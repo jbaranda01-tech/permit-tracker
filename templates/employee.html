@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}{{ employee.name }}{% endblock %}
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Empleados</a>
+        <div class="detail-title-row">
+            <div>
+                <h1>{{ employee.name }}</h1>
+                <div class="detail-meta">
+                    <span class="company-tag tag-{{ employee.company|lower }}">{{ employee.company_full }}</span>
+                    <span class="area-tag">{{ employee.area or '—' }}</span>
+                    <span class="status-tag status-{{ employee.status }}">{{ employee.status }}</span>
+                </div>
+            </div>
+            {% if current_user.is_manager %}
+            <div class="detail-actions">
+                <a href="{{ url_for('employee_edit', id=employee.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-edit"></i> Editar Perfil
+                </a>
+                {% if current_user.is_admin %}
+                <form method="POST" action="{{ url_for('employee_delete', id=employee.id) }}" style="display:inline"
+                      onsubmit="return confirm('¿Está seguro de eliminar a {{ employee.name }}?')">
+                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Profile Info -->
+    <div class="profile-grid">
+        <div class="profile-card">
+            <div class="profile-card-header">
+                <i class="fas fa-id-card"></i> Información Personal
+            </div>
+            <div class="profile-field">
+                <label>Fecha de Nacimiento</label>
+                <span>{{ employee.fecha_nacimiento.strftime('%d/%m/%Y') if employee.fecha_nacimiento else '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Teléfono</label>
+                <span>{{ employee.telefono or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Email</label>
+                <span>{{ employee.email or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Contacto de Emergencia</label>
+                <span>{{ employee.contacto_emergencia or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Talla Camisa</label>
+                <span>{{ employee.shirt_size or '—' }}</span>
+            </div>
+        </div>
+
+        <div class="profile-card">
+            <div class="profile-card-header">
+                <i class="fas fa-briefcase"></i> Información Laboral
+            </div>
+            <div class="profile-field">
+                <label>Puesto / Posición</label>
+                <span>{{ employee.puesto or employee.area or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Fecha de Contratación</label>
+                <span>{{ employee.fecha_contratacion.strftime('%d/%m/%Y') if employee.fecha_contratacion else '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Endoso HAZMAT</label>
+                <span class="hazmat-{{ employee.endoso_hazmat|lower }}">{{ employee.endoso_hazmat }}</span>
+            </div>
+        </div>
+
+        <div class="profile-card">
+            <div class="profile-card-header">
+                <i class="fas fa-car"></i> Licencia de Conducir
+            </div>
+            <div class="profile-field">
+                <label>Número</label>
+                <span>{{ employee.license_number or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Expiración</label>
+                {% if employee.license_expiration %}
+                    {% if employee.license_expiration < today %}
+                        <span class="permit-status-expired">{{ employee.license_expiration.strftime('%d/%m/%Y') }} — VENCIDA</span>
+                    {% elif employee.license_expiration <= alert_date %}
+                        <span class="permit-status-expiring">{{ employee.license_expiration.strftime('%d/%m/%Y') }} — POR VENCER</span>
+                    {% else %}
+                        <span class="permit-status-valid">{{ employee.license_expiration.strftime('%d/%m/%Y') }}</span>
+                    {% endif %}
+                {% else %}
+                    <span class="permit-status-missing">—</span>
+                {% endif %}
+            </div>
+            {% if employee.license_file %}
+            <div class="profile-field">
+                <label>Copia</label>
+                <a href="{{ url_for('uploaded_file', filename=employee.license_file) }}" target="_blank" class="file-link">
+                    <i class="fas fa-file-image"></i> Ver documento
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Permits Section -->
+    <div class="permits-section">
+        <div class="permits-header">
+            <h2><i class="fas fa-certificate"></i> Permisos y Certificaciones</h2>
+            {% if current_user.is_manager %}
+            <button class="btn btn-secondary btn-sm" onclick="toggleAddPermit()">
+                <i class="fas fa-plus"></i> Agregar Permiso
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Add permit form (hidden) -->
+        <div id="add-permit-form" class="add-permit-form" style="display:none">
+            <form method="POST" action="{{ url_for('employee_permit_new', emp_id=employee.id) }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Tipo de Permiso</label>
+                        <select name="permit_type" onchange="toggleCustomName(this)">
+                            {% for code, name in permit_types %}
+                            <option value="{{ code }}">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" id="custom-name-group" style="display:none">
+                        <label>Nombre del Permiso</label>
+                        <input type="text" name="permit_name" placeholder="Nombre personalizado">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha de Expiración</label>
+                        <input type="date" name="expiration_date">
+                    </div>
+                    <div class="form-group" style="align-self:flex-end">
+                        <button type="submit" class="btn btn-primary btn-sm">Agregar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="permits-grid">
+            {% for permit in permits %}
+            <div class="permit-card permit-{{ permit.status }}">
+                <div class="permit-card-header">
+                    <span class="permit-name">{{ permit.display_name }}</span>
+                    <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
+                </div>
+                <div class="permit-card-body">
+                    {% if permit.applicability == 'N/A' %}
+                        <div class="permit-na">No Aplica</div>
+                    {% else %}
+                        <div class="permit-field">
+                            <label>Expiración</label>
+                            <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                        </div>
+                        {% if permit.permit_number %}
+                        <div class="permit-field">
+                            <label>Número</label>
+                            <span>{{ permit.permit_number }}</span>
+                        </div>
+                        {% endif %}
+                        {% if permit.issuing_authority %}
+                        <div class="permit-field">
+                            <label>Autoridad</label>
+                            <span>{{ permit.issuing_authority }}</span>
+                        </div>
+                        {% endif %}
+                        {% if permit.renewal_cost %}
+                        <div class="permit-field">
+                            <label>Costo Renovación</label>
+                            <span>${{ "%.2f"|format(permit.renewal_cost) }}</span>
+                        </div>
+                        {% endif %}
+                        {% if permit.file_path %}
+                        <a href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank" class="file-link">
+                            <i class="fas fa-paperclip"></i> Ver documento
+                        </a>
+                        {% endif %}
+                        {% if permit.notes %}
+                        <div class="permit-notes">{{ permit.notes }}</div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% if current_user.is_manager %}
+                <div class="permit-card-footer">
+                    <button class="btn btn-ghost btn-sm" onclick="toggleEditPermit({{ permit.id }})">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                </div>
+                <!-- Edit form (hidden) -->
+                <div id="edit-permit-{{ permit.id }}" class="permit-edit-form" style="display:none">
+                    <form method="POST" action="{{ url_for('employee_permit_edit', emp_id=employee.id, permit_id=permit.id) }}" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label>Aplicabilidad</label>
+                            <select name="applicability">
+                                <option value="YES" {% if permit.applicability != 'N/A' %}selected{% endif %}>Aplica</option>
+                                <option value="N/A" {% if permit.applicability == 'N/A' %}selected{% endif %}>N/A</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de Expiración</label>
+                            <input type="date" name="expiration_date" value="{{ permit.expiration_date.strftime('%Y-%m-%d') if permit.expiration_date else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Número de Permiso</label>
+                            <input type="text" name="permit_number" value="{{ permit.permit_number or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Autoridad Emisora</label>
+                            <input type="text" name="issuing_authority" value="{{ permit.issuing_authority or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Costo de Renovación ($)</label>
+                            <input type="number" step="0.01" name="renewal_cost" value="{{ permit.renewal_cost or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Documento</label>
+                            <input type="file" name="permit_file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                        </div>
+                        <div class="form-group">
+                            <label>Notas</label>
+                            <textarea name="notes" rows="2">{{ permit.notes or '' }}</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            {% if not permits %}
+            <div class="empty-state">
+                <i class="fas fa-certificate"></i>
+                <p>No hay permisos registrados</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleAddPermit() {
+    const form = document.getElementById('add-permit-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+function toggleEditPermit(id) {
+    const form = document.getElementById('edit-permit-' + id);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+function toggleCustomName(select) {
+    const group = document.getElementById('custom-name-group');
+    group.style.display = select.value === 'OTHER' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

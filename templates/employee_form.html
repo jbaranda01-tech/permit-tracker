@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{% if employee %}Editar {{ employee.name }}{% else %}Nuevo Empleado{% endif %}{% endblock %}
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        {% if employee %}
+        <a href="{{ url_for('employee_detail', id=employee.id) }}" class="back-link"><i class="fas fa-arrow-left"></i> {{ employee.name }}</a>
+        <h1>Editar Empleado</h1>
+        {% else %}
+        <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Empleados</a>
+        <h1>Nuevo Empleado</h1>
+        {% endif %}
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" class="entity-form">
+        <div class="form-section">
+            <h3><i class="fas fa-user"></i> Información Básica</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="name">Nombre Completo *</label>
+                    <input type="text" id="name" name="name" value="{{ employee.name if employee else '' }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="company">Compañía *</label>
+                    <select id="company" name="company" required>
+                        <option value="LB" {% if employee and employee.company == 'LB' %}selected{% endif %}>LB Caribe Services</option>
+                        <option value="PLI" {% if employee and employee.company == 'PLI' %}selected{% endif %}>Professional Logistics</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="area">Área / Rol</label>
+                    <select id="area" name="area">
+                        <option value="">— Seleccionar —</option>
+                        {% for opt in ['administrador', 'chofer', 'vendedor', 'tecnico', 'mecanico', 'asistente taller', 'mensajero'] %}
+                        <option value="{{ opt }}" {% if employee and employee.area == opt %}selected{% endif %}>{{ opt|capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="status">Status</label>
+                    <select id="status" name="status">
+                        <option value="activo" {% if not employee or employee.status == 'activo' %}selected{% endif %}>Activo</option>
+                        <option value="inactivo" {% if employee and employee.status == 'inactivo' %}selected{% endif %}>Inactivo</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-id-card"></i> Información Personal</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="fecha_nacimiento">Fecha de Nacimiento</label>
+                    <input type="date" id="fecha_nacimiento" name="fecha_nacimiento"
+                           value="{{ employee.fecha_nacimiento.strftime('%Y-%m-%d') if employee and employee.fecha_nacimiento else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="telefono">Teléfono</label>
+                    <input type="tel" id="telefono" name="telefono" value="{{ employee.telefono if employee else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" value="{{ employee.email if employee else '' }}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="contacto_emergencia">Contacto de Emergencia</label>
+                    <input type="text" id="contacto_emergencia" name="contacto_emergencia"
+                           value="{{ employee.contacto_emergencia if employee else '' }}" placeholder="Nombre y teléfono">
+                </div>
+                <div class="form-group">
+                    <label for="shirt_size">Talla Camisa</label>
+                    <select id="shirt_size" name="shirt_size">
+                        <option value="">—</option>
+                        {% for sz in ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'] %}
+                        <option value="{{ sz }}" {% if employee and employee.shirt_size == sz %}selected{% endif %}>{{ sz }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-briefcase"></i> Información Laboral</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="puesto">Puesto / Posición</label>
+                    <input type="text" id="puesto" name="puesto" value="{{ employee.puesto if employee else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="fecha_contratacion">Fecha de Contratación</label>
+                    <input type="date" id="fecha_contratacion" name="fecha_contratacion"
+                           value="{{ employee.fecha_contratacion.strftime('%Y-%m-%d') if employee and employee.fecha_contratacion else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="endoso_hazmat">Endoso HAZMAT</label>
+                    <select id="endoso_hazmat" name="endoso_hazmat">
+                        <option value="N/A" {% if not employee or employee.endoso_hazmat == 'N/A' %}selected{% endif %}>N/A</option>
+                        <option value="SI" {% if employee and employee.endoso_hazmat == 'SI' %}selected{% endif %}>SÍ</option>
+                        <option value="NO" {% if employee and employee.endoso_hazmat == 'NO' %}selected{% endif %}>NO</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-car"></i> Licencia de Conducir</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="license_number">Número de Licencia</label>
+                    <input type="text" id="license_number" name="license_number"
+                           value="{{ employee.license_number if employee else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="license_expiration">Fecha de Expiración</label>
+                    <input type="date" id="license_expiration" name="license_expiration"
+                           value="{{ employee.license_expiration.strftime('%Y-%m-%d') if employee and employee.license_expiration else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="license_file">Copia de Licencia</label>
+                    <input type="file" id="license_file" name="license_file" accept=".pdf,.jpg,.jpeg,.png">
+                    {% if employee and employee.license_file %}
+                    <small class="form-help"><a href="{{ url_for('uploaded_file', filename=employee.license_file) }}" target="_blank">Ver archivo actual</a></small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> {{ 'Actualizar' if employee else 'Crear Empleado' }}
+            </button>
+            {% if employee %}
+            <a href="{{ url_for('employee_detail', id=employee.id) }}" class="btn btn-secondary">Cancelar</a>
+            {% else %}
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancelar</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}

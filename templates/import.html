@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Importar Datos{% endblock %}
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Dashboard</a>
+        <h1><i class="fas fa-file-import"></i> Importar desde Excel</h1>
+    </div>
+
+    <div class="import-container">
+        <div class="import-info">
+            <h3>Formato Esperado</h3>
+            <p>El archivo Excel debe tener las siguientes columnas en orden:</p>
+            <div class="column-list">
+                <span class="col-tag">Nombre Empleado</span>
+                <span class="col-tag">Compañía (LB/PLI)</span>
+                <span class="col-tag">Área</span>
+                <span class="col-tag">Status</span>
+                <span class="col-tag"># Licencia</span>
+                <span class="col-tag">Exp. Licencia</span>
+                <span class="col-tag">Endoso HAZMAT</span>
+                <span class="col-tag">NTSP</span>
+                <span class="col-tag">TWIC</span>
+                <span class="col-tag">Cert. Médico</span>
+                <span class="col-tag">Antecedentes</span>
+                <span class="col-tag">Record Choferil</span>
+                <span class="col-tag">Camisas</span>
+                <span class="col-tag">HM-126</span>
+                <span class="col-tag">HM-232</span>
+            </div>
+            <div class="import-notes">
+                <p><i class="fas fa-info-circle"></i> Los empleados que ya existen (por nombre exacto) serán omitidos.</p>
+                <p><i class="fas fa-info-circle"></i> Las fechas con año de 2 dígitos (ej. 1930 → 2030) se corregirán automáticamente.</p>
+                <p><i class="fas fa-info-circle"></i> Celdas con "N/A" se marcarán como No Aplica. Celdas vacías se marcarán como datos pendientes.</p>
+            </div>
+        </div>
+
+        <form method="POST" enctype="multipart/form-data" class="import-form">
+            <div class="upload-area" id="upload-area">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
+                <input type="file" name="file" id="file-input" accept=".xlsx,.xls" required>
+                <span class="file-name" id="file-name"></span>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">
+                <i class="fas fa-upload"></i> Importar Datos
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+const uploadArea = document.getElementById('upload-area');
+const fileInput = document.getElementById('file-input');
+const fileName = document.getElementById('file-name');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    fileInput.files = e.dataTransfer.files;
+    fileName.textContent = e.dataTransfer.files[0]?.name || '';
+});
+fileInput.addEventListener('change', () => {
+    fileName.textContent = fileInput.files[0]?.name || '';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Permisos — {{ today.strftime('%d/%m/%Y') }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 9pt; color: #1a1a2e; padding: 20px; }
+        .report-header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #1a1a2e; padding-bottom: 15px; }
+        .report-header h1 { font-size: 18pt; margin-bottom: 4px; }
+        .report-header p { font-size: 10pt; color: #555; }
+        .legend { display: flex; gap: 15px; justify-content: center; margin: 12px 0 20px; font-size: 8pt; }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .dot-valid { background: #22c55e; }
+        .dot-expiring { background: #f59e0b; }
+        .dot-expired { background: #ef4444; }
+        .dot-missing { background: #94a3b8; }
+        .dot-na { background: #e2e8f0; }
+
+        .company-section { margin-bottom: 25px; page-break-inside: avoid; }
+        .company-title { font-size: 13pt; font-weight: 700; padding: 6px 10px; margin-bottom: 8px; color: white; }
+        .company-lb { background: #1e40af; }
+        .company-pli { background: #7c3aed; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 15px; }
+        th { background: #f1f5f9; padding: 5px 6px; text-align: left; border-bottom: 2px solid #cbd5e1; font-weight: 600; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.3px; }
+        td { padding: 4px 6px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .status-cell { text-align: center; font-weight: 700; font-size: 7pt; padding: 2px 5px; border-radius: 3px; }
+        .st-valid { background: #dcfce7; color: #166534; }
+        .st-expiring { background: #fef3c7; color: #92400e; }
+        .st-expired { background: #fee2e2; color: #991b1b; }
+        .st-missing { background: #f1f5f9; color: #64748b; }
+        .st-na { background: #f8fafc; color: #94a3b8; font-style: italic; }
+
+        .section-subtitle { font-size: 10pt; font-weight: 600; margin: 12px 0 6px; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; }
+        .footer { text-align: center; margin-top: 20px; font-size: 7pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+        @media print { body { padding: 10px; } .company-section { page-break-inside: avoid; } }
+    </style>
+</head>
+<body>
+    <div class="report-header">
+        <h1>Reporte de Permisos y Documentos</h1>
+        <p>LB Caribe Services, Inc. & Professional Logistics, Inc.</p>
+        <p>Generado: {{ today.strftime('%d de %B de %Y') }}</p>
+    </div>
+
+    <div class="legend">
+        <span class="legend-item"><span class="legend-dot dot-valid"></span> Vigente</span>
+        <span class="legend-item"><span class="legend-dot dot-expiring"></span> Por Vencer (30 días)</span>
+        <span class="legend-item"><span class="legend-dot dot-expired"></span> Vencido</span>
+        <span class="legend-item"><span class="legend-dot dot-missing"></span> Incompleto</span>
+        <span class="legend-item"><span class="legend-dot dot-na"></span> N/A</span>
+    </div>
+
+    {% macro status_cell(exp_date, applicability='YES') %}
+        {% if applicability == 'N/A' %}
+            <td><span class="status-cell st-na">N/A</span></td>
+        {% elif exp_date is none %}
+            <td><span class="status-cell st-missing">—</span></td>
+        {% elif exp_date < today %}
+            <td><span class="status-cell st-expired">{{ exp_date.strftime('%d/%m/%y') }}</span></td>
+        {% elif exp_date <= alert_date %}
+            <td><span class="status-cell st-expiring">{{ exp_date.strftime('%d/%m/%y') }}</span></td>
+        {% else %}
+            <td><span class="status-cell st-valid">{{ exp_date.strftime('%d/%m/%y') }}</span></td>
+        {% endif %}
+    {% endmacro %}
+
+    {% if employees %}
+    <!-- LB Caribe Employees -->
+    {% set lb_emps = employees | selectattr('company', 'equalto', 'LB') | list %}
+    {% if lb_emps %}
+    <div class="company-section">
+        <div class="company-title company-lb">LB Caribe Services — Empleados</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Empleado</th>
+                    <th>Área</th>
+                    <th>Licencia</th>
+                    <th>Exp. Lic.</th>
+                    <th>HAZMAT</th>
+                    <th>NTSP</th>
+                    <th>TWIC</th>
+                    <th>Cert. Méd.</th>
+                    <th>Antec.</th>
+                    <th>Rec. Chof.</th>
+                    <th>HM-126</th>
+                    <th>HM-232</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in lb_emps %}
+                <tr>
+                    <td><strong>{{ emp.name }}</strong></td>
+                    <td>{{ emp.area or '—' }}</td>
+                    <td>{{ emp.license_number or '—' }}</td>
+                    {{ status_cell(emp.license_expiration) }}
+                    <td>
+                        {% if emp.endoso_hazmat == 'SI' %}
+                            <span class="status-cell st-valid">SÍ</span>
+                        {% elif emp.endoso_hazmat == 'NO' %}
+                            <span class="status-cell st-expired">NO</span>
+                        {% else %}
+                            <span class="status-cell st-na">N/A</span>
+                        {% endif %}
+                    </td>
+                    {% for ptype in ['NTSP', 'TWIC', 'CERT_MEDICO', 'ANTECEDENTES', 'RECORD_CHOFERIL', 'HM126', 'HM232'] %}
+                        {% set permit = emp.permits.filter_by(permit_type=ptype).first() %}
+                        {% if permit %}
+                            {{ status_cell(permit.expiration_date, permit.applicability) }}
+                        {% else %}
+                            <td><span class="status-cell st-missing">—</span></td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- PLI Employees -->
+    {% set pli_emps = employees | selectattr('company', 'equalto', 'PLI') | list %}
+    {% if pli_emps %}
+    <div class="company-section">
+        <div class="company-title company-pli">Professional Logistics — Empleados</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Empleado</th>
+                    <th>Área</th>
+                    <th>Licencia</th>
+                    <th>Exp. Lic.</th>
+                    <th>HAZMAT</th>
+                    <th>NTSP</th>
+                    <th>TWIC</th>
+                    <th>Cert. Méd.</th>
+                    <th>Antec.</th>
+                    <th>Rec. Chof.</th>
+                    <th>HM-126</th>
+                    <th>HM-232</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in pli_emps %}
+                <tr>
+                    <td><strong>{{ emp.name }}</strong></td>
+                    <td>{{ emp.area or '—' }}</td>
+                    <td>{{ emp.license_number or '—' }}</td>
+                    {{ status_cell(emp.license_expiration) }}
+                    <td>
+                        {% if emp.endoso_hazmat == 'SI' %}
+                            <span class="status-cell st-valid">SÍ</span>
+                        {% elif emp.endoso_hazmat == 'NO' %}
+                            <span class="status-cell st-expired">NO</span>
+                        {% else %}
+                            <span class="status-cell st-na">N/A</span>
+                        {% endif %}
+                    </td>
+                    {% for ptype in ['NTSP', 'TWIC', 'CERT_MEDICO', 'ANTECEDENTES', 'RECORD_CHOFERIL', 'HM126', 'HM232'] %}
+                        {% set permit = emp.permits.filter_by(permit_type=ptype).first() %}
+                        {% if permit %}
+                            {{ status_cell(permit.expiration_date, permit.applicability) }}
+                        {% else %}
+                            <td><span class="status-cell st-missing">—</span></td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if equipment_list %}
+    {% set lb_eq = equipment_list | selectattr('company', 'equalto', 'LB') | list %}
+    {% if lb_eq %}
+    <div class="company-section">
+        <div class="company-title company-lb">LB Caribe Services — Equipos</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Equipo</th>
+                    <th>Tipo</th>
+                    <th>Tablilla</th>
+                    <th>VIN/Serial</th>
+                    <th>Marbete</th>
+                    <th>Seguro</th>
+                    <th>Inspección</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in lb_eq %}
+                <tr>
+                    <td><strong>{{ eq.display_name }}</strong></td>
+                    <td>{{ 'Generador' if eq.equipment_type == 'generator' else 'Vehículo' }}</td>
+                    <td>{{ eq.plate_number or '—' }}</td>
+                    <td>{{ eq.vin_serial or '—' }}</td>
+                    {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}
+                        {% set permit = eq.permits.filter_by(permit_type=ptype).first() %}
+                        {% if permit %}
+                            {{ status_cell(permit.expiration_date, permit.applicability) }}
+                        {% else %}
+                            <td><span class="status-cell st-missing">—</span></td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% set pli_eq = equipment_list | selectattr('company', 'equalto', 'PLI') | list %}
+    {% if pli_eq %}
+    <div class="company-section">
+        <div class="company-title company-pli">Professional Logistics — Equipos</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Equipo</th>
+                    <th>Tipo</th>
+                    <th>Tablilla</th>
+                    <th>VIN/Serial</th>
+                    <th>Marbete</th>
+                    <th>Seguro</th>
+                    <th>Inspección</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in pli_eq %}
+                <tr>
+                    <td><strong>{{ eq.display_name }}</strong></td>
+                    <td>{{ 'Generador' if eq.equipment_type == 'generator' else 'Vehículo' }}</td>
+                    <td>{{ eq.plate_number or '—' }}</td>
+                    <td>{{ eq.vin_serial or '—' }}</td>
+                    {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}
+                        {% set permit = eq.permits.filter_by(permit_type=ptype).first() %}
+                        {% if permit %}
+                            {{ status_cell(permit.expiration_date, permit.applicability) }}
+                        {% else %}
+                            <td><span class="status-cell st-missing">—</span></td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <div class="footer">
+        <p>PermitTracker — LB Caribe Services, Inc. — Confidencial</p>
+    </div>
+</body>
+</html>

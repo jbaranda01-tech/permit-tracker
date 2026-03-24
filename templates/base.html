@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PermitTracker{% endblock %} — LB Caribe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <i class="fas fa-shield-alt"></i>
+                <span>PermitTracker</span>
+            </div>
+            <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <div class="nav-section">
+            <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' and request.args.get('view','employees') == 'employees' %}active{% endif %}">
+                <i class="fas fa-users"></i>
+                <span>Empleados</span>
+            </a>
+            <a href="{{ url_for('dashboard', view='equipment') }}" class="nav-link {% if request.args.get('view') == 'equipment' %}active{% endif %}">
+                <i class="fas fa-truck"></i>
+                <span>Equipos</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Alertas</div>
+            <a href="#" class="nav-link alert-link" onclick="showAlerts('expiring')" id="nav-expiring">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Por Vencer</span>
+                {% if permisos_por_vencer > 0 %}
+                <span class="badge badge-warning">{{ permisos_por_vencer }}</span>
+                {% endif %}
+            </a>
+            <a href="#" class="nav-link alert-link" onclick="showAlerts('expired')" id="nav-expired">
+                <i class="fas fa-times-circle"></i>
+                <span>Vencidos</span>
+                {% if permisos_vencidos > 0 %}
+                <span class="badge badge-danger">{{ permisos_vencidos }}</span>
+                {% endif %}
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Herramientas</div>
+            <a href="{{ url_for('generate_pdf') }}" class="nav-link">
+                <i class="fas fa-file-pdf"></i>
+                <span>Reporte PDF</span>
+            </a>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('import_data') }}" class="nav-link {% if request.endpoint == 'import_data' %}active{% endif %}">
+                <i class="fas fa-file-import"></i>
+                <span>Importar Excel</span>
+            </a>
+            <a href="{{ url_for('admin_users') }}" class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}">
+                <i class="fas fa-user-cog"></i>
+                <span>Usuarios</span>
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="theme-toggle" onclick="toggleTheme()">
+                <i class="fas fa-sun" id="theme-icon-sun"></i>
+                <i class="fas fa-moon" id="theme-icon-moon"></i>
+            </div>
+            <div class="user-info">
+                <span class="user-name">{{ current_user.username }}</span>
+                <span class="user-role">{{ current_user.role }}</span>
+            </div>
+            <a href="{{ url_for('logout') }}" class="nav-link logout-link">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Salir</span>
+            </a>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="{% if current_user.is_authenticated %}main-content{% else %}main-content-full{% endif %}">
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-container">
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">
+                <span>{{ message }}</span>
+                <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Alerts Modal -->
+    <div class="modal-overlay" id="alerts-modal" onclick="if(event.target===this)closeAlerts()">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="alerts-title">Alertas</h3>
+                <button onclick="closeAlerts()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="alerts-body">
+                <div class="loading"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

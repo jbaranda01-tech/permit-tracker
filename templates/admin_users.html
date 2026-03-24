@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Usuarios{% endblock %}
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Dashboard</a>
+        <h1><i class="fas fa-user-cog"></i> Gestión de Usuarios</h1>
+    </div>
+
+    <!-- New User Form -->
+    <div class="form-section">
+        <h3>Crear Nuevo Usuario</h3>
+        <form method="POST" action="{{ url_for('admin_user_new') }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="username">Usuario</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" name="password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="role">Rol</label>
+                    <select id="role" name="role">
+                        <option value="viewer">Viewer — Solo lectura</option>
+                        <option value="manager">Manager — Lectura y edición</option>
+                        <option value="admin">Admin — Control total</option>
+                    </select>
+                </div>
+                <div class="form-group" style="align-self:flex-end">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Crear</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Existing Users -->
+    <div class="users-table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Usuario</th>
+                    <th>Email</th>
+                    <th>Rol</th>
+                    <th>Creado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td><strong>{{ user.username }}</strong></td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        <span class="role-badge role-{{ user.role }}">{{ user.role }}</span>
+                    </td>
+                    <td>{{ user.created_at.strftime('%d/%m/%Y') if user.created_at else '—' }}</td>
+                    <td>
+                        <div class="table-actions">
+                            <button class="btn btn-ghost btn-sm" onclick="toggleEditUser({{ user.id }})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            {% if user.id != current_user.id %}
+                            <form method="POST" action="{{ url_for('admin_user_delete', id=user.id) }}" style="display:inline"
+                                  onsubmit="return confirm('¿Eliminar usuario {{ user.username }}?')">
+                                <button type="submit" class="btn btn-ghost btn-sm btn-danger-text"><i class="fas fa-trash"></i></button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <div id="edit-user-{{ user.id }}" class="inline-edit-form" style="display:none">
+                            <form method="POST" action="{{ url_for('admin_user_edit', id=user.id) }}">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Email</label>
+                                        <input type="email" name="email" value="{{ user.email }}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Rol</label>
+                                        <select name="role">
+                                            <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>Viewer</option>
+                                            <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
+                                            <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Nueva Contraseña (dejar vacío para no cambiar)</label>
+                                        <input type="password" name="password">
+                                    </div>
+                                    <div class="form-group" style="align-self:flex-end">
+                                        <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function toggleEditUser(id) {
+    const form = document.getElementById('edit-user-' + id);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

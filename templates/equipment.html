@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}{{ equipment.display_name }}{% endblock %}
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('dashboard', view='equipment') }}" class="back-link"><i class="fas fa-arrow-left"></i> Equipos</a>
+        <div class="detail-title-row">
+            <div>
+                <h1>{{ equipment.display_name }}</h1>
+                <div class="detail-meta">
+                    <span class="company-tag tag-{{ equipment.company|lower }}">{{ equipment.company_full }}</span>
+                    <span class="area-tag">{{ 'Generador' if equipment.equipment_type == 'generator' else 'Vehículo' }}</span>
+                    <span class="status-tag status-{{ equipment.status }}">{{ equipment.status }}</span>
+                </div>
+            </div>
+            {% if current_user.is_manager %}
+            <div class="detail-actions">
+                <a href="{{ url_for('equipment_edit', id=equipment.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-edit"></i> Editar
+                </a>
+                {% if current_user.is_admin %}
+                <form method="POST" action="{{ url_for('equipment_delete', id=equipment.id) }}" style="display:inline"
+                      onsubmit="return confirm('¿Está seguro de eliminar este equipo?')">
+                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Equipment Info -->
+    <div class="profile-grid">
+        <div class="profile-card">
+            <div class="profile-card-header">
+                <i class="fas fa-truck"></i> Información del Equipo
+            </div>
+            <div class="profile-field">
+                <label>Tablilla</label>
+                <span>{{ equipment.plate_number or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Marca</label>
+                <span>{{ equipment.make or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Modelo</label>
+                <span>{{ equipment.model or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Año</label>
+                <span>{{ equipment.year or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>VIN / Serial</label>
+                <span class="monospace">{{ equipment.vin_serial or '—' }}</span>
+            </div>
+            {% if equipment.notes %}
+            <div class="profile-field">
+                <label>Notas</label>
+                <span>{{ equipment.notes }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Permits Section -->
+    <div class="permits-section">
+        <div class="permits-header">
+            <h2><i class="fas fa-certificate"></i> Permisos y Documentos</h2>
+            {% if current_user.is_manager %}
+            <button class="btn btn-secondary btn-sm" onclick="toggleAddPermit()">
+                <i class="fas fa-plus"></i> Agregar Permiso
+            </button>
+            {% endif %}
+        </div>
+
+        <div id="add-permit-form" class="add-permit-form" style="display:none">
+            <form method="POST" action="{{ url_for('equipment_permit_new', eq_id=equipment.id) }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Tipo de Permiso</label>
+                        <select name="permit_type" onchange="toggleCustomName(this)">
+                            {% for code, name in permit_types %}
+                            <option value="{{ code }}">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" id="custom-name-group" style="display:none">
+                        <label>Nombre del Permiso</label>
+                        <input type="text" name="permit_name" placeholder="Nombre personalizado">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha de Expiración</label>
+                        <input type="date" name="expiration_date">
+                    </div>
+                    <div class="form-group" style="align-self:flex-end">
+                        <button type="submit" class="btn btn-primary btn-sm">Agregar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="permits-grid">
+            {% for permit in permits %}
+            <div class="permit-card permit-{{ permit.status }}">
+                <div class="permit-card-header">
+                    <span class="permit-name">{{ permit.display_name }}</span>
+                    <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
+                </div>
+                <div class="permit-card-body">
+                    {% if permit.applicability == 'N/A' %}
+                        <div class="permit-na">No Aplica</div>
+                    {% else %}
+                        <div class="permit-field">
+                            <label>Expiración</label>
+                            <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                        </div>
+                        {% if permit.permit_number %}
+                        <div class="permit-field">
+                            <label>Número</label>
+                            <span>{{ permit.permit_number }}</span>
+                        </div>
+                        {% endif %}
+                        {% if permit.file_path %}
+                        <a href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank" class="file-link">
+                            <i class="fas fa-paperclip"></i> Ver documento
+                        </a>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% if current_user.is_manager %}
+                <div class="permit-card-footer">
+                    <button class="btn btn-ghost btn-sm" onclick="toggleEditPermit({{ permit.id }})">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                </div>
+                <div id="edit-permit-{{ permit.id }}" class="permit-edit-form" style="display:none">
+                    <form method="POST" action="{{ url_for('equipment_permit_edit', eq_id=equipment.id, permit_id=permit.id) }}" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label>Aplicabilidad</label>
+                            <select name="applicability">
+                                <option value="YES" {% if permit.applicability != 'N/A' %}selected{% endif %}>Aplica</option>
+                                <option value="N/A" {% if permit.applicability == 'N/A' %}selected{% endif %}>N/A</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de Expiración</label>
+                            <input type="date" name="expiration_date" value="{{ permit.expiration_date.strftime('%Y-%m-%d') if permit.expiration_date else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Número de Permiso</label>
+                            <input type="text" name="permit_number" value="{{ permit.permit_number or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Autoridad Emisora</label>
+                            <input type="text" name="issuing_authority" value="{{ permit.issuing_authority or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Costo de Renovación ($)</label>
+                            <input type="number" step="0.01" name="renewal_cost" value="{{ permit.renewal_cost or '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Documento</label>
+                            <input type="file" name="permit_file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                        </div>
+                        <div class="form-group">
+                            <label>Notas</label>
+                            <textarea name="notes" rows="2">{{ permit.notes or '' }}</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleAddPermit() {
+    const form = document.getElementById('add-permit-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+function toggleEditPermit(id) {
+    const form = document.getElementById('edit-permit-' + id);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+function toggleCustomName(select) {
+    const group = document.getElementById('custom-name-group');
+    group.style.display = select.value === 'OTHER' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

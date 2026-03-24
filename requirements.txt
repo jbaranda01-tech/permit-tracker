@@ -1,0 +1,9 @@
+flask==3.0.0
+flask-sqlalchemy==3.1.1
+flask-login==0.6.3
+flask-migrate==4.0.5
+psycopg2-binary==2.9.9
+werkzeug==3.0.1
+openpyxl==3.1.2
+weasyprint==62.0
+gunicorn==21.2.0
