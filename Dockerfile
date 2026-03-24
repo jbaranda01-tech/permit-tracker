@@ -21,4 +21,6 @@ COPY . .
 
 RUN mkdir -p uploads
 
+ENV PORT=8080
+
 CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
