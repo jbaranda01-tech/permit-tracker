@@ -1,5 +1,21 @@
 [phases.setup]
-nixPkgs = ["pango", "cairo", "gdk-pixbuf", "libffi", "gobject-introspection", "shared-mime-info", "harfbuzz", "fontconfig", "freetype"]
+nixPkgs = [
+  "python311",
+  "pkg-config",
+  "pango",
+  "cairo",
+  "gdk-pixbuf",
+  "libffi",
+  "gobject-introspection",
+  "shared-mime-info",
+  "harfbuzz",
+  "fontconfig",
+  "freetype",
+  "zlib",
+]
 
 [phases.install]
 cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
