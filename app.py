@@ -878,6 +878,13 @@ def api_alerts():
     return jsonify(alerts)
 
 
+# ── HEALTH CHECK ──────────────────────────────────────────────────────
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok'})
+
+
 # ── DB INIT CLI ────────────────────────────────────────────────────────
 
 @app.cli.command('init-db')
@@ -896,12 +903,15 @@ def init_db():
 
 # For Railway — auto-init on startup
 with app.app_context():
-    db.create_all()
-    if not User.query.filter_by(role='admin').first():
-        admin = User(username='admin', email='admin@lbcaribe.com', role='admin')
-        admin.set_password('admin123')
-        db.session.add(admin)
-        db.session.commit()
+    try:
+        db.create_all()
+        if not User.query.filter_by(role='admin').first():
+            admin = User(username='admin', email='admin@lbcaribe.com', role='admin')
+            admin.set_password('admin123')
+            db.session.add(admin)
+            db.session.commit()
+    except Exception as e:
+        print(f"[WARN] Database init failed: {e}")
 
 
 if __name__ == '__main__':
