@@ -913,7 +913,7 @@ img { max-width: 100%; }
 
 .upload-area i { font-size: 2.5rem; color: var(--text-tertiary); display: block; margin-bottom: var(--space-sm); }
 .upload-area p { color: var(--text-secondary); }
-.upload-area input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.upload-area input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; pointer-events: none; }
 .file-name { font-weight: 600; color: var(--color-lb); margin-top: var(--space-sm); display: block; }
 
 

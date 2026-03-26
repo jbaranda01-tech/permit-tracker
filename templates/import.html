@@ -39,7 +39,7 @@
             <div class="upload-area" id="upload-area">
                 <i class="fas fa-cloud-upload-alt"></i>
                 <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
-                <input type="file" name="file" id="file-input" accept=".xlsx,.xls" required>
+                <input type="file" name="file" id="file-input" accept=".xlsx,.xls">
                 <span class="file-name" id="file-name"></span>
             </div>
             <button type="submit" class="btn btn-primary btn-full">
@@ -54,7 +54,7 @@ const uploadArea = document.getElementById('upload-area');
 const fileInput = document.getElementById('file-input');
 const fileName = document.getElementById('file-name');
 
-uploadArea.addEventListener('click', (e) => { if (e.target !== fileInput) fileInput.click(); });
+uploadArea.addEventListener('click', () => fileInput.click());
 uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
 uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
 uploadArea.addEventListener('drop', (e) => {
