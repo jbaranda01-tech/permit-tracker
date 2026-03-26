@@ -35,14 +35,15 @@
             </div>
         </div>
 
-        <form method="POST" enctype="multipart/form-data" class="import-form">
+        <form method="POST" enctype="multipart/form-data" class="import-form" id="import-form">
+            <input type="hidden" name="import_token" value="{{ import_token }}">
             <div class="upload-area" id="upload-area">
                 <i class="fas fa-cloud-upload-alt"></i>
                 <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
                 <input type="file" name="file" id="file-input" accept=".xlsx,.xls">
                 <span class="file-name" id="file-name"></span>
             </div>
-            <button type="submit" class="btn btn-primary btn-full">
+            <button type="submit" class="btn btn-primary btn-full" id="import-btn">
                 <i class="fas fa-upload"></i> Importar Datos
             </button>
         </form>
@@ -65,6 +66,17 @@ uploadArea.addEventListener('drop', (e) => {
 });
 fileInput.addEventListener('change', () => {
     fileName.textContent = fileInput.files[0]?.name || '';
+});
+
+document.getElementById('import-form').addEventListener('submit', function(e) {
+    const btn = document.getElementById('import-btn');
+    if (btn.dataset.submitted === 'true') {
+        e.preventDefault();
+        return;
+    }
+    btn.dataset.submitted = 'true';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
 });
 </script>
 {% endblock %}

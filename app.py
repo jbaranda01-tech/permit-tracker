@@ -1,11 +1,13 @@
 import os
 import uuid
+import secrets
+import click
 from datetime import datetime, date, timedelta
 from functools import wraps
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, send_file, jsonify, abort, send_from_directory
+    flash, send_file, jsonify, abort, send_from_directory, session
 )
 from flask_login import (
     LoginManager, login_user, logout_user,
@@ -561,6 +563,12 @@ def uploaded_file(filename):
 @admin_required
 def import_data():
     if request.method == 'POST':
+        # Validate idempotency token to prevent double-submission
+        token = request.form.get('import_token', '')
+        if token != session.pop('import_token', None):
+            flash('Formulario ya fue procesado. Por favor intente nuevamente.', 'warning')
+            return redirect(url_for('import_data'))
+
         if 'file' not in request.files:
             flash('No se seleccionó archivo.', 'danger')
             return redirect(url_for('import_data'))
@@ -572,9 +580,14 @@ def import_data():
 
         try:
             from openpyxl import load_workbook
+            from sqlalchemy.exc import IntegrityError
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'import_{uuid.uuid4().hex}.xlsx')
             file.save(filepath)
             wb = load_workbook(filepath, read_only=True)
+
+            # Acquire advisory lock to prevent concurrent imports (PostgreSQL only)
+            if db.engine.dialect.name == 'postgresql':
+                db.session.execute(db.text("SELECT pg_advisory_xact_lock(42)"))
 
             # Find the data sheet
             ws = None
@@ -699,7 +712,13 @@ def import_data():
 
                 imported += 1
 
-            db.session.commit()
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                flash('Error: datos duplicados detectados. Posible importación simultánea.', 'danger')
+                os.remove(filepath)
+                return redirect(url_for('import_data'))
             os.remove(filepath)
             flash(f'Importación completa: {imported} empleados importados, {skipped} duplicados omitidos.', 'success')
 
@@ -709,7 +728,8 @@ def import_data():
 
         return redirect(url_for('import_data'))
 
-    return render_template('import.html')
+    session['import_token'] = secrets.token_hex(16)
+    return render_template('import.html', import_token=session['import_token'])
 
 
 # ── PDF REPORT ─────────────────────────────────────────────────────────
@@ -899,6 +919,125 @@ def init_db():
         print('Database initialized. Admin user created (admin / admin123)')
     else:
         print('Database already initialized.')
+
+
+@app.cli.command('dedup')
+@click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
+def dedup_data(dry_run):
+    """Remove duplicate employees and permits, keeping the record with the most data."""
+    # --- Deduplicate employees by (name, company) ---
+    dupes = (
+        db.session.query(Employee.name, Employee.company, db.func.count(Employee.id))
+        .group_by(Employee.name, Employee.company)
+        .having(db.func.count(Employee.id) > 1)
+        .all()
+    )
+
+    emp_deleted = 0
+    for name, company, count in dupes:
+        employees = Employee.query.filter_by(name=name, company=company).order_by(Employee.id).all()
+        keeper = employees[0]
+        for dup in employees[1:]:
+            # Merge non-null fields from duplicate into keeper
+            for col in ['area', 'status', 'fecha_nacimiento', 'license_number',
+                        'license_expiration', 'license_file', 'puesto', 'telefono',
+                        'email', 'fecha_contratacion', 'contacto_emergencia', 'shirt_size']:
+                if getattr(keeper, col) is None and getattr(dup, col) is not None:
+                    setattr(keeper, col, getattr(dup, col))
+            if keeper.endoso_hazmat == 'N/A' and dup.endoso_hazmat != 'N/A':
+                keeper.endoso_hazmat = dup.endoso_hazmat
+
+            # Merge permit data: if keeper's permit is missing data that dup's has, copy it
+            for dup_permit in dup.permits.all():
+                keeper_permit = keeper.permits.filter_by(permit_type=dup_permit.permit_type).first()
+                if keeper_permit:
+                    if keeper_permit.expiration_date is None and dup_permit.expiration_date is not None:
+                        keeper_permit.expiration_date = dup_permit.expiration_date
+                    if keeper_permit.applicability == 'N/A' and dup_permit.applicability == 'YES':
+                        keeper_permit.applicability = dup_permit.applicability
+                    for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
+                        if getattr(keeper_permit, field) is None and getattr(dup_permit, field) is not None:
+                            setattr(keeper_permit, field, getattr(dup_permit, field))
+
+            print(f'  {"[DRY RUN] " if dry_run else ""}Delete duplicate employee: {dup.name} ({dup.company}) id={dup.id}, keeping id={keeper.id}')
+            if not dry_run:
+                db.session.delete(dup)
+            emp_deleted += 1
+
+    # --- Deduplicate permits within each employee by (employee_id, permit_type) ---
+    permit_dupes = (
+        db.session.query(EmployeePermit.employee_id, EmployeePermit.permit_type, db.func.count(EmployeePermit.id))
+        .filter(EmployeePermit.permit_type != 'OTHER')
+        .group_by(EmployeePermit.employee_id, EmployeePermit.permit_type)
+        .having(db.func.count(EmployeePermit.id) > 1)
+        .all()
+    )
+
+    permit_deleted = 0
+    for emp_id, ptype, count in permit_dupes:
+        permits = EmployeePermit.query.filter_by(employee_id=emp_id, permit_type=ptype).order_by(EmployeePermit.id).all()
+        keeper = permits[0]
+        for dup in permits[1:]:
+            # Merge non-null fields
+            if keeper.expiration_date is None and dup.expiration_date is not None:
+                keeper.expiration_date = dup.expiration_date
+            if keeper.applicability == 'N/A' and dup.applicability == 'YES':
+                keeper.applicability = dup.applicability
+            for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
+                if getattr(keeper, field) is None and getattr(dup, field) is not None:
+                    setattr(keeper, field, getattr(dup, field))
+            print(f'  {"[DRY RUN] " if dry_run else ""}Delete duplicate permit: employee_id={emp_id} type={ptype} id={dup.id}, keeping id={keeper.id}')
+            if not dry_run:
+                db.session.delete(dup)
+            permit_deleted += 1
+
+    # --- Same for equipment permits ---
+    eq_permit_dupes = (
+        db.session.query(EquipmentPermit.equipment_id, EquipmentPermit.permit_type, db.func.count(EquipmentPermit.id))
+        .filter(EquipmentPermit.permit_type != 'OTHER')
+        .group_by(EquipmentPermit.equipment_id, EquipmentPermit.permit_type)
+        .having(db.func.count(EquipmentPermit.id) > 1)
+        .all()
+    )
+
+    eq_permit_deleted = 0
+    for eq_id, ptype, count in eq_permit_dupes:
+        permits = EquipmentPermit.query.filter_by(equipment_id=eq_id, permit_type=ptype).order_by(EquipmentPermit.id).all()
+        keeper = permits[0]
+        for dup in permits[1:]:
+            if keeper.expiration_date is None and dup.expiration_date is not None:
+                keeper.expiration_date = dup.expiration_date
+            if keeper.applicability == 'N/A' and dup.applicability == 'YES':
+                keeper.applicability = dup.applicability
+            for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
+                if getattr(keeper, field) is None and getattr(dup, field) is not None:
+                    setattr(keeper, field, getattr(dup, field))
+            if not dry_run:
+                db.session.delete(dup)
+            eq_permit_deleted += 1
+
+    if not dry_run:
+        db.session.commit()
+
+        # Apply unique constraints (db.create_all() won't add them to existing tables)
+        dialect = db.engine.dialect.name
+        if dialect == 'postgresql':
+            constraints = [
+                "ALTER TABLE employees ADD CONSTRAINT uq_employee_name_company UNIQUE (name, company)",
+                "ALTER TABLE employee_permits ADD CONSTRAINT uq_employee_permit_type UNIQUE (employee_id, permit_type)",
+                "ALTER TABLE equipment_permits ADD CONSTRAINT uq_equipment_permit_type UNIQUE (equipment_id, permit_type)",
+            ]
+            for sql in constraints:
+                try:
+                    db.session.execute(db.text(sql))
+                    db.session.commit()
+                    print(f'  Applied: {sql}')
+                except Exception:
+                    db.session.rollback()
+                    print(f'  Constraint already exists or skipped: {sql.split("ADD CONSTRAINT ")[1].split(" ")[0]}')
+
+    prefix = '[DRY RUN] ' if dry_run else ''
+    print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {eq_permit_deleted} duplicate equipment permits removed.')
 
 
 # For Railway — auto-init on startup

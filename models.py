@@ -35,6 +35,9 @@ class User(UserMixin, db.Model):
 
 class Employee(db.Model):
     __tablename__ = 'employees'
+    __table_args__ = (
+        db.UniqueConstraint('name', 'company', name='uq_employee_name_company'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     company = db.Column(db.String(10), nullable=False)  # LB or PLI
@@ -129,6 +132,9 @@ EMPLOYEE_PERMIT_TYPES = [
 
 class EmployeePermit(db.Model):
     __tablename__ = 'employee_permits'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'permit_type', name='uq_employee_permit_type'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
     permit_type = db.Column(db.String(50), nullable=False)
@@ -245,6 +251,9 @@ EQUIPMENT_PERMIT_TYPES = [
 
 class EquipmentPermit(db.Model):
     __tablename__ = 'equipment_permits'
+    __table_args__ = (
+        db.UniqueConstraint('equipment_id', 'permit_type', name='uq_equipment_permit_type'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
     permit_type = db.Column(db.String(50), nullable=False)
