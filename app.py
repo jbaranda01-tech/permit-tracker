@@ -557,6 +557,18 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
+# ── DEBUG: Duplicate Check (temporary) ─────────────────────────────────
+
+@app.route('/debug/duplicates')
+@login_required
+def debug_duplicates():
+    dupes = db.session.query(
+        Employee.name, Employee.company, db.func.count(Employee.id)
+    ).group_by(Employee.name, Employee.company).having(db.func.count(Employee.id) > 1).all()
+    return {'duplicates': [{'name': d[0], 'company': d[1], 'count': d[2]} for d in dupes],
+            'total_duplicate_groups': len(dupes)}
+
+
 # ── EXCEL IMPORT ───────────────────────────────────────────────────────
 
 @app.route('/import', methods=['GET', 'POST'])
