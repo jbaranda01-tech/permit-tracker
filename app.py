@@ -557,7 +557,7 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
-# ── DEBUG: Duplicate Check (temporary) ─────────────────────────────────
+# ── DEBUG: Duplicate Check & Fix (temporary) ──────────────────────────
 
 @app.route('/debug/duplicates')
 @login_required
@@ -567,6 +567,112 @@ def debug_duplicates():
     ).group_by(Employee.name, Employee.company).having(db.func.count(Employee.id) > 1).all()
     return {'duplicates': [{'name': d[0], 'company': d[1], 'count': d[2]} for d in dupes],
             'total_duplicate_groups': len(dupes)}
+
+
+@app.route('/debug/dedup', methods=['POST'])
+@admin_required
+def run_dedup():
+    """Web-accessible dedup for environments without CLI access."""
+    emp_deleted = 0
+    permit_deleted = 0
+    eq_permit_deleted = 0
+
+    # --- Deduplicate employees by (name, company) ---
+    dupes = (
+        db.session.query(Employee.name, Employee.company, db.func.count(Employee.id))
+        .group_by(Employee.name, Employee.company)
+        .having(db.func.count(Employee.id) > 1)
+        .all()
+    )
+    for name, company, count in dupes:
+        employees = Employee.query.filter_by(name=name, company=company).order_by(Employee.id).all()
+        keeper = employees[0]
+        for dup in employees[1:]:
+            for col in ['area', 'status', 'fecha_nacimiento', 'license_number',
+                        'license_expiration', 'license_file', 'puesto', 'telefono',
+                        'email', 'fecha_contratacion', 'contacto_emergencia', 'shirt_size']:
+                if getattr(keeper, col) is None and getattr(dup, col) is not None:
+                    setattr(keeper, col, getattr(dup, col))
+            if keeper.endoso_hazmat == 'N/A' and dup.endoso_hazmat != 'N/A':
+                keeper.endoso_hazmat = dup.endoso_hazmat
+            for dup_permit in dup.permits.all():
+                keeper_permit = keeper.permits.filter_by(permit_type=dup_permit.permit_type).first()
+                if keeper_permit:
+                    if keeper_permit.expiration_date is None and dup_permit.expiration_date is not None:
+                        keeper_permit.expiration_date = dup_permit.expiration_date
+                    if keeper_permit.applicability == 'N/A' and dup_permit.applicability == 'YES':
+                        keeper_permit.applicability = dup_permit.applicability
+                    for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
+                        if getattr(keeper_permit, field) is None and getattr(dup_permit, field) is not None:
+                            setattr(keeper_permit, field, getattr(dup_permit, field))
+            db.session.delete(dup)
+            emp_deleted += 1
+
+    # --- Deduplicate employee permits ---
+    permit_dupes = (
+        db.session.query(EmployeePermit.employee_id, EmployeePermit.permit_type, db.func.count(EmployeePermit.id))
+        .filter(EmployeePermit.permit_type != 'OTHER')
+        .group_by(EmployeePermit.employee_id, EmployeePermit.permit_type)
+        .having(db.func.count(EmployeePermit.id) > 1)
+        .all()
+    )
+    for emp_id, ptype, count in permit_dupes:
+        permits = EmployeePermit.query.filter_by(employee_id=emp_id, permit_type=ptype).order_by(EmployeePermit.id).all()
+        keeper = permits[0]
+        for dup in permits[1:]:
+            if keeper.expiration_date is None and dup.expiration_date is not None:
+                keeper.expiration_date = dup.expiration_date
+            if keeper.applicability == 'N/A' and dup.applicability == 'YES':
+                keeper.applicability = dup.applicability
+            for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
+                if getattr(keeper, field) is None and getattr(dup, field) is not None:
+                    setattr(keeper, field, getattr(dup, field))
+            db.session.delete(dup)
+            permit_deleted += 1
+
+    # --- Deduplicate equipment permits ---
+    eq_permit_dupes = (
+        db.session.query(EquipmentPermit.equipment_id, EquipmentPermit.permit_type, db.func.count(EquipmentPermit.id))
+        .filter(EquipmentPermit.permit_type != 'OTHER')
+        .group_by(EquipmentPermit.equipment_id, EquipmentPermit.permit_type)
+        .having(db.func.count(EquipmentPermit.id) > 1)
+        .all()
+    )
+    for eq_id, ptype, count in eq_permit_dupes:
+        permits = EquipmentPermit.query.filter_by(equipment_id=eq_id, permit_type=ptype).order_by(EquipmentPermit.id).all()
+        keeper = permits[0]
+        for dup in permits[1:]:
+            if keeper.expiration_date is None and dup.expiration_date is not None:
+                keeper.expiration_date = dup.expiration_date
+            if keeper.applicability == 'N/A' and dup.applicability == 'YES':
+                keeper.applicability = dup.applicability
+            for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
+                if getattr(keeper, field) is None and getattr(dup, field) is not None:
+                    setattr(keeper, field, getattr(dup, field))
+            db.session.delete(dup)
+            eq_permit_deleted += 1
+
+    db.session.commit()
+
+    # Apply unique constraints
+    if db.engine.dialect.name == 'postgresql':
+        for sql in [
+            "ALTER TABLE employees ADD CONSTRAINT uq_employee_name_company UNIQUE (name, company)",
+            "ALTER TABLE employee_permits ADD CONSTRAINT uq_employee_permit_type UNIQUE (employee_id, permit_type)",
+            "ALTER TABLE equipment_permits ADD CONSTRAINT uq_equipment_permit_type UNIQUE (equipment_id, permit_type)",
+        ]:
+            try:
+                db.session.execute(db.text(sql))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+    return {
+        'status': 'ok',
+        'employees_deleted': emp_deleted,
+        'employee_permits_deleted': permit_deleted,
+        'equipment_permits_deleted': eq_permit_deleted,
+    }
 
 
 # ── EXCEL IMPORT ───────────────────────────────────────────────────────
