@@ -70,9 +70,13 @@
         </div>
 
         <div class="sidebar-footer">
-            <div class="theme-toggle" onclick="toggleTheme()">
-                <i class="fas fa-sun" id="theme-icon-sun"></i>
-                <i class="fas fa-moon" id="theme-icon-moon"></i>
+            <div class="theme-toggle">
+                <button class="theme-btn" data-theme-value="light" onclick="setTheme('light')" title="Modo Claro">
+                    <i class="fas fa-sun"></i>
+                </button>
+                <button class="theme-btn" data-theme-value="dark" onclick="setTheme('dark')" title="Modo Oscuro">
+                    <i class="fas fa-moon"></i>
+                </button>
             </div>
             <div class="user-info">
                 <span class="user-name">{{ current_user.username }}</span>
