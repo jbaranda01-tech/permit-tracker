@@ -1327,21 +1327,30 @@ with app.app_context():
     try:
         db.create_all()
 
-        # Additive schema fixes for columns added after initial deploy.
-        # db.create_all() does not ALTER existing tables, so new columns must
-        # be backfilled here. Safe to run on every boot.
+        # Additive schema sync: db.create_all() does not ALTER existing tables,
+        # so any column added to a model after the initial deploy is missing in
+        # production. Compare each model's columns to the live table and ADD
+        # whatever is missing. Idempotent and safe to run on every boot.
         if db.engine.dialect.name == 'postgresql':
-            additive_columns = [
-                "ALTER TABLE equipment ADD COLUMN IF NOT EXISTS titular VARCHAR(200)",
-                "ALTER TABLE equipment ADD COLUMN IF NOT EXISTS unit_number VARCHAR(50)",
-            ]
-            for sql in additive_columns:
-                try:
-                    db.session.execute(db.text(sql))
-                    db.session.commit()
-                except Exception as e:
-                    db.session.rollback()
-                    print(f"[WARN] Schema backfill skipped: {sql} -> {e}")
+            from sqlalchemy import inspect as sa_inspect
+            from sqlalchemy.schema import CreateColumn
+            inspector = sa_inspect(db.engine)
+            for table in db.metadata.sorted_tables:
+                if not inspector.has_table(table.name):
+                    continue
+                existing_cols = {c['name'] for c in inspector.get_columns(table.name)}
+                for col in table.columns:
+                    if col.name in existing_cols:
+                        continue
+                    try:
+                        col_ddl = str(CreateColumn(col).compile(db.engine))
+                        sql = f'ALTER TABLE {table.name} ADD COLUMN IF NOT EXISTS {col_ddl}'
+                        db.session.execute(db.text(sql))
+                        db.session.commit()
+                        print(f"[INFO] Schema backfill: added {table.name}.{col.name}")
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"[WARN] Schema backfill skipped {table.name}.{col.name}: {e}")
 
         if not User.query.filter_by(role='admin').first():
             admin = User(username='admin', email='admin@lbcaribe.com', role='admin')
