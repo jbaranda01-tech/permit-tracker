@@ -507,30 +507,6 @@ img { max-width: 100%; }
     gap: var(--space-md);
 }
 
-.view-toggle {
-    display: flex;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-}
-
-.toggle-btn {
-    padding: var(--space-sm) var(--space-lg);
-    font-weight: 600;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    transition: all var(--transition);
-    color: var(--text-secondary);
-}
-.toggle-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.toggle-btn.active {
-    background: var(--color-lb);
-    color: #fff;
-}
-
 .dashboard-actions {
     display: flex;
     gap: var(--space-md);

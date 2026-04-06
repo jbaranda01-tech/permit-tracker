@@ -4,14 +4,6 @@
 <div class="dashboard">
     <!-- Top Bar -->
     <div class="dashboard-header">
-        <div class="view-toggle">
-            <a href="{{ url_for('dashboard', view='employees') }}" class="toggle-btn {% if view == 'employees' %}active{% endif %}">
-                <i class="fas fa-users"></i> Empleados
-            </a>
-            <a href="{{ url_for('dashboard', view='equipment') }}" class="toggle-btn {% if view == 'equipment' %}active{% endif %}">
-                <i class="fas fa-truck"></i> Equipos
-            </a>
-        </div>
         <div class="dashboard-actions">
             <form class="search-form" method="GET" action="{{ url_for('dashboard') }}">
                 <input type="hidden" name="view" value="{{ view }}">
