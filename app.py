@@ -1326,6 +1326,23 @@ def dedup_data(dry_run):
 with app.app_context():
     try:
         db.create_all()
+
+        # Additive schema fixes for columns added after initial deploy.
+        # db.create_all() does not ALTER existing tables, so new columns must
+        # be backfilled here. Safe to run on every boot.
+        if db.engine.dialect.name == 'postgresql':
+            additive_columns = [
+                "ALTER TABLE equipment ADD COLUMN IF NOT EXISTS titular VARCHAR(200)",
+                "ALTER TABLE equipment ADD COLUMN IF NOT EXISTS unit_number VARCHAR(50)",
+            ]
+            for sql in additive_columns:
+                try:
+                    db.session.execute(db.text(sql))
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"[WARN] Schema backfill skipped: {sql} -> {e}")
+
         if not User.query.filter_by(role='admin').first():
             admin = User(username='admin', email='admin@lbcaribe.com', role='admin')
             admin.set_password('admin123')
