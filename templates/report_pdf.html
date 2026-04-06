@@ -22,6 +22,7 @@
         .company-title { font-size: 13pt; font-weight: 700; padding: 6px 10px; margin-bottom: 8px; color: white; }
         .company-lb { background: #1e40af; }
         .company-pli { background: #7c3aed; }
+        .company-personal { background: #059669; }
 
         table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 15px; }
         th { background: #f1f5f9; padding: 5px 6px; text-align: left; border-bottom: 2px solid #cbd5e1; font-weight: 600; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -234,6 +235,44 @@
             </thead>
             <tbody>
                 {% for eq in pli_eq %}
+                <tr>
+                    <td><strong>{{ eq.display_name }}</strong></td>
+                    <td>{{ 'Generador' if eq.equipment_type == 'generator' else 'Vehículo' }}</td>
+                    <td>{{ eq.plate_number or '—' }}</td>
+                    <td>{{ eq.vin_serial or '—' }}</td>
+                    {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}
+                        {% set permit = eq.permits.filter_by(permit_type=ptype).first() %}
+                        {% if permit %}
+                            {{ status_cell(permit.expiration_date, permit.applicability) }}
+                        {% else %}
+                            <td><span class="status-cell st-missing">—</span></td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% set personal_eq = equipment_list | selectattr('company', 'equalto', 'Personal') | list %}
+    {% if personal_eq %}
+    <div class="company-section">
+        <div class="company-title company-personal">Personal — Equipos</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Equipo</th>
+                    <th>Tipo</th>
+                    <th>Tablilla</th>
+                    <th>VIN/Serial</th>
+                    <th>Marbete</th>
+                    <th>Seguro</th>
+                    <th>Inspección</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in personal_eq %}
                 <tr>
                     <td><strong>{{ eq.display_name }}</strong></td>
                     <td>{{ 'Generador' if eq.equipment_type == 'generator' else 'Vehículo' }}</td>

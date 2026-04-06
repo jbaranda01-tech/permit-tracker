@@ -44,6 +44,8 @@
     --color-lb-light: #dbeafe;
     --color-pli: #7c3aed;
     --color-pli-light: #ede9fe;
+    --color-personal: #059669;
+    --color-personal-light: #d1fae5;
 
     /* Transition */
     --transition: 200ms ease;
@@ -110,6 +112,7 @@
     --color-missing-text: #94a3b8;
     --color-lb-light: #1e3a5f;
     --color-pli-light: #2e1a5e;
+    --color-personal-light: #064e3b;
 }
 
 
@@ -554,6 +557,10 @@ img { max-width: 100%; }
     gap: var(--space-lg);
 }
 
+.company-panels.three-columns {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
 .company-panel {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
@@ -580,6 +587,7 @@ img { max-width: 100%; }
 
 .panel-lb { background: var(--color-lb); }
 .panel-pli { background: var(--color-pli); }
+.panel-personal { background: var(--color-personal); }
 
 .panel-count {
     background: rgba(255,255,255,0.2);
@@ -683,6 +691,7 @@ img { max-width: 100%; }
 }
 .tag-lb { background: var(--color-lb-light); color: var(--color-lb); }
 .tag-pli { background: var(--color-pli-light); color: var(--color-pli); }
+.tag-personal { background: var(--color-personal-light); color: var(--color-personal); }
 
 .area-tag {
     font-size: 0.85rem;
@@ -1060,6 +1069,7 @@ img { max-width: 100%; }
 /* ── Responsive ────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
     .company-panels { grid-template-columns: 1fr; }
+    .company-panels.three-columns { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {

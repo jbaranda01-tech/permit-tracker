@@ -185,6 +185,7 @@ def dashboard():
         # Split by company
         lb_items = query.filter(Equipment.company == 'LB').order_by(Equipment.make).all()
         pli_items = query.filter(Equipment.company == 'PLI').order_by(Equipment.make).all()
+        personal_items = query.filter(Equipment.company == 'Personal').order_by(Equipment.make).all()
     else:
         query = Employee.query
         if search:
@@ -208,6 +209,7 @@ def dashboard():
         view=view,
         lb_items=lb_items,
         pli_items=pli_items,
+        personal_items=personal_items if view == 'equipment' else [],
         search=search,
         company_filter=company_filter,
         status_filter=status_filter,

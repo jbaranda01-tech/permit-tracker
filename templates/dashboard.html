@@ -26,8 +26,8 @@
         </div>
     </div>
 
-    <!-- Dual Company Panels -->
-    <div class="company-panels">
+    <!-- Company Panels -->
+    <div class="company-panels{% if view == 'equipment' %} three-columns{% endif %}">
         <!-- LB Caribe Services -->
         <div class="company-panel">
             <div class="panel-header panel-lb">
@@ -169,6 +169,47 @@
                 {% endif %}
             </div>
         </div>
+
+        {% if view == 'equipment' %}
+        <!-- Personal -->
+        <div class="company-panel">
+            <div class="panel-header panel-personal">
+                <h2><i class="fas fa-user"></i> Personal</h2>
+                <span class="panel-count">{{ personal_items|length }}</span>
+            </div>
+            <div class="panel-body">
+                {% for eq in personal_items %}
+                <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
+                    <div class="entity-info">
+                        <div class="entity-name">{{ eq.display_name }}</div>
+                        <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
+                    </div>
+                    <div class="entity-status">
+                        {% set summary = eq.permit_status_summary %}
+                        {% if summary.expired > 0 %}
+                            <span class="status-dot status-expired" title="{{ summary.expired }} vencido(s)"></span>
+                        {% endif %}
+                        {% if summary.expiring_soon > 0 %}
+                            <span class="status-dot status-expiring" title="{{ summary.expiring_soon }} por vencer"></span>
+                        {% endif %}
+                        {% if summary.missing > 0 %}
+                            <span class="status-dot status-missing" title="{{ summary.missing }} incompleto(s)"></span>
+                        {% endif %}
+                        {% if summary.expired == 0 and summary.expiring_soon == 0 and summary.missing == 0 and (summary.valid > 0) %}
+                            <span class="status-dot status-valid" title="Completo"></span>
+                        {% endif %}
+                    </div>
+                </a>
+                {% endfor %}
+                {% if not personal_items %}
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <p>No hay equipos</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

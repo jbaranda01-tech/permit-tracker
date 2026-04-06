@@ -188,7 +188,7 @@ class EmployeePermit(db.Model):
 class Equipment(db.Model):
     __tablename__ = 'equipment'
     id = db.Column(db.Integer, primary_key=True)
-    company = db.Column(db.String(10), nullable=False)  # LB or PLI
+    company = db.Column(db.String(10), nullable=False)  # LB, PLI, or Personal
     equipment_type = db.Column(db.String(20), default='vehicle')  # vehicle, generator
     plate_number = db.Column(db.String(50))
     make = db.Column(db.String(100))
@@ -205,7 +205,8 @@ class Equipment(db.Model):
 
     @property
     def company_full(self):
-        return 'LB Caribe Services' if self.company == 'LB' else 'Professional Logistics'
+        names = {'LB': 'LB Caribe Services', 'PLI': 'Professional Logistics', 'Personal': 'Personal'}
+        return names.get(self.company, self.company)
 
     @property
     def display_name(self):
