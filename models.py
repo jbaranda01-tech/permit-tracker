@@ -214,7 +214,7 @@ class Equipment(db.Model):
     @property
     def display_name(self):
         if self.unit_number:
-            return f'Unidad {self.unit_number}'
+            return self.unit_number
         return f'Equipo #{self.id}'
 
     @property
