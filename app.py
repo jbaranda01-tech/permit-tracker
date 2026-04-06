@@ -171,6 +171,7 @@ def dashboard():
         if search:
             query = query.filter(
                 db.or_(
+                    Equipment.unit_number.ilike(f'%{search}%'),
                     Equipment.plate_number.ilike(f'%{search}%'),
                     Equipment.make.ilike(f'%{search}%'),
                     Equipment.model.ilike(f'%{search}%'),

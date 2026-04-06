@@ -213,17 +213,8 @@ class Equipment(db.Model):
 
     @property
     def display_name(self):
-        parts = []
-        if self.year:
-            parts.append(str(self.year))
-        if self.make:
-            parts.append(self.make)
-        if self.model:
-            parts.append(self.model)
-        if parts:
-            return ' '.join(parts)
-        if self.plate_number:
-            return f'Tablilla: {self.plate_number}'
+        if self.unit_number:
+            return f'Unidad {self.unit_number}'
         return f'Equipo #{self.id}'
 
     @property
