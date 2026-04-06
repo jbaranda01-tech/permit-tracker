@@ -169,6 +169,18 @@ img { max-width: 100%; }
 
 .logo i { font-size: 1.3rem; color: var(--color-valid); }
 
+.logo-img {
+    height: 32px;
+    width: auto;
+    object-fit: contain;
+}
+
+.company-logo {
+    height: 24px;
+    width: auto;
+    object-fit: contain;
+}
+
 .sidebar-toggle {
     background: none;
     border: none;
