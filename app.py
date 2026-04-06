@@ -416,10 +416,13 @@ def equipment_new():
         equip = Equipment(
             company=request.form['company'],
             equipment_type=request.form.get('equipment_type', 'vehicle'),
+            titular=request.form.get('titular', ''),
+            unit_number=request.form.get('unit_number', ''),
             plate_number=request.form.get('plate_number', ''),
             make=request.form.get('make', ''),
             model=request.form.get('model', ''),
             vin_serial=request.form.get('vin_serial', ''),
+            insurance_company=request.form.get('insurance_company', ''),
             notes=request.form.get('notes', ''),
             status=request.form.get('status', 'activo'),
         )
@@ -436,10 +439,12 @@ def equipment_new():
         # Create default permit slots
         for code, name in EQUIPMENT_PERMIT_TYPES:
             if code != 'OTHER':
+                # Voucher does not apply to Personal equipment
+                applicability = 'N/A' if code == 'VOUCHER' and equip.company == 'Personal' else 'YES'
                 permit = EquipmentPermit(
                     equipment_id=equip.id,
                     permit_type=code,
-                    applicability='YES'
+                    applicability=applicability,
                 )
                 db.session.add(permit)
 
@@ -457,10 +462,13 @@ def equipment_edit(id):
     if request.method == 'POST':
         equip.company = request.form['company']
         equip.equipment_type = request.form.get('equipment_type', 'vehicle')
+        equip.titular = request.form.get('titular', '')
+        equip.unit_number = request.form.get('unit_number', '')
         equip.plate_number = request.form.get('plate_number', '')
         equip.make = request.form.get('make', '')
         equip.model = request.form.get('model', '')
         equip.vin_serial = request.form.get('vin_serial', '')
+        equip.insurance_company = request.form.get('insurance_company', '')
         equip.notes = request.form.get('notes', '')
         equip.status = request.form.get('status', 'activo')
 
@@ -850,6 +858,160 @@ def import_data():
 
     session['import_token'] = secrets.token_hex(16)
     return render_template('import.html', import_token=session['import_token'])
+
+
+@app.route('/import/equipment', methods=['POST'])
+@admin_required
+def import_equipment():
+    import calendar
+
+    # Validate idempotency token
+    token = request.form.get('import_token', '')
+    if token != session.pop('import_token', None):
+        flash('Formulario ya fue procesado. Por favor intente nuevamente.', 'warning')
+        return redirect(url_for('import_data'))
+
+    if 'file' not in request.files:
+        flash('No se seleccionó archivo.', 'danger')
+        return redirect(url_for('import_data'))
+
+    file = request.files['file']
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        flash('Solo se aceptan archivos Excel (.xlsx, .xls).', 'danger')
+        return redirect(url_for('import_data'))
+
+    try:
+        from openpyxl import load_workbook
+        from sqlalchemy.exc import IntegrityError
+
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'import_eq_{uuid.uuid4().hex}.xlsx')
+        file.save(filepath)
+        wb = load_workbook(filepath, read_only=True)
+
+        # Advisory lock for PostgreSQL
+        if db.engine.dialect.name == 'postgresql':
+            db.session.execute(db.text("SELECT pg_advisory_xact_lock(43)"))
+
+        # Find data sheet
+        ws = None
+        for name in wb.sheetnames:
+            if 'equipo' in name.lower() or 'vehicle' in name.lower():
+                ws = wb[name]
+                break
+        if ws is None:
+            ws = wb[wb.sheetnames[0]]
+
+        imported = 0
+        skipped = 0
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            flash('El archivo está vacío.', 'warning')
+            return redirect(url_for('import_data'))
+
+        for row in rows[1:]:
+            if not row or not row[0]:
+                continue
+
+            # Column mapping: Company, Titular, Unit, Model, Year, VIN, Exp Month, Plate, Insurance
+            company_raw = str(row[0]).strip().upper() if row[0] else ''
+            if 'PERSONAL' in company_raw:
+                company = 'Personal'
+            elif 'PLI' in company_raw:
+                company = 'PLI'
+            else:
+                company = 'LB'
+
+            titular = str(row[1]).strip() if row[1] else ''
+            unit_number = str(row[2]).strip() if row[2] else ''
+            model = str(row[3]).strip() if row[3] else ''
+
+            year = None
+            if row[4]:
+                try:
+                    year = int(row[4])
+                except (ValueError, TypeError):
+                    pass
+
+            vin_serial = str(row[5]).strip() if row[5] else ''
+            if vin_serial and vin_serial.replace('.', '').replace(',', '').isdigit():
+                vin_serial = str(int(float(vin_serial)))
+
+            # Expiration month (1-12) → last day of that month, current year
+            exp_date = None
+            if row[6]:
+                try:
+                    month = int(row[6])
+                    if 1 <= month <= 12:
+                        current_year = date.today().year
+                        last_day = calendar.monthrange(current_year, month)[1]
+                        exp_date = date(current_year, month, last_day)
+                except (ValueError, TypeError):
+                    pass
+
+            plate_number = str(row[7]).strip() if len(row) > 7 and row[7] else ''
+            insurance_company = str(row[8]).strip() if len(row) > 8 and row[8] else ''
+
+            # Skip duplicates by VIN or plate number
+            if vin_serial:
+                existing = Equipment.query.filter_by(vin_serial=vin_serial).first()
+                if existing:
+                    skipped += 1
+                    continue
+            if plate_number:
+                existing = Equipment.query.filter_by(plate_number=plate_number).first()
+                if existing:
+                    skipped += 1
+                    continue
+
+            equip = Equipment(
+                company=company,
+                titular=titular,
+                unit_number=unit_number,
+                model=model,
+                year=year,
+                vin_serial=vin_serial,
+                plate_number=plate_number,
+                insurance_company=insurance_company,
+                status='activo',
+            )
+            db.session.add(equip)
+            db.session.flush()
+
+            # Create 3 permits, all with the same expiration date
+            permit_types = ['MARBETE', 'INSPECCION', 'VOUCHER']
+            for ptype in permit_types:
+                # Voucher does not apply to Personal equipment
+                if ptype == 'VOUCHER' and company == 'Personal':
+                    applicability = 'N/A'
+                else:
+                    applicability = 'YES'
+
+                permit = EquipmentPermit(
+                    equipment_id=equip.id,
+                    permit_type=ptype,
+                    applicability=applicability,
+                    expiration_date=exp_date if applicability == 'YES' else None,
+                )
+                db.session.add(permit)
+
+            imported += 1
+
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash('Error: datos duplicados detectados. Posible importación simultánea.', 'danger')
+            os.remove(filepath)
+            return redirect(url_for('import_data'))
+
+        os.remove(filepath)
+        flash(f'Importación completa: {imported} equipos importados, {skipped} duplicados omitidos.', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error en la importación: {str(e)}', 'danger')
+
+    return redirect(url_for('import_data'))
 
 
 # ── PDF REPORT ─────────────────────────────────────────────────────────

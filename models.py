@@ -190,11 +190,14 @@ class Equipment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     company = db.Column(db.String(10), nullable=False)  # LB, PLI, or Personal
     equipment_type = db.Column(db.String(20), default='vehicle')  # vehicle, generator
+    titular = db.Column(db.String(200))
+    unit_number = db.Column(db.String(50))
     plate_number = db.Column(db.String(50))
     make = db.Column(db.String(100))
     model = db.Column(db.String(100))
     year = db.Column(db.Integer)
     vin_serial = db.Column(db.String(100))
+    insurance_company = db.Column(db.String(200))
     notes = db.Column(db.Text)
     status = db.Column(db.String(20), default='activo')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -245,6 +248,7 @@ class Equipment(db.Model):
 EQUIPMENT_PERMIT_TYPES = [
     ('MARBETE', 'Marbete'),
     ('SEGURO', 'Seguro / Insurance'),
+    ('VOUCHER', 'Voucher'),
     ('INSPECCION', 'Inspección'),
     ('OTHER', 'Otro'),
 ]

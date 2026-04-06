@@ -7,9 +7,19 @@
         <h1><i class="fas fa-file-import"></i> Importar desde Excel</h1>
     </div>
 
-    <div class="import-container">
+    <div class="import-tabs">
+        <button class="import-tab active" data-tab="employees" onclick="switchTab('employees')">
+            <i class="fas fa-users"></i> Empleados
+        </button>
+        <button class="import-tab" data-tab="equipment" onclick="switchTab('equipment')">
+            <i class="fas fa-truck"></i> Equipos
+        </button>
+    </div>
+
+    <!-- Employees Import -->
+    <div class="import-container" id="tab-employees">
         <div class="import-info">
-            <h3>Formato Esperado</h3>
+            <h3>Formato Esperado — Empleados</h3>
             <p>El archivo Excel debe tener las siguientes columnas en orden:</p>
             <div class="column-list">
                 <span class="col-tag">Nombre Empleado</span>
@@ -35,48 +45,126 @@
             </div>
         </div>
 
-        <form method="POST" enctype="multipart/form-data" class="import-form" id="import-form">
+        <form method="POST" action="{{ url_for('import_data') }}" enctype="multipart/form-data" class="import-form" id="import-form-employees">
             <input type="hidden" name="import_token" value="{{ import_token }}">
-            <div class="upload-area" id="upload-area">
+            <div class="upload-area" id="upload-area-employees">
                 <i class="fas fa-cloud-upload-alt"></i>
                 <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
-                <input type="file" name="file" id="file-input" accept=".xlsx,.xls">
-                <span class="file-name" id="file-name"></span>
+                <input type="file" name="file" id="file-input-employees" accept=".xlsx,.xls">
+                <span class="file-name" id="file-name-employees"></span>
             </div>
-            <button type="submit" class="btn btn-primary btn-full" id="import-btn">
-                <i class="fas fa-upload"></i> Importar Datos
+            <button type="submit" class="btn btn-primary btn-full" id="import-btn-employees">
+                <i class="fas fa-upload"></i> Importar Empleados
+            </button>
+        </form>
+    </div>
+
+    <!-- Equipment Import -->
+    <div class="import-container" id="tab-equipment" style="display: none;">
+        <div class="import-info">
+            <h3>Formato Esperado — Equipos</h3>
+            <p>El archivo Excel debe tener las siguientes columnas en orden:</p>
+            <div class="column-list">
+                <span class="col-tag">Compañía (LB/PLI/Personal)</span>
+                <span class="col-tag">Titular</span>
+                <span class="col-tag">Unidad</span>
+                <span class="col-tag">Modelo</span>
+                <span class="col-tag">Año</span>
+                <span class="col-tag">VIN</span>
+                <span class="col-tag">Mes de Expiración (1-12)</span>
+                <span class="col-tag">Tablilla</span>
+                <span class="col-tag">Seguro (Compañía)</span>
+            </div>
+            <div class="import-notes">
+                <p><i class="fas fa-info-circle"></i> Se crearán 3 permisos por equipo: <strong>Voucher</strong>, <strong>Inspección</strong>, y <strong>Marbete</strong>.</p>
+                <p><i class="fas fa-info-circle"></i> Todos los permisos vencen el último día del mes especificado en el año actual.</p>
+                <p><i class="fas fa-info-circle"></i> El <strong>Voucher</strong> no aplica a equipos marcados como <strong>Personal</strong>.</p>
+                <p><i class="fas fa-info-circle"></i> Equipos duplicados (por VIN o tablilla) serán omitidos.</p>
+            </div>
+        </div>
+
+        <form method="POST" action="{{ url_for('import_equipment') }}" enctype="multipart/form-data" class="import-form" id="import-form-equipment">
+            <input type="hidden" name="import_token" value="{{ import_token }}">
+            <div class="upload-area" id="upload-area-equipment">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
+                <input type="file" name="file" id="file-input-equipment" accept=".xlsx,.xls">
+                <span class="file-name" id="file-name-equipment"></span>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="import-btn-equipment">
+                <i class="fas fa-upload"></i> Importar Equipos
             </button>
         </form>
     </div>
 </div>
 
+<style>
+.import-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0;
+    border-bottom: 2px solid var(--border-color, #e2e8f0);
+}
+.import-tab {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-secondary, #64748b);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+.import-tab:hover {
+    color: var(--text-primary, #1e293b);
+}
+.import-tab.active {
+    color: var(--primary, #3b82f6);
+    border-bottom-color: var(--primary, #3b82f6);
+}
+</style>
+
 <script>
-const uploadArea = document.getElementById('upload-area');
-const fileInput = document.getElementById('file-input');
-const fileName = document.getElementById('file-name');
+function switchTab(tab) {
+    document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.import-tab[data-tab="${tab}"]`).classList.add('active');
+    document.getElementById('tab-employees').style.display = tab === 'employees' ? '' : 'none';
+    document.getElementById('tab-equipment').style.display = tab === 'equipment' ? '' : 'none';
+}
 
-uploadArea.addEventListener('click', () => fileInput.click());
-uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
-uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
-uploadArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadArea.classList.remove('drag-over');
-    fileInput.files = e.dataTransfer.files;
-    fileName.textContent = e.dataTransfer.files[0]?.name || '';
-});
-fileInput.addEventListener('change', () => {
-    fileName.textContent = fileInput.files[0]?.name || '';
-});
+function setupUpload(areaId, inputId, nameId, formId, btnId) {
+    const area = document.getElementById(areaId);
+    const input = document.getElementById(inputId);
+    const name = document.getElementById(nameId);
 
-document.getElementById('import-form').addEventListener('submit', function(e) {
-    const btn = document.getElementById('import-btn');
-    if (btn.dataset.submitted === 'true') {
+    area.addEventListener('click', () => input.click());
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('drag-over'); });
+    area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+    area.addEventListener('drop', (e) => {
         e.preventDefault();
-        return;
-    }
-    btn.dataset.submitted = 'true';
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
-});
+        area.classList.remove('drag-over');
+        input.files = e.dataTransfer.files;
+        name.textContent = e.dataTransfer.files[0]?.name || '';
+    });
+    input.addEventListener('change', () => {
+        name.textContent = input.files[0]?.name || '';
+    });
+
+    document.getElementById(formId).addEventListener('submit', function(e) {
+        const btn = document.getElementById(btnId);
+        if (btn.dataset.submitted === 'true') {
+            e.preventDefault();
+            return;
+        }
+        btn.dataset.submitted = 'true';
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+    });
+}
+
+setupUpload('upload-area-employees', 'file-input-employees', 'file-name-employees', 'import-form-employees', 'import-btn-employees');
+setupUpload('upload-area-equipment', 'file-input-equipment', 'file-name-equipment', 'import-form-equipment', 'import-btn-equipment');
 </script>
 {% endblock %}
