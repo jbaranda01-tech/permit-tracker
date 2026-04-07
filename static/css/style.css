@@ -287,6 +287,15 @@ img { max-width: 100%; }
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
+.theme-toggle-floating {
+    position: fixed;
+    top: var(--space-md);
+    right: var(--space-lg);
+    z-index: 1000;
+    background: var(--bg-card, var(--bg-sidebar-hover));
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
 .user-info {
     display: flex;
     flex-direction: column;

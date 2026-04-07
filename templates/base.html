@@ -70,14 +70,6 @@
         </div>
 
         <div class="sidebar-footer">
-            <div class="theme-toggle">
-                <button class="theme-btn" data-theme-value="light" onclick="setTheme('light')" title="Modo Claro">
-                    <i class="fas fa-sun"></i>
-                </button>
-                <button class="theme-btn" data-theme-value="dark" onclick="setTheme('dark')" title="Modo Oscuro">
-                    <i class="fas fa-moon"></i>
-                </button>
-            </div>
             <div class="user-info">
                 <span class="user-name">{{ current_user.username }}</span>
                 <span class="user-role">{{ current_user.role }}</span>
@@ -88,6 +80,15 @@
             </a>
         </div>
     </nav>
+
+    <div class="theme-toggle theme-toggle-floating">
+        <button class="theme-btn" data-theme-value="light" onclick="setTheme('light')" title="Modo Claro">
+            <i class="fas fa-sun"></i>
+        </button>
+        <button class="theme-btn" data-theme-value="dark" onclick="setTheme('dark')" title="Modo Oscuro">
+            <i class="fas fa-moon"></i>
+        </button>
+    </div>
     {% endif %}
 
     <main class="{% if current_user.is_authenticated %}main-content{% else %}main-content-full{% endif %}">
