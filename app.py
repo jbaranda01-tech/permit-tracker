@@ -727,6 +727,7 @@ def import_data():
         try:
             from openpyxl import load_workbook
             from sqlalchemy.exc import IntegrityError
+            import unicodedata
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'import_{uuid.uuid4().hex}.xlsx')
             file.save(filepath)
             wb = load_workbook(filepath, read_only=True)
@@ -752,6 +753,22 @@ def import_data():
                 return redirect(url_for('import_data'))
 
             headers = [str(h).strip().upper() if h else '' for h in rows[0]]
+
+            # Reject files that don't look like an employee sheet (e.g. an
+            # equipment template uploaded by mistake creates ghost PLI rows).
+            def _norm(s):
+                return unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode()
+            normalized_headers = [_norm(h) for h in headers]
+            joined_headers = ' '.join(normalized_headers)
+            first_header = normalized_headers[0] if normalized_headers else ''
+            equipment_markers = ('TITULAR', 'UNIDAD', 'VIN', 'MARBETE', 'TABLILLA')
+            looks_like_employee = ('NOMBRE' in first_header) or ('NAME' in first_header)
+            looks_like_equipment = any(m in joined_headers for m in equipment_markers)
+            if not looks_like_employee or looks_like_equipment:
+                wb.close()
+                os.remove(filepath)
+                flash('El archivo no parece ser de empleados. Verifique que está usando la plantilla correcta.', 'danger')
+                return redirect(url_for('import_data'))
 
             for row in rows[1:]:
                 if not row[0]:
@@ -955,6 +972,25 @@ def import_equipment():
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             flash('El archivo está vacío.', 'warning')
+            return redirect(url_for('import_data'))
+
+        # Reject files that don't look like an equipment sheet (mirrors the
+        # guard in import_data() so neither endpoint accepts the wrong template).
+        headers = [str(h).strip().upper() if h else '' for h in rows[0]]
+        normalized_headers = [
+            unicodedata.normalize('NFKD', h).encode('ascii', 'ignore').decode()
+            for h in headers
+        ]
+        joined_headers = ' '.join(normalized_headers)
+        employee_markers = ('NTSP', 'TWIC', 'HAZMAT', 'CERT MEDICO', 'ANTECEDENTES')
+        looks_like_equipment = any(
+            m in joined_headers for m in ('TITULAR', 'UNIDAD', 'VIN', 'MARBETE', 'TABLILLA')
+        )
+        looks_like_employee = any(m in joined_headers for m in employee_markers)
+        if not looks_like_equipment or looks_like_employee:
+            wb.close()
+            os.remove(filepath)
+            flash('El archivo no parece ser de equipos. Verifique que está usando la plantilla correcta.', 'danger')
             return redirect(url_for('import_data'))
 
         for row in rows[1:]:
