@@ -968,13 +968,22 @@ def import_equipment():
             if vin_serial and vin_serial.replace('.', '').replace(',', '').isdigit():
                 vin_serial = str(int(float(vin_serial)))
 
-            # Expiration month (Spanish name or 1-12) → last day of that month, current year
+            # Expiration month (Spanish name or 1-12) → last day of that month.
+            # Use the next occurrence of that month so equipment is assumed
+            # up-to-date: if the month has already passed this year, roll to
+            # the same month next year.
             exp_date = None
             month = parse_month(row[6])
             if month is not None:
-                current_year = date.today().year
-                last_day = calendar.monthrange(current_year, month)[1]
-                exp_date = date(current_year, month, last_day)
+                today = date.today()
+                year = today.year
+                last_day = calendar.monthrange(year, month)[1]
+                candidate = date(year, month, last_day)
+                if candidate < today:
+                    year += 1
+                    last_day = calendar.monthrange(year, month)[1]
+                    candidate = date(year, month, last_day)
+                exp_date = candidate
 
             plate_number = str(row[7]).strip() if len(row) > 7 and row[7] else ''
             insurance_company = str(row[8]).strip() if len(row) > 8 and row[8] else ''
