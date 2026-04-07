@@ -865,6 +865,37 @@ def import_data():
 @admin_required
 def import_equipment():
     import calendar
+    import unicodedata
+
+    SPANISH_MONTHS = {
+        'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+        'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+        'septiembre': 9, 'setiembre': 9, 'octubre': 10,
+        'noviembre': 11, 'diciembre': 12,
+    }
+
+    def parse_month(value):
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            try:
+                m = int(value)
+                return m if 1 <= m <= 12 else None
+            except (ValueError, TypeError):
+                return None
+        if isinstance(value, str):
+            s = value.strip().lower()
+            if not s:
+                return None
+            s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode()
+            if s in SPANISH_MONTHS:
+                return SPANISH_MONTHS[s]
+            try:
+                m = int(s)
+                return m if 1 <= m <= 12 else None
+            except ValueError:
+                return None
+        return None
 
     # Validate idempotency token
     token = request.form.get('import_token', '')
@@ -937,17 +968,13 @@ def import_equipment():
             if vin_serial and vin_serial.replace('.', '').replace(',', '').isdigit():
                 vin_serial = str(int(float(vin_serial)))
 
-            # Expiration month (1-12) → last day of that month, current year
+            # Expiration month (Spanish name or 1-12) → last day of that month, current year
             exp_date = None
-            if row[6]:
-                try:
-                    month = int(row[6])
-                    if 1 <= month <= 12:
-                        current_year = date.today().year
-                        last_day = calendar.monthrange(current_year, month)[1]
-                        exp_date = date(current_year, month, last_day)
-                except (ValueError, TypeError):
-                    pass
+            month = parse_month(row[6])
+            if month is not None:
+                current_year = date.today().year
+                last_day = calendar.monthrange(current_year, month)[1]
+                exp_date = date(current_year, month, last_day)
 
             plate_number = str(row[7]).strip() if len(row) > 7 and row[7] else ''
             insurance_company = str(row[8]).strip() if len(row) > 8 and row[8] else ''
