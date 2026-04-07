@@ -370,7 +370,8 @@ img { max-width: 100%; }
     text-align: center;
     margin-bottom: var(--space-xl);
 }
-.login-logo i { font-size: 2.5rem; color: var(--color-valid); margin-bottom: var(--space-sm); display: block; }
+.login-logo .logos { display: flex; justify-content: center; align-items: center; gap: var(--space-md); margin-bottom: var(--space-md); }
+.login-company-logo { height: 48px; width: auto; object-fit: contain; }
 .login-logo h1 { font-size: 1.5rem; font-weight: 700; }
 .login-logo p { color: var(--text-secondary); font-size: 0.85rem; margin-top: var(--space-xs); }
 
