@@ -979,17 +979,22 @@ def import_equipment():
             plate_number = str(row[7]).strip() if len(row) > 7 and row[7] else ''
             insurance_company = str(row[8]).strip() if len(row) > 8 and row[8] else ''
 
-            # Skip duplicates by VIN or plate number
+            # Look up duplicates by VIN or plate number — if found, refresh the
+            # permit expiration dates from this row instead of skipping outright,
+            # so corrections to the source spreadsheet propagate on re-import.
+            existing = None
             if vin_serial:
                 existing = Equipment.query.filter_by(vin_serial=vin_serial).first()
-                if existing:
-                    skipped += 1
-                    continue
-            if plate_number:
+            if not existing and plate_number:
                 existing = Equipment.query.filter_by(plate_number=plate_number).first()
-                if existing:
-                    skipped += 1
-                    continue
+            if existing:
+                if exp_date is not None:
+                    for permit in existing.permits:
+                        if permit.permit_type in ('MARBETE', 'INSPECCION', 'VOUCHER') \
+                                and permit.applicability != 'N/A':
+                            permit.expiration_date = exp_date
+                skipped += 1
+                continue
 
             equip = Equipment(
                 company=company,
