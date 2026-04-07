@@ -329,6 +329,10 @@ def employee_edit(id):
 def employee_delete(id):
     emp = Employee.query.get_or_404(id)
     name = emp.name
+    # Explicitly delete child permits first: the relationship is lazy='dynamic'
+    # and the FK has no ON DELETE CASCADE, so the ORM-level cascade doesn't
+    # always issue child DELETEs before the parent, causing FK violations.
+    EmployeePermit.query.filter_by(employee_id=emp.id).delete(synchronize_session=False)
     db.session.delete(emp)
     db.session.commit()
     flash(f'Empleado {name} eliminado.', 'warning')
@@ -509,6 +513,8 @@ def equipment_edit(id):
 def equipment_delete(id):
     equip = Equipment.query.get_or_404(id)
     name = equip.display_name
+    # Explicitly delete child permits first (see employee_delete for rationale).
+    EquipmentPermit.query.filter_by(equipment_id=equip.id).delete(synchronize_session=False)
     db.session.delete(equip)
     db.session.commit()
     flash(f'Equipo {name} eliminado.', 'warning')
