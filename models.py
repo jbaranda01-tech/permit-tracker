@@ -198,6 +198,7 @@ class Equipment(db.Model):
     year = db.Column(db.Integer)
     vin_serial = db.Column(db.String(100))
     insurance_company = db.Column(db.String(200))
+    cost = db.Column(db.Numeric(10, 2))
     notes = db.Column(db.Text)
     status = db.Column(db.String(20), default='activo')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

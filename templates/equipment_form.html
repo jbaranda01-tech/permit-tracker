@@ -76,6 +76,10 @@
                     <label for="insurance_company">Compañía de Seguro</label>
                     <input type="text" id="insurance_company" name="insurance_company" value="{{ equipment.insurance_company if equipment else '' }}">
                 </div>
+                <div class="form-group">
+                    <label for="cost">Costo ($)</label>
+                    <input type="number" step="0.01" min="0" id="cost" name="cost" value="{{ equipment.cost if equipment and equipment.cost is not none else '' }}">
+                </div>
             </div>
             <div class="form-row">
                 <div class="form-group form-group-full">

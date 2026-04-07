@@ -3,6 +3,7 @@ import uuid
 import secrets
 import click
 from datetime import datetime, date, timedelta
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from flask import (
@@ -434,6 +435,13 @@ def equipment_new():
             except ValueError:
                 pass
 
+        cost_raw = request.form.get('cost', '').strip()
+        if cost_raw:
+            try:
+                equip.cost = Decimal(cost_raw)
+            except (InvalidOperation, ValueError):
+                pass
+
         db.session.add(equip)
         db.session.flush()
 
@@ -479,6 +487,15 @@ def equipment_edit(id):
                 equip.year = int(yr)
             except ValueError:
                 pass
+
+        cost_raw = request.form.get('cost', '').strip()
+        if cost_raw:
+            try:
+                equip.cost = Decimal(cost_raw)
+            except (InvalidOperation, ValueError):
+                pass
+        else:
+            equip.cost = None
 
         db.session.commit()
         flash(f'Equipo {equip.display_name} actualizado.', 'success')

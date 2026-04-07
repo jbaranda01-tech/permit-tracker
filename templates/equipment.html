@@ -36,18 +36,6 @@
                 <i class="fas fa-truck"></i> Información del Equipo
             </div>
             <div class="profile-field">
-                <label>Aseguradora</label>
-                <span>{{ equipment.insurance_company or '—' }}</span>
-            </div>
-            <div class="profile-field">
-                <label>Tablilla</label>
-                <span>{{ equipment.plate_number or '—' }}</span>
-            </div>
-            <div class="profile-field">
-                <label>Marca</label>
-                <span>{{ equipment.make or '—' }}</span>
-            </div>
-            <div class="profile-field">
                 <label>Modelo</label>
                 <span>{{ equipment.model or '—' }}</span>
             </div>
@@ -59,12 +47,34 @@
                 <label>VIN / Serial</label>
                 <span class="monospace">{{ equipment.vin_serial or '—' }}</span>
             </div>
+            <div class="profile-field">
+                <label>Tablilla</label>
+                <span>{{ equipment.plate_number or '—' }}</span>
+            </div>
             {% if equipment.notes %}
             <div class="profile-field">
                 <label>Notas</label>
                 <span>{{ equipment.notes }}</span>
             </div>
             {% endif %}
+        </div>
+
+        <div class="profile-card">
+            <div class="profile-card-header">
+                <i class="fas fa-file-invoice-dollar"></i> Titularidad y Costo
+            </div>
+            <div class="profile-field">
+                <label>Aseguradora</label>
+                <span>{{ equipment.insurance_company or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Titular</label>
+                <span>{{ equipment.titular or '—' }}</span>
+            </div>
+            <div class="profile-field">
+                <label>Costo</label>
+                <span>{% if equipment.cost is not none %}${{ '{:,.2f}'.format(equipment.cost) }}{% else %}—{% endif %}</span>
+            </div>
         </div>
     </div>
 
