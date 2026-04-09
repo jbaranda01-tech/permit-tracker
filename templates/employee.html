@@ -194,6 +194,22 @@
                     <button class="btn btn-ghost btn-sm" onclick="toggleEditPermit({{ permit.id }})">
                         <i class="fas fa-edit"></i> Editar
                     </button>
+                    {% if permit.file_path %}
+                    <a class="btn btn-ghost btn-sm" href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank">
+                        <i class="fas fa-file-pdf"></i> Ver formulario
+                    </a>
+                    <form method="POST" action="{{ url_for('employee_permit_delete_form', emp_id=employee.id, permit_id=permit.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar el formulario adjunto?');">
+                        <button type="submit" class="btn btn-ghost btn-sm">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </form>
+                    {% endif %}
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('upload-form-{{ permit.id }}').click()">
+                        <i class="fas fa-upload"></i> {% if permit.file_path %}Reemplazar formulario{% else %}Subir formulario{% endif %}
+                    </button>
+                    <form id="upload-form-wrap-{{ permit.id }}" method="POST" action="{{ url_for('employee_permit_upload_form', emp_id=employee.id, permit_id=permit.id) }}" enctype="multipart/form-data" style="display:none">
+                        <input type="file" id="upload-form-{{ permit.id }}" name="form_file" accept=".pdf" onchange="document.getElementById('upload-form-wrap-{{ permit.id }}').submit()">
+                    </form>
                 </div>
                 <!-- Edit form (hidden) -->
                 <div id="edit-permit-{{ permit.id }}" class="permit-edit-form" style="display:none">

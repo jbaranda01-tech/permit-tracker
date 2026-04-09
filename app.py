@@ -381,6 +381,53 @@ def employee_permit_edit(emp_id, permit_id):
     return redirect(url_for('employee_detail', id=emp_id))
 
 
+@app.route('/employee/<int:emp_id>/permit/<int:permit_id>/upload-form', methods=['POST'])
+@manager_required
+def employee_permit_upload_form(emp_id, permit_id):
+    permit = EmployeePermit.query.get_or_404(permit_id)
+    if permit.employee_id != emp_id:
+        abort(403)
+
+    file = request.files.get('form_file')
+    if not file or not file.filename:
+        flash('No se seleccionó ningún archivo.', 'error')
+        return redirect(url_for('employee_detail', id=emp_id))
+    if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() != 'pdf':
+        flash('Solo se permiten archivos PDF.', 'error')
+        return redirect(url_for('employee_detail', id=emp_id))
+
+    if permit.file_path:
+        try:
+            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], permit.file_path))
+        except OSError:
+            pass
+
+    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    permit.file_path = filename
+    db.session.commit()
+    flash(f'Formulario adjuntado a {permit.display_name}.', 'success')
+    return redirect(url_for('employee_detail', id=emp_id))
+
+
+@app.route('/employee/<int:emp_id>/permit/<int:permit_id>/delete-form', methods=['POST'])
+@manager_required
+def employee_permit_delete_form(emp_id, permit_id):
+    permit = EmployeePermit.query.get_or_404(permit_id)
+    if permit.employee_id != emp_id:
+        abort(403)
+
+    if permit.file_path:
+        try:
+            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], permit.file_path))
+        except OSError:
+            pass
+        permit.file_path = None
+        db.session.commit()
+        flash(f'Formulario eliminado de {permit.display_name}.', 'success')
+    return redirect(url_for('employee_detail', id=emp_id))
+
+
 @app.route('/employee/<int:emp_id>/permit/new', methods=['POST'])
 @manager_required
 def employee_permit_new(emp_id):
@@ -558,6 +605,53 @@ def equipment_permit_edit(eq_id, permit_id):
 
     db.session.commit()
     flash(f'Permiso {permit.display_name} actualizado.', 'success')
+    return redirect(url_for('equipment_detail', id=eq_id))
+
+
+@app.route('/equipment/<int:eq_id>/permit/<int:permit_id>/upload-form', methods=['POST'])
+@manager_required
+def equipment_permit_upload_form(eq_id, permit_id):
+    permit = EquipmentPermit.query.get_or_404(permit_id)
+    if permit.equipment_id != eq_id:
+        abort(403)
+
+    file = request.files.get('form_file')
+    if not file or not file.filename:
+        flash('No se seleccionó ningún archivo.', 'error')
+        return redirect(url_for('equipment_detail', id=eq_id))
+    if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() != 'pdf':
+        flash('Solo se permiten archivos PDF.', 'error')
+        return redirect(url_for('equipment_detail', id=eq_id))
+
+    if permit.file_path:
+        try:
+            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], permit.file_path))
+        except OSError:
+            pass
+
+    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    permit.file_path = filename
+    db.session.commit()
+    flash(f'Formulario adjuntado a {permit.display_name}.', 'success')
+    return redirect(url_for('equipment_detail', id=eq_id))
+
+
+@app.route('/equipment/<int:eq_id>/permit/<int:permit_id>/delete-form', methods=['POST'])
+@manager_required
+def equipment_permit_delete_form(eq_id, permit_id):
+    permit = EquipmentPermit.query.get_or_404(permit_id)
+    if permit.equipment_id != eq_id:
+        abort(403)
+
+    if permit.file_path:
+        try:
+            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], permit.file_path))
+        except OSError:
+            pass
+        permit.file_path = None
+        db.session.commit()
+        flash(f'Formulario eliminado de {permit.display_name}.', 'success')
     return redirect(url_for('equipment_detail', id=eq_id))
 
 
