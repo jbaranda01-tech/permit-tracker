@@ -904,38 +904,34 @@ def import_data():
 @app.route('/import/equipment', methods=['POST'])
 @admin_required
 def import_equipment():
-    import calendar
     import unicodedata
 
-    SPANISH_MONTHS = {
-        'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
-        'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
-        'septiembre': 9, 'setiembre': 9, 'octubre': 10,
-        'noviembre': 11, 'diciembre': 12,
-    }
-
-    def parse_month(value):
-        if value is None:
+    def to_date(cell):
+        """Coerce an Excel cell to a date or None."""
+        if cell is None or cell == '':
             return None
-        if isinstance(value, (int, float)):
-            try:
-                m = int(value)
-                return m if 1 <= m <= 12 else None
-            except (ValueError, TypeError):
-                return None
-        if isinstance(value, str):
-            s = value.strip().lower()
+        if isinstance(cell, datetime):
+            return cell.date()
+        if isinstance(cell, date):
+            return cell
+        if isinstance(cell, str):
+            s = cell.strip()
             if not s:
                 return None
-            s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode()
-            if s in SPANISH_MONTHS:
-                return SPANISH_MONTHS[s]
-            try:
-                m = int(s)
-                return m if 1 <= m <= 12 else None
-            except ValueError:
-                return None
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'):
+                try:
+                    return datetime.strptime(s, fmt).date()
+                except ValueError:
+                    continue
         return None
+
+    def to_float(cell):
+        if cell is None or cell == '':
+            return None
+        try:
+            return float(cell)
+        except (ValueError, TypeError):
+            return None
 
     # Validate idempotency token
     token = request.form.get('import_token', '')
@@ -990,7 +986,7 @@ def import_equipment():
         joined_headers = ' '.join(normalized_headers)
         employee_markers = ('NTSP', 'TWIC', 'HAZMAT', 'CERT MEDICO', 'ANTECEDENTES')
         looks_like_equipment = any(
-            m in joined_headers for m in ('TITULAR', 'UNIDAD', 'VIN', 'MARBETE', 'TABLILLA')
+            m in joined_headers for m in ('TITULO', 'UNIDAD', 'VIN', 'MARBETE', 'TABLILLA', 'COMPANIA')
         )
         looks_like_employee = any(m in joined_headers for m in employee_markers)
         if not looks_like_equipment or looks_like_employee:
@@ -1000,11 +996,20 @@ def import_equipment():
             return redirect(url_for('import_data'))
 
         for row in rows[1:]:
-            if not row or not row[0]:
+            if not row or not any(row):
                 continue
 
-            # Column mapping: Company, Titular, Unit, Model, Year, VIN, Exp Month, Plate, Insurance
-            company_raw = str(row[0]).strip().upper() if row[0] else ''
+            # Column mapping (Registro de Equipos.xlsx):
+            # 0 Titulo | 1 Unidad | 2 Compañia | 3 Modelo | 4 Año | 5 VIN |
+            # 6 Tablilla | 7 Seguro | 8 Marbete | 9 Inspección | 10 Voucher |
+            # 11 NTSP | 12 Costo
+            titulo = str(row[0]).strip() if row[0] is not None else ''
+            unit_number = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ''
+            # Numeric unit numbers come back as int/float — strip the trailing .0
+            if unit_number and unit_number.replace('.', '').isdigit():
+                unit_number = str(int(float(unit_number)))
+
+            company_raw = str(row[2]).strip().upper() if len(row) > 2 and row[2] is not None else ''
             if 'PERSONAL' in company_raw:
                 company = 'Personal'
             elif 'PLI' in company_raw:
@@ -1012,88 +1017,94 @@ def import_equipment():
             else:
                 company = 'LB'
 
-            titular = str(row[1]).strip() if row[1] else ''
-            unit_number = str(row[2]).strip() if row[2] else ''
-            model = str(row[3]).strip() if row[3] else ''
+            model = str(row[3]).strip() if len(row) > 3 and row[3] is not None else ''
 
             year = None
-            if row[4]:
+            if len(row) > 4 and row[4] is not None:
                 try:
                     year = int(row[4])
                 except (ValueError, TypeError):
                     pass
 
-            vin_serial = str(row[5]).strip() if row[5] else ''
+            vin_serial = str(row[5]).strip() if len(row) > 5 and row[5] is not None else ''
             if vin_serial and vin_serial.replace('.', '').replace(',', '').isdigit():
                 vin_serial = str(int(float(vin_serial)))
 
-            # Expiration month (Spanish name or 1-12) → last day of that month.
-            # Use the next occurrence of that month so equipment is assumed
-            # up-to-date: if the month has already passed this year, roll to
-            # the same month next year.
-            exp_date = None
-            month = parse_month(row[6])
-            if month is not None:
-                today = date.today()
-                year = today.year
-                last_day = calendar.monthrange(year, month)[1]
-                candidate = date(year, month, last_day)
-                if candidate < today:
-                    year += 1
-                    last_day = calendar.monthrange(year, month)[1]
-                    candidate = date(year, month, last_day)
-                exp_date = candidate
+            plate_number = str(row[6]).strip() if len(row) > 6 and row[6] is not None else ''
+            if plate_number and plate_number.replace('.', '').isdigit():
+                plate_number = str(int(float(plate_number)))
 
-            plate_number = str(row[7]).strip() if len(row) > 7 and row[7] else ''
-            insurance_company = str(row[8]).strip() if len(row) > 8 and row[8] else ''
+            insurance_company = str(row[7]).strip() if len(row) > 7 and row[7] is not None else ''
 
-            # Look up duplicates by VIN or plate number — if found, refresh the
-            # permit expiration dates from this row instead of skipping outright,
-            # so corrections to the source spreadsheet propagate on re-import.
+            marbete_date    = to_date(row[8])  if len(row) > 8  else None
+            inspeccion_date = to_date(row[9])  if len(row) > 9  else None
+            voucher_date    = to_date(row[10]) if len(row) > 10 else None
+            ntsp_date       = to_date(row[11]) if len(row) > 11 else None
+            cost            = to_float(row[12]) if len(row) > 12 else None
+
+            permit_dates = {
+                'MARBETE':    marbete_date,
+                'INSPECCION': inspeccion_date,
+                'VOUCHER':    voucher_date,
+                'NTSP':       ntsp_date,
+            }
+
+            # Look up existing equipment by VIN or plate; upsert in place so
+            # corrections to the source spreadsheet propagate on re-import.
             existing = None
             if vin_serial:
                 existing = Equipment.query.filter_by(vin_serial=vin_serial).first()
             if not existing and plate_number:
                 existing = Equipment.query.filter_by(plate_number=plate_number).first()
+
             if existing:
-                if exp_date is not None:
-                    for permit in existing.permits:
-                        if permit.permit_type in ('MARBETE', 'INSPECCION', 'VOUCHER') \
-                                and permit.applicability != 'N/A':
-                            permit.expiration_date = exp_date
+                if titulo:            existing.titular = titulo
+                if insurance_company: existing.insurance_company = insurance_company
+                if cost is not None:  existing.cost = cost
+                if year is not None:  existing.year = year
+                if model:             existing.model = model
+
+                existing_permits = {p.permit_type: p for p in existing.permits}
+                for ptype, pdate in permit_dates.items():
+                    applicability = 'N/A' if (ptype == 'VOUCHER' and company == 'Personal') else 'YES'
+                    if ptype in existing_permits:
+                        permit = existing_permits[ptype]
+                        permit.applicability = applicability
+                        if pdate is not None:
+                            permit.expiration_date = pdate
+                    else:
+                        db.session.add(EquipmentPermit(
+                            equipment_id=existing.id,
+                            permit_type=ptype,
+                            applicability=applicability,
+                            expiration_date=pdate if applicability == 'YES' else None,
+                        ))
                 skipped += 1
                 continue
 
             equip = Equipment(
                 company=company,
-                titular=titular,
+                titular=titulo,
                 unit_number=unit_number,
                 model=model,
                 year=year,
                 vin_serial=vin_serial,
                 plate_number=plate_number,
                 insurance_company=insurance_company,
+                cost=cost,
                 status='activo',
             )
             db.session.add(equip)
             db.session.flush()
 
-            # Create 3 permits, all with the same expiration date
-            permit_types = ['MARBETE', 'INSPECCION', 'VOUCHER']
-            for ptype in permit_types:
-                # Voucher does not apply to Personal equipment
-                if ptype == 'VOUCHER' and company == 'Personal':
-                    applicability = 'N/A'
-                else:
-                    applicability = 'YES'
-
-                permit = EquipmentPermit(
+            for ptype, pdate in permit_dates.items():
+                applicability = 'N/A' if (ptype == 'VOUCHER' and company == 'Personal') else 'YES'
+                db.session.add(EquipmentPermit(
                     equipment_id=equip.id,
                     permit_type=ptype,
                     applicability=applicability,
-                    expiration_date=exp_date if applicability == 'YES' else None,
-                )
-                db.session.add(permit)
+                    expiration_date=pdate if applicability == 'YES' else None,
+                ))
 
             imported += 1
 
@@ -1106,7 +1117,7 @@ def import_equipment():
             return redirect(url_for('import_data'))
 
         os.remove(filepath)
-        flash(f'Importación completa: {imported} equipos importados, {skipped} duplicados omitidos.', 'success')
+        flash(f'Importación completa: {imported} equipos importados, {skipped} actualizados.', 'success')
 
     except Exception as e:
         db.session.rollback()

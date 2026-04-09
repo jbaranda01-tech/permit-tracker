@@ -242,6 +242,7 @@ EQUIPMENT_PERMIT_TYPES = [
     ('SEGURO', 'Seguro / Insurance'),
     ('VOUCHER', 'Voucher'),
     ('INSPECCION', 'Inspección'),
+    ('NTSP', 'NTSP'),
     ('OTHER', 'Otro'),
 ]
 

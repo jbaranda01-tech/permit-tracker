@@ -65,21 +65,25 @@
             <h3>Formato Esperado — Equipos</h3>
             <p>El archivo Excel debe tener las siguientes columnas en orden:</p>
             <div class="column-list">
-                <span class="col-tag">Compañía (LB/PLI/Personal)</span>
-                <span class="col-tag">Titular</span>
+                <span class="col-tag">Titulo</span>
                 <span class="col-tag">Unidad</span>
+                <span class="col-tag">Compañía (LB/PLI/Personal)</span>
                 <span class="col-tag">Modelo</span>
                 <span class="col-tag">Año</span>
                 <span class="col-tag">VIN</span>
-                <span class="col-tag">Mes de Expiración (1-12)</span>
                 <span class="col-tag">Tablilla</span>
-                <span class="col-tag">Seguro (Compañía)</span>
+                <span class="col-tag">Seguro</span>
+                <span class="col-tag">Marbete (fecha)</span>
+                <span class="col-tag">Inspección (fecha)</span>
+                <span class="col-tag">Voucher (fecha)</span>
+                <span class="col-tag">NTSP (fecha)</span>
+                <span class="col-tag">Costo</span>
             </div>
             <div class="import-notes">
-                <p><i class="fas fa-info-circle"></i> Se crearán 3 permisos por equipo: <strong>Voucher</strong>, <strong>Inspección</strong>, y <strong>Marbete</strong>.</p>
-                <p><i class="fas fa-info-circle"></i> Todos los permisos vencen el último día del mes especificado en el año actual.</p>
+                <p><i class="fas fa-info-circle"></i> Se crearán hasta 4 permisos por equipo: <strong>Marbete</strong>, <strong>Inspección</strong>, <strong>Voucher</strong> y <strong>NTSP</strong> — cada uno con su propia fecha de vencimiento.</p>
                 <p><i class="fas fa-info-circle"></i> El <strong>Voucher</strong> no aplica a equipos marcados como <strong>Personal</strong>.</p>
-                <p><i class="fas fa-info-circle"></i> Equipos duplicados (por VIN o tablilla) serán omitidos.</p>
+                <p><i class="fas fa-info-circle"></i> Equipos existentes (por VIN o tablilla) se actualizan en lugar de duplicarse.</p>
+                <p><i class="fas fa-info-circle"></i> NTSP y Costo pueden dejarse en blanco; se llenarán al re-importar el archivo más adelante.</p>
             </div>
         </div>
 
