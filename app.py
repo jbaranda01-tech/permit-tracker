@@ -2,6 +2,7 @@ import os
 import uuid
 import secrets
 import click
+import logging
 from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -27,6 +28,12 @@ from models import (
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Ensure logs go to stdout for Railway
+if not app.debug:
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level or logging.INFO)
 
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -80,53 +87,70 @@ def inject_globals():
     today = date.today()
     alert_date = today + timedelta(days=30)
 
-    # Count expiring permits (employees)
-    expiring_emp = EmployeePermit.query.filter(
-        EmployeePermit.applicability != 'N/A',
-        EmployeePermit.expiration_date != None,
-        EmployeePermit.expiration_date > today,
-        EmployeePermit.expiration_date <= alert_date
-    ).count()
+    try:
+        # Count expiring permits (employees)
+        expiring_emp = EmployeePermit.query.filter(
+            EmployeePermit.applicability != 'N/A',
+            EmployeePermit.expiration_date != None,
+            EmployeePermit.expiration_date > today,
+            EmployeePermit.expiration_date <= alert_date
+        ).count()
 
-    # Count expiring licenses
-    expiring_lic = Employee.query.filter(
-        Employee.license_expiration != None,
-        Employee.license_expiration > today,
-        Employee.license_expiration <= alert_date
-    ).count()
+        # Count expiring licenses
+        expiring_lic = Employee.query.filter(
+            Employee.license_expiration != None,
+            Employee.license_expiration > today,
+            Employee.license_expiration <= alert_date
+        ).count()
 
-    # Count expiring equipment permits
-    expiring_eq = EquipmentPermit.query.filter(
-        EquipmentPermit.applicability != 'N/A',
-        EquipmentPermit.expiration_date != None,
-        EquipmentPermit.expiration_date > today,
-        EquipmentPermit.expiration_date <= alert_date
-    ).count()
+        # Count expiring equipment permits
+        expiring_eq = EquipmentPermit.query.filter(
+            EquipmentPermit.applicability != 'N/A',
+            EquipmentPermit.expiration_date != None,
+            EquipmentPermit.expiration_date > today,
+            EquipmentPermit.expiration_date <= alert_date
+        ).count()
 
-    # Count expired
-    expired_emp = EmployeePermit.query.filter(
-        EmployeePermit.applicability != 'N/A',
-        EmployeePermit.expiration_date != None,
-        EmployeePermit.expiration_date < today
-    ).count()
+        # Count expired
+        expired_emp = EmployeePermit.query.filter(
+            EmployeePermit.applicability != 'N/A',
+            EmployeePermit.expiration_date != None,
+            EmployeePermit.expiration_date < today
+        ).count()
 
-    expired_lic = Employee.query.filter(
-        Employee.license_expiration != None,
-        Employee.license_expiration < today
-    ).count()
+        expired_lic = Employee.query.filter(
+            Employee.license_expiration != None,
+            Employee.license_expiration < today
+        ).count()
 
-    expired_eq = EquipmentPermit.query.filter(
-        EquipmentPermit.applicability != 'N/A',
-        EquipmentPermit.expiration_date != None,
-        EquipmentPermit.expiration_date < today
-    ).count()
+        expired_eq = EquipmentPermit.query.filter(
+            EquipmentPermit.applicability != 'N/A',
+            EquipmentPermit.expiration_date != None,
+            EquipmentPermit.expiration_date < today
+        ).count()
 
-    return {
-        'permisos_por_vencer': expiring_emp + expiring_lic + expiring_eq,
-        'permisos_vencidos': expired_emp + expired_lic + expired_eq,
-        'today': today,
-        'alert_date': alert_date,
-    }
+        return {
+            'permisos_por_vencer': expiring_emp + expiring_lic + expiring_eq,
+            'permisos_vencidos': expired_emp + expired_lic + expired_eq,
+            'today': today,
+            'alert_date': alert_date,
+        }
+    except Exception as e:
+        app.logger.error(f"Database error in context processor: {e}")
+        return {
+            'permisos_por_vencer': 0,
+            'permisos_vencidos': 0,
+            'today': today,
+            'alert_date': alert_date,
+        }
+
+
+# ── REQUEST LOGGING ────────────────────────────────────────────────────
+
+@app.after_request
+def log_request(response):
+    app.logger.info(f"{request.method} {request.path} → {response.status_code}")
+    return response
 
 
 # ── AUTH ROUTES ────────────────────────────────────────────────────────
@@ -1390,7 +1414,12 @@ def api_alerts():
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'})
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        return jsonify({'status': 'ok', 'database': 'ok'})
+    except Exception as e:
+        app.logger.error(f"Health check DB failure: {e}")
+        return jsonify({'status': 'degraded', 'database': str(e)}), 503
 
 
 # ── DB INIT CLI ────────────────────────────────────────────────────────

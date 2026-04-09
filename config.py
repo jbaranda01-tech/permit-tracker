@@ -18,6 +18,9 @@ class Config:
         SQLALCHEMY_ENGINE_OPTIONS = {
             'connect_args': {'connect_timeout': 5},
             'pool_pre_ping': True,
+            'pool_recycle': 300,
+            'pool_size': 5,
+            'max_overflow': 2,
         }
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads'))
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file upload
