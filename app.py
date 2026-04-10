@@ -248,6 +248,21 @@ def dashboard():
 @login_required
 def employee_detail(id):
     emp = Employee.query.get_or_404(id)
+
+    # Backfill missing permit slots for existing employees
+    existing_types = {p.permit_type for p in emp.permits.all()}
+    added = False
+    for code, name in EMPLOYEE_PERMIT_TYPES:
+        if code != 'OTHER' and code not in existing_types:
+            db.session.add(EmployeePermit(
+                employee_id=emp.id,
+                permit_type=code,
+                applicability='N/A'
+            ))
+            added = True
+    if added:
+        db.session.commit()
+
     permits = emp.permits.order_by(EmployeePermit.permit_type).all()
     return render_template('employee.html', employee=emp, permits=permits,
                            permit_types=EMPLOYEE_PERMIT_TYPES)
