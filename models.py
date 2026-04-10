@@ -137,7 +137,7 @@ class EmployeePermit(db.Model):
         db.UniqueConstraint('employee_id', 'permit_type', name='uq_employee_permit_type'),
     )
     id = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id', ondelete='CASCADE'), nullable=False)
     permit_type = db.Column(db.String(50), nullable=False)
     permit_name = db.Column(db.String(200))  # For OTHER type
     applicability = db.Column(db.String(10), default='YES')  # YES, N/A
@@ -254,7 +254,7 @@ class EquipmentPermit(db.Model):
         db.UniqueConstraint('equipment_id', 'permit_type', name='uq_equipment_permit_type'),
     )
     id = db.Column(db.Integer, primary_key=True)
-    equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
+    equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id', ondelete='CASCADE'), nullable=False)
     permit_type = db.Column(db.String(50), nullable=False)
     permit_name = db.Column(db.String(200))
     applicability = db.Column(db.String(10), default='YES')
