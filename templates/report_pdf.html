@@ -91,7 +91,7 @@
                     <th>Rec. Chof.</th>
                     <th>HM-126</th>
                     <th>HM-232</th>
-                    <th>CPR</th>
+                    <th>P. Auxilios</th>
                 </tr>
             </thead>
             <tbody>
@@ -110,7 +110,7 @@
                             <span class="status-cell st-na">N/A</span>
                         {% endif %}
                     </td>
-                    {% for ptype in ['NTSP', 'TWIC', 'CERT_MEDICO', 'ANTECEDENTES', 'RECORD_CHOFERIL', 'HM126', 'HM232', 'CPR'] %}
+                    {% for ptype in ['NTSP', 'TWIC', 'CERT_MEDICO', 'ANTECEDENTES', 'RECORD_CHOFERIL', 'HM126', 'HM232', 'PRIMEROS_AUXILIOS'] %}
                         {% set permit = emp.permits.filter_by(permit_type=ptype).first() %}
                         {% if permit %}
                             {{ status_cell(permit.expiration_date, permit.applicability) }}
@@ -145,7 +145,7 @@
                     <th>Rec. Chof.</th>
                     <th>HM-126</th>
                     <th>HM-232</th>
-                    <th>CPR</th>
+                    <th>P. Auxilios</th>
                 </tr>
             </thead>
             <tbody>
@@ -164,7 +164,7 @@
                             <span class="status-cell st-na">N/A</span>
                         {% endif %}
                     </td>
-                    {% for ptype in ['NTSP', 'TWIC', 'CERT_MEDICO', 'ANTECEDENTES', 'RECORD_CHOFERIL', 'HM126', 'HM232', 'CPR'] %}
+                    {% for ptype in ['NTSP', 'TWIC', 'CERT_MEDICO', 'ANTECEDENTES', 'RECORD_CHOFERIL', 'HM126', 'HM232', 'PRIMEROS_AUXILIOS'] %}
                         {% set permit = emp.permits.filter_by(permit_type=ptype).first() %}
                         {% if permit %}
                             {{ status_cell(permit.expiration_date, permit.applicability) }}

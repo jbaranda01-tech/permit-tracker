@@ -261,10 +261,10 @@ def employee_detail(id):
             db.session.add(EmployeePermit(
                 employee_id=emp.id,
                 permit_type=code,
-                applicability='YES' if code == 'CPR' else 'N/A'
+                applicability='YES' if code == 'PRIMEROS_AUXILIOS' else 'N/A'
             ))
             changed = True
-        elif code == 'CPR':
+        elif code == 'PRIMEROS_AUXILIOS':
             permit = existing_types[code]
             if permit.applicability == 'N/A' and permit.expiration_date is None:
                 permit.applicability = 'YES'
@@ -320,7 +320,7 @@ def employee_new():
                 permit = EmployeePermit(
                     employee_id=emp.id,
                     permit_type=code,
-                    applicability='YES' if code == 'CPR' else 'N/A'
+                    applicability='YES' if code == 'PRIMEROS_AUXILIOS' else 'N/A'
                 )
                 db.session.add(permit)
 
@@ -937,7 +937,7 @@ def import_data():
                         11: 'RECORD_CHOFERIL',
                         13: 'HM126',
                         14: 'HM232',
-                        15: 'CPR',
+                        15: 'PRIMEROS_AUXILIOS',
                     }
                     for col_idx, ptype in permit_map.items():
                         if col_idx >= len(row):
@@ -1036,7 +1036,7 @@ def import_data():
                     11: 'RECORD_CHOFERIL',
                     13: 'HM126',
                     14: 'HM232',
-                    15: 'CPR',
+                    15: 'PRIMEROS_AUXILIOS',
                 }
 
                 for col_idx, ptype in permit_map.items():
@@ -1661,6 +1661,10 @@ with app.app_context():
                     except Exception as e:
                         db.session.rollback()
                         print(f"[WARN] Schema backfill skipped {table.name}.{col.name}: {e}")
+
+        # Rename CPR → PRIMEROS_AUXILIOS in existing records
+        db.session.execute(db.text("UPDATE employee_permits SET permit_type = 'PRIMEROS_AUXILIOS' WHERE permit_type = 'CPR'"))
+        db.session.commit()
 
         if not User.query.filter_by(role='admin').first():
             admin = User(username='admin', email='admin@lbcaribe.com', role='admin')
