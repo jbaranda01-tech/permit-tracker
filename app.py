@@ -7,9 +7,10 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
+from io import BytesIO
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, send_file, jsonify, abort, send_from_directory, session
+    flash, send_file, jsonify, abort, session
 )
 from flask_login import (
     LoginManager, login_user, logout_user,
@@ -21,7 +22,7 @@ from werkzeug.utils import secure_filename
 from config import Config
 from models import (
     db, User, Employee, EmployeePermit, Equipment, EquipmentPermit,
-    EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES
+    EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES, FileStorage
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -42,13 +43,34 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Por favor inicie sesión para acceder.'
 login_manager.login_message_category = 'warning'
 
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx'}
 
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def save_uploaded_file(file):
+    """Save an uploaded file to the database and return the storage filename."""
+    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+    file_data = file.read()
+    stored = FileStorage(
+        filename=filename,
+        original_filename=file.filename,
+        mime_type=file.content_type or 'application/octet-stream',
+        data=file_data,
+        size=len(file_data),
+    )
+    db.session.add(stored)
+    return filename
+
+
+def delete_stored_file(filename):
+    """Delete a file from the database by filename."""
+    stored = FileStorage.query.filter_by(filename=filename).first()
+    if stored:
+        db.session.delete(stored)
 
 
 @login_manager.user_loader
@@ -307,8 +329,7 @@ def employee_new():
         if 'license_file' in request.files:
             file = request.files['license_file']
             if file and file.filename and allowed_file(file.filename):
-                filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                filename = save_uploaded_file(file)
                 emp.license_file = filename
 
         db.session.add(emp)
@@ -361,8 +382,7 @@ def employee_edit(id):
         if 'license_file' in request.files:
             file = request.files['license_file']
             if file and file.filename and allowed_file(file.filename):
-                filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                filename = save_uploaded_file(file)
                 emp.license_file = filename
 
         db.session.commit()
@@ -420,8 +440,7 @@ def employee_permit_edit(emp_id, permit_id):
     if 'permit_file' in request.files:
         file = request.files['permit_file']
         if file and file.filename and allowed_file(file.filename):
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            filename = save_uploaded_file(file)
             permit.file_path = filename
 
     db.session.commit()
@@ -445,13 +464,9 @@ def employee_permit_upload_form(emp_id, permit_id):
         return redirect(url_for('employee_detail', id=emp_id))
 
     if permit.file_path:
-        try:
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], permit.file_path))
-        except OSError:
-            pass
+        delete_stored_file(permit.file_path)
 
-    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    filename = save_uploaded_file(file)
     permit.file_path = filename
     db.session.commit()
     flash(f'Formulario adjuntado a {permit.display_name}.', 'success')
@@ -466,10 +481,7 @@ def employee_permit_delete_form(emp_id, permit_id):
         abort(403)
 
     if permit.file_path:
-        try:
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], permit.file_path))
-        except OSError:
-            pass
+        delete_stored_file(permit.file_path)
         permit.file_path = None
         db.session.commit()
         flash(f'Formulario eliminado de {permit.display_name}.', 'success')
@@ -647,8 +659,7 @@ def equipment_permit_edit(eq_id, permit_id):
     if 'permit_file' in request.files:
         file = request.files['permit_file']
         if file and file.filename and allowed_file(file.filename):
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            filename = save_uploaded_file(file)
             permit.file_path = filename
 
     db.session.commit()
@@ -672,13 +683,9 @@ def equipment_permit_upload_form(eq_id, permit_id):
         return redirect(url_for('equipment_detail', id=eq_id))
 
     if permit.file_path:
-        try:
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], permit.file_path))
-        except OSError:
-            pass
+        delete_stored_file(permit.file_path)
 
-    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    filename = save_uploaded_file(file)
     permit.file_path = filename
     db.session.commit()
     flash(f'Formulario adjuntado a {permit.display_name}.', 'success')
@@ -693,10 +700,7 @@ def equipment_permit_delete_form(eq_id, permit_id):
         abort(403)
 
     if permit.file_path:
-        try:
-            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], permit.file_path))
-        except OSError:
-            pass
+        delete_stored_file(permit.file_path)
         permit.file_path = None
         db.session.commit()
         flash(f'Formulario eliminado de {permit.display_name}.', 'success')
@@ -730,7 +734,13 @@ def equipment_permit_new(eq_id):
 @app.route('/uploads/<filename>')
 @login_required
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    stored = FileStorage.query.filter_by(filename=filename).first_or_404()
+    return send_file(
+        BytesIO(stored.data),
+        mimetype=stored.mime_type,
+        as_attachment=False,
+        download_name=stored.original_filename or filename,
+    )
 
 
 # ── DEBUG: Duplicate Check & Fix (temporary) ──────────────────────────
@@ -876,7 +886,9 @@ def import_data():
             from openpyxl import load_workbook
             from sqlalchemy.exc import IntegrityError
             import unicodedata
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'import_{uuid.uuid4().hex}.xlsx')
+            import tempfile
+            fd, filepath = tempfile.mkstemp(suffix='.xlsx')
+            os.close(fd)
             file.save(filepath)
             wb = load_workbook(filepath, read_only=True)
 
@@ -1145,7 +1157,9 @@ def import_equipment():
         from openpyxl import load_workbook
         from sqlalchemy.exc import IntegrityError
 
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'import_eq_{uuid.uuid4().hex}.xlsx')
+        import tempfile
+        fd, filepath = tempfile.mkstemp(suffix='.xlsx')
+        os.close(fd)
         file.save(filepath)
         wb = load_workbook(filepath, read_only=True)
 

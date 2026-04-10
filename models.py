@@ -299,3 +299,16 @@ class EquipmentPermit(db.Model):
             'valid': 'Vigente'
         }
         return labels.get(self.status, 'Desconocido')
+
+
+# ── FILE STORAGE ──────────────────────────────────────────────────────
+
+class FileStorage(db.Model):
+    __tablename__ = 'file_storage'
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(500), unique=True, nullable=False)
+    original_filename = db.Column(db.String(500))
+    mime_type = db.Column(db.String(100), nullable=False, default='application/pdf')
+    data = db.Column(db.LargeBinary, nullable=False)
+    size = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
