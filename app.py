@@ -1227,6 +1227,10 @@ def import_equipment():
             if plate_number and plate_number.replace('.', '').isdigit():
                 plate_number = str(int(float(plate_number)))
 
+            # Skip rows with no identifying data (empty/junk rows from Excel)
+            if not titulo and not unit_number and not vin_serial and not plate_number:
+                continue
+
             insurance_company = str(row[7]).strip() if len(row) > 7 and row[7] is not None else ''
 
             marbete_date    = to_date(row[8])  if len(row) > 8  else None
