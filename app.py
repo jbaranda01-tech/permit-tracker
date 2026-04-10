@@ -962,6 +962,7 @@ def import_data():
                     11: 'RECORD_CHOFERIL',
                     13: 'HM126',
                     14: 'HM232',
+                    15: 'CPR',
                 }
 
                 for col_idx, ptype in permit_map.items():

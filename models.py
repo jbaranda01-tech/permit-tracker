@@ -126,6 +126,7 @@ EMPLOYEE_PERMIT_TYPES = [
     ('RECORD_CHOFERIL', 'Record Choferil'),
     ('HM126', 'HM-126'),
     ('HM232', 'HM-232'),
+    ('CPR', 'CPR'),
     ('OTHER', 'Otro'),
 ]
 
