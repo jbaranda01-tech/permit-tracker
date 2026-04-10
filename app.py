@@ -895,6 +895,7 @@ def import_data():
 
             imported = 0
             skipped = 0
+            updated = 0
             rows = list(ws.iter_rows(values_only=True))
             if not rows:
                 flash('El archivo está vacío.', 'warning')
@@ -927,7 +928,56 @@ def import_data():
                 # Check if employee already exists
                 existing = Employee.query.filter_by(name=name).first()
                 if existing:
-                    skipped += 1
+                    # Update permits for existing employee
+                    permit_map = {
+                        7: 'NTSP',
+                        8: 'TWIC',
+                        9: 'CERT_MEDICO',
+                        10: 'ANTECEDENTES',
+                        11: 'RECORD_CHOFERIL',
+                        13: 'HM126',
+                        14: 'HM232',
+                        15: 'CPR',
+                    }
+                    for col_idx, ptype in permit_map.items():
+                        if col_idx >= len(row):
+                            continue
+                        val = row[col_idx]
+                        applicability = 'YES'
+                        exp_date = None
+
+                        if val is None:
+                            applicability = 'YES'
+                            exp_date = None
+                        elif isinstance(val, str):
+                            val_upper = val.strip().upper()
+                            if val_upper in ('N/A', 'NA', ''):
+                                applicability = 'N/A'
+                            elif val_upper in ('NO',):
+                                applicability = 'N/A'
+                        elif hasattr(val, 'date'):
+                            d = val.date() if hasattr(val, 'date') else val
+                            if hasattr(d, 'year') and d.year < 2000:
+                                try:
+                                    d = d.replace(year=d.year + 100)
+                                except ValueError:
+                                    pass
+                            exp_date = d
+
+                        permit = EmployeePermit.query.filter_by(
+                            employee_id=existing.id, permit_type=ptype
+                        ).first()
+                        if permit:
+                            permit.applicability = applicability
+                            permit.expiration_date = exp_date
+                        else:
+                            db.session.add(EmployeePermit(
+                                employee_id=existing.id,
+                                permit_type=ptype,
+                                applicability=applicability,
+                                expiration_date=exp_date,
+                            ))
+                    updated += 1
                     continue
 
                 # Map company
@@ -1032,7 +1082,7 @@ def import_data():
                 os.remove(filepath)
                 return redirect(url_for('import_data'))
             os.remove(filepath)
-            flash(f'Importación completa: {imported} empleados importados, {skipped} duplicados omitidos.', 'success')
+            flash(f'Importación completa: {imported} nuevos, {updated} actualizados, {skipped} omitidos.', 'success')
 
         except Exception as e:
             db.session.rollback()
