@@ -1177,7 +1177,7 @@ def import_equipment():
             for h in headers
         ]
         joined_headers = ' '.join(normalized_headers)
-        employee_markers = ('NTSP', 'TWIC', 'HAZMAT', 'CERT MEDICO', 'ANTECEDENTES')
+        employee_markers = ('TWIC', 'HAZMAT', 'CERT MEDICO', 'ANTECEDENTES')
         looks_like_equipment = any(
             m in joined_headers for m in ('TITULO', 'UNIDAD', 'VIN', 'MARBETE', 'TABLILLA', 'COMPANIA')
         )
