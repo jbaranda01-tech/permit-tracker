@@ -250,17 +250,26 @@ def employee_detail(id):
     emp = Employee.query.get_or_404(id)
 
     # Backfill missing permit slots for existing employees
-    existing_types = {p.permit_type for p in emp.permits.all()}
-    added = False
+    existing_types = {}
+    for p in emp.permits.all():
+        existing_types[p.permit_type] = p
+    changed = False
     for code, name in EMPLOYEE_PERMIT_TYPES:
-        if code != 'OTHER' and code not in existing_types:
+        if code == 'OTHER':
+            continue
+        if code not in existing_types:
             db.session.add(EmployeePermit(
                 employee_id=emp.id,
                 permit_type=code,
                 applicability='YES' if code == 'CPR' else 'N/A'
             ))
-            added = True
-    if added:
+            changed = True
+        elif code == 'CPR':
+            permit = existing_types[code]
+            if permit.applicability == 'N/A' and permit.expiration_date is None:
+                permit.applicability = 'YES'
+                changed = True
+    if changed:
         db.session.commit()
 
     permits = emp.permits.order_by(EmployeePermit.permit_type).all()
