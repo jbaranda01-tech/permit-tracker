@@ -257,7 +257,7 @@ def employee_detail(id):
             db.session.add(EmployeePermit(
                 employee_id=emp.id,
                 permit_type=code,
-                applicability='N/A'
+                applicability='YES' if code == 'CPR' else 'N/A'
             ))
             added = True
     if added:
@@ -311,7 +311,7 @@ def employee_new():
                 permit = EmployeePermit(
                     employee_id=emp.id,
                     permit_type=code,
-                    applicability='N/A'
+                    applicability='YES' if code == 'CPR' else 'N/A'
                 )
                 db.session.add(permit)
 
