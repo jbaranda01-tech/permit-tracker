@@ -30,6 +30,10 @@
                 <i class="fas fa-truck"></i>
                 <span>Equipos</span>
             </a>
+            <a href="{{ url_for('dashboard', view='company') }}" class="nav-link {% if request.args.get('view') == 'company' %}active{% endif %}">
+                <i class="fas fa-building"></i>
+                <span>Empresa</span>
+            </a>
         </div>
 
         <div class="nav-section">

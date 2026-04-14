@@ -80,7 +80,9 @@ function showAlerts(type) {
             }
 
             body.innerHTML = filtered.map(a => {
-                const url = a.entity === 'employee'
+                const url = a.entity === 'company'
+                    ? '/?view=company'
+                    : a.entity === 'employee'
                     ? `/employee/${a.id}`
                     : `/equipment/${a.id}`;
                 const dateStr = new Date(a.date).toLocaleDateString('es-PR', {

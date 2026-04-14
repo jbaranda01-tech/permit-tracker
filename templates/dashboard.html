@@ -3,6 +3,7 @@
 {% block content %}
 <div class="dashboard">
     <!-- Top Bar -->
+    {% if view != 'company' %}
     <div class="dashboard-header">
         <div class="dashboard-actions">
             <form class="search-form" method="GET" action="{{ url_for('dashboard') }}">
@@ -25,7 +26,245 @@
             {% endif %}
         </div>
     </div>
+    {% endif %}
 
+    {% if view == 'company' %}
+    <!-- Company Permits -->
+    <div class="company-panels">
+        <!-- LB Caribe Services -->
+        <div class="company-panel">
+            <div class="panel-header panel-lb">
+                <h2><img src="{{ url_for('static', filename='img/logo-lb.png') }}" alt="LB Caribe" class="company-logo"> LB Caribe Services</h2>
+                <span class="panel-count">{{ lb_permits|length }}</span>
+            </div>
+            <div class="panel-body">
+                <div class="permits-grid">
+                    {% for permit in lb_permits %}
+                    <div class="permit-card permit-{{ permit.status }}">
+                        <div class="permit-card-header">
+                            <span class="permit-name">{{ permit.display_name }}</span>
+                            <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
+                        </div>
+                        <div class="permit-card-body">
+                            {% if permit.applicability == 'N/A' %}
+                                <div class="permit-na">No Aplica</div>
+                            {% else %}
+                                <div class="permit-field">
+                                    <label>Expiraci&oacute;n</label>
+                                    <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                                </div>
+                                {% if permit.permit_number %}
+                                <div class="permit-field">
+                                    <label>N&uacute;mero</label>
+                                    <span>{{ permit.permit_number }}</span>
+                                </div>
+                                {% endif %}
+                                {% if permit.issuing_authority %}
+                                <div class="permit-field">
+                                    <label>Autoridad</label>
+                                    <span>{{ permit.issuing_authority }}</span>
+                                </div>
+                                {% endif %}
+                                {% if permit.renewal_cost %}
+                                <div class="permit-field">
+                                    <label>Costo Renovaci&oacute;n</label>
+                                    <span>${{ "%.2f"|format(permit.renewal_cost) }}</span>
+                                </div>
+                                {% endif %}
+                                {% if permit.file_path %}
+                                <a href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank" class="file-link">
+                                    <i class="fas fa-paperclip"></i> Ver documento
+                                </a>
+                                {% endif %}
+                                {% if permit.notes %}
+                                <div class="permit-notes">{{ permit.notes }}</div>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                        {% if current_user.is_manager %}
+                        <div class="permit-card-footer">
+                            <button class="btn btn-ghost btn-sm" onclick="toggleEditPermit({{ permit.id }})">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            {% if permit.file_path %}
+                            <a class="btn btn-ghost btn-sm" href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank">
+                                <i class="fas fa-file-pdf"></i> Ver formulario
+                            </a>
+                            <form method="POST" action="{{ url_for('company_permit_delete_form', company='LB', permit_id=permit.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar el formulario adjunto?');">
+                                <button type="submit" class="btn btn-ghost btn-sm">
+                                    <i class="fas fa-trash"></i> Eliminar
+                                </button>
+                            </form>
+                            {% endif %}
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('upload-form-{{ permit.id }}').click()">
+                                <i class="fas fa-upload"></i> {% if permit.file_path %}Reemplazar formulario{% else %}Subir formulario{% endif %}
+                            </button>
+                            <form id="upload-form-wrap-{{ permit.id }}" method="POST" action="{{ url_for('company_permit_upload_form', company='LB', permit_id=permit.id) }}" enctype="multipart/form-data" style="display:none">
+                                <input type="file" id="upload-form-{{ permit.id }}" name="form_file" accept=".pdf" onchange="document.getElementById('upload-form-wrap-{{ permit.id }}').submit()">
+                            </form>
+                        </div>
+                        <!-- Edit form (hidden) -->
+                        <div id="edit-permit-{{ permit.id }}" class="permit-edit-form" style="display:none">
+                            <form method="POST" action="{{ url_for('company_permit_edit', company='LB', permit_id=permit.id) }}" enctype="multipart/form-data">
+                                <div class="form-group">
+                                    <label>Aplicabilidad</label>
+                                    <select name="applicability">
+                                        <option value="YES" {% if permit.applicability != 'N/A' %}selected{% endif %}>Aplica</option>
+                                        <option value="N/A" {% if permit.applicability == 'N/A' %}selected{% endif %}>N/A</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Fecha de Expiraci&oacute;n</label>
+                                    <input type="date" name="expiration_date" value="{{ permit.expiration_date.strftime('%Y-%m-%d') if permit.expiration_date else '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>N&uacute;mero de Permiso</label>
+                                    <input type="text" name="permit_number" value="{{ permit.permit_number or '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Autoridad Emisora</label>
+                                    <input type="text" name="issuing_authority" value="{{ permit.issuing_authority or '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Costo de Renovaci&oacute;n ($)</label>
+                                    <input type="number" step="0.01" name="renewal_cost" value="{{ permit.renewal_cost or '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Documento</label>
+                                    <input type="file" name="permit_file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                                </div>
+                                <div class="form-group">
+                                    <label>Notas</label>
+                                    <textarea name="notes" rows="2">{{ permit.notes or '' }}</textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Professional Logistics -->
+        <div class="company-panel">
+            <div class="panel-header panel-pli">
+                <h2><img src="{{ url_for('static', filename='img/logo-pli.png') }}" alt="PLI" class="company-logo"> Professional Logistics</h2>
+                <span class="panel-count">{{ pli_permits|length }}</span>
+            </div>
+            <div class="panel-body">
+                <div class="permits-grid">
+                    {% for permit in pli_permits %}
+                    <div class="permit-card permit-{{ permit.status }}">
+                        <div class="permit-card-header">
+                            <span class="permit-name">{{ permit.display_name }}</span>
+                            <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
+                        </div>
+                        <div class="permit-card-body">
+                            {% if permit.applicability == 'N/A' %}
+                                <div class="permit-na">No Aplica</div>
+                            {% else %}
+                                <div class="permit-field">
+                                    <label>Expiraci&oacute;n</label>
+                                    <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                                </div>
+                                {% if permit.permit_number %}
+                                <div class="permit-field">
+                                    <label>N&uacute;mero</label>
+                                    <span>{{ permit.permit_number }}</span>
+                                </div>
+                                {% endif %}
+                                {% if permit.issuing_authority %}
+                                <div class="permit-field">
+                                    <label>Autoridad</label>
+                                    <span>{{ permit.issuing_authority }}</span>
+                                </div>
+                                {% endif %}
+                                {% if permit.renewal_cost %}
+                                <div class="permit-field">
+                                    <label>Costo Renovaci&oacute;n</label>
+                                    <span>${{ "%.2f"|format(permit.renewal_cost) }}</span>
+                                </div>
+                                {% endif %}
+                                {% if permit.file_path %}
+                                <a href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank" class="file-link">
+                                    <i class="fas fa-paperclip"></i> Ver documento
+                                </a>
+                                {% endif %}
+                                {% if permit.notes %}
+                                <div class="permit-notes">{{ permit.notes }}</div>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                        {% if current_user.is_manager %}
+                        <div class="permit-card-footer">
+                            <button class="btn btn-ghost btn-sm" onclick="toggleEditPermit({{ permit.id }})">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            {% if permit.file_path %}
+                            <a class="btn btn-ghost btn-sm" href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank">
+                                <i class="fas fa-file-pdf"></i> Ver formulario
+                            </a>
+                            <form method="POST" action="{{ url_for('company_permit_delete_form', company='PLI', permit_id=permit.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar el formulario adjunto?');">
+                                <button type="submit" class="btn btn-ghost btn-sm">
+                                    <i class="fas fa-trash"></i> Eliminar
+                                </button>
+                            </form>
+                            {% endif %}
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('upload-form-{{ permit.id }}').click()">
+                                <i class="fas fa-upload"></i> {% if permit.file_path %}Reemplazar formulario{% else %}Subir formulario{% endif %}
+                            </button>
+                            <form id="upload-form-wrap-{{ permit.id }}" method="POST" action="{{ url_for('company_permit_upload_form', company='PLI', permit_id=permit.id) }}" enctype="multipart/form-data" style="display:none">
+                                <input type="file" id="upload-form-{{ permit.id }}" name="form_file" accept=".pdf" onchange="document.getElementById('upload-form-wrap-{{ permit.id }}').submit()">
+                            </form>
+                        </div>
+                        <!-- Edit form (hidden) -->
+                        <div id="edit-permit-{{ permit.id }}" class="permit-edit-form" style="display:none">
+                            <form method="POST" action="{{ url_for('company_permit_edit', company='PLI', permit_id=permit.id) }}" enctype="multipart/form-data">
+                                <div class="form-group">
+                                    <label>Aplicabilidad</label>
+                                    <select name="applicability">
+                                        <option value="YES" {% if permit.applicability != 'N/A' %}selected{% endif %}>Aplica</option>
+                                        <option value="N/A" {% if permit.applicability == 'N/A' %}selected{% endif %}>N/A</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Fecha de Expiraci&oacute;n</label>
+                                    <input type="date" name="expiration_date" value="{{ permit.expiration_date.strftime('%Y-%m-%d') if permit.expiration_date else '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>N&uacute;mero de Permiso</label>
+                                    <input type="text" name="permit_number" value="{{ permit.permit_number or '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Autoridad Emisora</label>
+                                    <input type="text" name="issuing_authority" value="{{ permit.issuing_authority or '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Costo de Renovaci&oacute;n ($)</label>
+                                    <input type="number" step="0.01" name="renewal_cost" value="{{ permit.renewal_cost or '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Documento</label>
+                                    <input type="file" name="permit_file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                                </div>
+                                <div class="form-group">
+                                    <label>Notas</label>
+                                    <textarea name="notes" rows="2">{{ permit.notes or '' }}</textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
     <!-- Company Panels -->
     <div class="company-panels{% if view == 'equipment' %} three-columns{% endif %}">
         <!-- LB Caribe Services -->
@@ -211,5 +450,15 @@
         </div>
         {% endif %}
     </div>
+    {% endif %}
 </div>
+
+{% if view == 'company' %}
+<script>
+function toggleEditPermit(id) {
+    var form = document.getElementById('edit-permit-' + id);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+{% endif %}
 {% endblock %}

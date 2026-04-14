@@ -301,6 +301,66 @@ class EquipmentPermit(db.Model):
         return labels.get(self.status, 'Desconocido')
 
 
+# ── COMPANY PERMITS ───────────────────────────────────────────────────
+
+COMPANY_PERMIT_TYPES = [
+    ('HAZMAT_CERT', 'Certificado HazMat', ['LB', 'PLI']),
+    ('NMFTA_CERT', 'Certificado NMFTA', ['PLI']),
+    ('USDOT_BIENNIAL', 'USDOT Biennial Report', ['LB', 'PLI']),
+    ('NTSP_FRANCHISE', 'Franquicia NTSP', ['LB', 'PLI']),
+]
+
+
+class CompanyPermit(db.Model):
+    __tablename__ = 'company_permits'
+    __table_args__ = (
+        db.UniqueConstraint('company', 'permit_type', name='uq_company_permit_type'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    company = db.Column(db.String(10), nullable=False)
+    permit_type = db.Column(db.String(50), nullable=False)
+    applicability = db.Column(db.String(10), default='YES')
+    expiration_date = db.Column(db.Date)
+    issuing_authority = db.Column(db.String(200))
+    permit_number = db.Column(db.String(100))
+    file_path = db.Column(db.String(500))
+    renewal_cost = db.Column(db.Float)
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def display_name(self):
+        for code, name, _companies in COMPANY_PERMIT_TYPES:
+            if code == self.permit_type:
+                return name
+        return self.permit_type
+
+    @property
+    def status(self):
+        if self.applicability == 'N/A':
+            return 'na'
+        if self.expiration_date is None:
+            return 'missing'
+        today = date.today()
+        if self.expiration_date < today:
+            return 'expired'
+        if self.expiration_date <= today + timedelta(days=30):
+            return 'expiring_soon'
+        return 'valid'
+
+    @property
+    def status_label(self):
+        labels = {
+            'na': 'N/A',
+            'missing': 'Incompleto',
+            'expired': 'Vencido',
+            'expiring_soon': 'Por Vencer',
+            'valid': 'Vigente'
+        }
+        return labels.get(self.status, 'Desconocido')
+
+
 # ── FILE STORAGE ──────────────────────────────────────────────────────
 
 class FileStorage(db.Model):

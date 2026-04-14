@@ -22,7 +22,8 @@ from werkzeug.utils import secure_filename
 from config import Config
 from models import (
     db, User, Employee, EmployeePermit, Equipment, EquipmentPermit,
-    EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES, FileStorage
+    CompanyPermit, EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES,
+    COMPANY_PERMIT_TYPES, FileStorage
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -151,9 +152,23 @@ def inject_globals():
             EquipmentPermit.expiration_date < today
         ).count()
 
+        # Count expiring company permits
+        expiring_co = CompanyPermit.query.filter(
+            CompanyPermit.applicability != 'N/A',
+            CompanyPermit.expiration_date != None,
+            CompanyPermit.expiration_date > today,
+            CompanyPermit.expiration_date <= alert_date
+        ).count()
+
+        expired_co = CompanyPermit.query.filter(
+            CompanyPermit.applicability != 'N/A',
+            CompanyPermit.expiration_date != None,
+            CompanyPermit.expiration_date < today
+        ).count()
+
         return {
-            'permisos_por_vencer': expiring_emp + expiring_lic + expiring_eq,
-            'permisos_vencidos': expired_emp + expired_lic + expired_eq,
+            'permisos_por_vencer': expiring_emp + expiring_lic + expiring_eq + expiring_co,
+            'permisos_vencidos': expired_emp + expired_lic + expired_eq + expired_co,
             'today': today,
             'alert_date': alert_date,
         }
@@ -212,6 +227,27 @@ def dashboard():
     company_filter = request.args.get('company', '')
     status_filter = request.args.get('status', '')
     sort_by = request.args.get('sort', 'name')
+
+    if view == 'company':
+        # Backfill missing company permits
+        changed = False
+        for code, name, companies in COMPANY_PERMIT_TYPES:
+            for company in companies:
+                existing = CompanyPermit.query.filter_by(company=company, permit_type=code).first()
+                if not existing:
+                    db.session.add(CompanyPermit(company=company, permit_type=code, applicability='YES'))
+                    changed = True
+        if changed:
+            db.session.commit()
+
+        lb_permits = CompanyPermit.query.filter_by(company='LB').order_by(CompanyPermit.permit_type).all()
+        pli_permits = CompanyPermit.query.filter_by(company='PLI').order_by(CompanyPermit.permit_type).all()
+
+        return render_template('dashboard.html',
+            view=view,
+            lb_permits=lb_permits,
+            pli_permits=pli_permits,
+        )
 
     if view == 'equipment':
         query = Equipment.query
@@ -727,6 +763,90 @@ def equipment_permit_new(eq_id):
     db.session.commit()
     flash(f'Nuevo permiso agregado.', 'success')
     return redirect(url_for('equipment_detail', id=eq_id))
+
+
+# ── COMPANY PERMIT ROUTES ─────────────────────────────────────────────
+
+@app.route('/company/<company>/permit/<int:permit_id>/edit', methods=['POST'])
+@manager_required
+def company_permit_edit(company, permit_id):
+    permit = CompanyPermit.query.get_or_404(permit_id)
+    if permit.company != company:
+        abort(403)
+
+    permit.applicability = request.form.get('applicability', 'YES')
+    permit.permit_number = request.form.get('permit_number', '')
+    permit.issuing_authority = request.form.get('issuing_authority', '')
+    permit.notes = request.form.get('notes', '')
+
+    val = request.form.get('expiration_date', '')
+    if val:
+        try:
+            permit.expiration_date = datetime.strptime(val, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    else:
+        permit.expiration_date = None
+
+    cost_val = request.form.get('renewal_cost', '')
+    if cost_val:
+        try:
+            permit.renewal_cost = float(cost_val)
+        except (ValueError, TypeError):
+            pass
+    else:
+        permit.renewal_cost = None
+
+    file = request.files.get('permit_file')
+    if file and file.filename:
+        if permit.file_path:
+            delete_stored_file(permit.file_path)
+        permit.file_path = save_uploaded_file(file)
+
+    db.session.commit()
+    flash(f'{permit.display_name} actualizado.', 'success')
+    return redirect(url_for('dashboard', view='company'))
+
+
+@app.route('/company/<company>/permit/<int:permit_id>/upload-form', methods=['POST'])
+@manager_required
+def company_permit_upload_form(company, permit_id):
+    permit = CompanyPermit.query.get_or_404(permit_id)
+    if permit.company != company:
+        abort(403)
+
+    file = request.files.get('form_file')
+    if not file or not file.filename:
+        flash('No se seleccionó archivo.', 'warning')
+        return redirect(url_for('dashboard', view='company'))
+
+    if not file.filename.lower().endswith('.pdf'):
+        flash('Solo se permiten archivos PDF.', 'warning')
+        return redirect(url_for('dashboard', view='company'))
+
+    if permit.file_path:
+        delete_stored_file(permit.file_path)
+
+    filename = save_uploaded_file(file)
+    permit.file_path = filename
+    db.session.commit()
+    flash(f'Formulario adjuntado a {permit.display_name}.', 'success')
+    return redirect(url_for('dashboard', view='company'))
+
+
+@app.route('/company/<company>/permit/<int:permit_id>/delete-form', methods=['POST'])
+@manager_required
+def company_permit_delete_form(company, permit_id):
+    permit = CompanyPermit.query.get_or_404(permit_id)
+    if permit.company != company:
+        abort(403)
+
+    if permit.file_path:
+        delete_stored_file(permit.file_path)
+        permit.file_path = None
+        db.session.commit()
+        flash(f'Formulario eliminado de {permit.display_name}.', 'success')
+    return redirect(url_for('dashboard', view='company'))
 
 
 # ── FILE SERVING ───────────────────────────────────────────────────────
@@ -1496,6 +1616,27 @@ def api_alerts():
             alerts.append({
                 'type': 'expiring', 'entity': 'equipment', 'id': eq.id,
                 'name': eq.display_name, 'company': eq.company,
+                'permit': permit.display_name, 'date': permit.expiration_date.isoformat()
+            })
+
+    # Company permit alerts
+    company_names = {'LB': 'LB Caribe Services', 'PLI': 'Professional Logistics'}
+    for permit in CompanyPermit.query.filter(
+        CompanyPermit.applicability != 'N/A',
+        CompanyPermit.expiration_date != None
+    ).all():
+        if permit.expiration_date < today:
+            alerts.append({
+                'type': 'expired', 'entity': 'company', 'id': 0,
+                'name': company_names.get(permit.company, permit.company),
+                'company': permit.company,
+                'permit': permit.display_name, 'date': permit.expiration_date.isoformat()
+            })
+        elif permit.expiration_date <= alert_date:
+            alerts.append({
+                'type': 'expiring', 'entity': 'company', 'id': 0,
+                'name': company_names.get(permit.company, permit.company),
+                'company': permit.company,
                 'permit': permit.display_name, 'date': permit.expiration_date.isoformat()
             })
 
