@@ -18,7 +18,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="name">Nombre Completo *</label>
-                    <input type="text" id="name" name="name" value="{{ employee.name if employee else '' }}" required>
+                    <input type="text" id="name" name="name" value="{{ employee.name if employee else '' }}" placeholder="Juan Pérez" required>
                 </div>
                 <div class="form-group">
                     <label for="company">Compañía *</label>
@@ -56,11 +56,11 @@
                 </div>
                 <div class="form-group">
                     <label for="telefono">Teléfono</label>
-                    <input type="tel" id="telefono" name="telefono" value="{{ employee.telefono if employee else '' }}">
+                    <input type="tel" id="telefono" name="telefono" value="{{ employee.telefono if employee else '' }}" placeholder="787-555-1234">
                 </div>
                 <div class="form-group">
                     <label for="email">Email</label>
-                    <input type="email" id="email" name="email" value="{{ employee.email if employee else '' }}">
+                    <input type="email" id="email" name="email" value="{{ employee.email if employee else '' }}" placeholder="correo@ejemplo.com">
                 </div>
             </div>
             <div class="form-row">
@@ -86,7 +86,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="puesto">Puesto / Posición</label>
-                    <input type="text" id="puesto" name="puesto" value="{{ employee.puesto if employee else '' }}">
+                    <input type="text" id="puesto" name="puesto" value="{{ employee.puesto if employee else '' }}" placeholder="Chofer">
                 </div>
                 <div class="form-group">
                     <label for="fecha_contratacion">Fecha de Contratación</label>
@@ -110,7 +110,7 @@
                 <div class="form-group">
                     <label for="license_number">Número de Licencia</label>
                     <input type="text" id="license_number" name="license_number"
-                           value="{{ employee.license_number if employee else '' }}">
+                           value="{{ employee.license_number if employee else '' }}" placeholder="1234567">
                 </div>
                 <div class="form-group">
                     <label for="license_expiration">Fecha de Expiración</label>
