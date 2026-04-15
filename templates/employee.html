@@ -41,7 +41,7 @@
             </div>
             <div class="profile-field">
                 <label>Teléfono</label>
-                <span>{{ employee.telefono or '—' }}</span>
+                <span>{{ employee.telefono|format_phone or '—' }}</span>
             </div>
             <div class="profile-field">
                 <label>Email</label>

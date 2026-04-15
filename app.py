@@ -105,6 +105,17 @@ def admin_required(f):
 
 # ── TEMPLATE HELPERS ───────────────────────────────────────────────────
 
+@app.template_filter('format_phone')
+def format_phone(value):
+    if not value:
+        return value
+    digits = ''.join(c for c in str(value) if c.isdigit())
+    if len(digits) == 10:
+        return f'({digits[:3]}) {digits[3:6]}-{digits[6:]}'
+    if len(digits) == 7:
+        return f'{digits[:3]}-{digits[3:]}'
+    return value
+
 @app.context_processor
 def inject_globals():
     today = date.today()
