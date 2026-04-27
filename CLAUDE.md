@@ -14,7 +14,7 @@ python app.py                    # Runs on http://localhost:5000
 
 # Environment variables needed
 export SECRET_KEY=dev-secret
-export DATABASE_URL=sqlite:///permits.db   # SQLite for local dev; PostgreSQL in production
+export DATABASE_URL=sqlite:///permits.db   # SQLite for local dev; production uses DATABASE_PRIVATE_URL (Railway internal network)
 
 # Database
 flask init-db                    # Creates tables + default admin user (admin/admin123)
@@ -33,7 +33,7 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 
 - `app.py` (~1050 lines): All routes, CLI commands, Excel import logic, PDF generation, file upload handling. Contains role decorators (`@admin_required`, `@manager_required`) and a context processor that injects global alert counts into every template.
 - `models.py`: SQLAlchemy models — `User`, `Employee`, `EmployeePermit`, `Equipment`, `EquipmentPermit`. Permit types are defined as module-level lists (`EMPLOYEE_PERMIT_TYPES`, `EQUIPMENT_PERMIT_TYPES`). Status logic (expired/expiring_soon/valid/missing/na) lives in model `@property` methods.
-- `config.py`: Single `Config` class. Auto-converts Railway's `postgres://` to `postgresql://`. Sets PostgreSQL connection timeout only when using PostgreSQL.
+- `config.py`: Single `Config` class. Prefers `DATABASE_PRIVATE_URL` (Railway internal network) over `DATABASE_URL`, falling back to SQLite for local dev. Auto-converts Railway's `postgres://` to `postgresql://`. Sets PostgreSQL connection timeout only when using PostgreSQL.
 
 **Two-company model**: Every employee and equipment record has a `company` field (`LB` or `PLI`). The dashboard shows both side by side.
 
