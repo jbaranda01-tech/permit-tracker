@@ -44,6 +44,7 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 ## Key Patterns
 
 - Templates use Jinja2 with a shared `base.html` layout (sidebar + navbar)
+- Dark/light theme uses `data-theme` attribute on `<html>`, persisted in `localStorage`. An inline `<script>` in `<head>` sets the theme before first paint to prevent FOUC; `app.js` handles toggle buttons and syncing.
 - File uploads go to `uploads/` directory with UUID-prefixed filenames
 - Excel import (openpyxl) includes a 2-digit year fix (1930→2030) for date handling
 - PDF reports generated with WeasyPrint via `report_pdf.html` template
