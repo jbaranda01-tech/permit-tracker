@@ -28,3 +28,9 @@ class Config:
         }
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file upload
     ALERT_DAYS_BEFORE = 30  # Days before expiration to trigger alert
+
+    SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
+    SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL', 'notificaciones@lb-pli-permits.com')
+    ENABLE_SCHEDULER = os.environ.get('ENABLE_SCHEDULER', 'false').lower() == 'true'
+    NOTIFICATION_DAY = os.environ.get('NOTIFICATION_DAY', 'monday')
+    NOTIFICATION_HOUR = int(os.environ.get('NOTIFICATION_HOUR', '12'))

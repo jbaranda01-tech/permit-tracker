@@ -22,9 +22,12 @@ flask db migrate -m "message"    # Generate migration (Flask-Migrate, but no mig
 flask db upgrade                 # Apply migrations
 flask dedup --dry-run            # Preview duplicate cleanup
 flask dedup                      # Remove duplicate employees/permits
+flask send-notifications --dry-run          # Preview without sending emails
+flask send-notifications                    # Send all pending notifications
+flask send-notifications --employee-id 42   # Single employee (testing)
 
 # Production (Railway)
-gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 ```
 
 ## Architecture
@@ -32,8 +35,8 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 **Monolith Flask app** — all routes, models, and config in three files:
 
 - `app.py` (~1050 lines): All routes, CLI commands, Excel import logic, PDF generation, file upload handling. Contains role decorators (`@admin_required`, `@manager_required`) and a context processor that injects global alert counts into every template.
-- `models.py`: SQLAlchemy models — `User`, `Employee`, `EmployeePermit`, `Equipment`, `EquipmentPermit`. Permit types are defined as module-level lists (`EMPLOYEE_PERMIT_TYPES`, `EQUIPMENT_PERMIT_TYPES`). Status logic (expired/expiring_soon/valid/missing/na) lives in model `@property` methods.
-- `config.py`: Single `Config` class. Prefers `DATABASE_PRIVATE_URL` (Railway internal network) over `DATABASE_URL`, falling back to SQLite for local dev. Auto-converts Railway's `postgres://` to `postgresql://`. Sets PostgreSQL connection timeout only when using PostgreSQL.
+- `models.py`: SQLAlchemy models — `User`, `Employee`, `EmployeePermit`, `Equipment`, `EquipmentPermit`, `NotificationLog`. Permit types are defined as module-level lists (`EMPLOYEE_PERMIT_TYPES`, `EQUIPMENT_PERMIT_TYPES`). Status logic (expired/expiring_soon/valid/missing/na) lives in model `@property` methods. `NotificationLog` tracks sent email notifications with 7-day dedup.
+- `config.py`: Single `Config` class. Prefers `DATABASE_PRIVATE_URL` (Railway internal network) over `DATABASE_URL`, falling back to SQLite for local dev. Auto-converts Railway's `postgres://` to `postgresql://`. Sets PostgreSQL connection timeout only when using PostgreSQL. Email notification config: `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `ENABLE_SCHEDULER`, `NOTIFICATION_DAY`, `NOTIFICATION_HOUR`.
 
 **Two-company model**: Every employee and equipment record has a `company` field (`LB` or `PLI`). The dashboard shows both side by side.
 

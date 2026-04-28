@@ -372,3 +372,16 @@ class FileStorage(db.Model):
     data = db.Column(db.LargeBinary, nullable=False)
     size = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ── NOTIFICATION LOG ─────────────────────────────────────────────────
+
+class NotificationLog(db.Model):
+    __tablename__ = 'notification_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id', ondelete='CASCADE'), nullable=False)
+    permit_key = db.Column(db.String(100), nullable=False)
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+    email_to = db.Column(db.String(120), nullable=False)
+    status = db.Column(db.String(20), nullable=False)
+    error_message = db.Column(db.Text)

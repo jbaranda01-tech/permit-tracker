@@ -23,7 +23,7 @@ from config import Config
 from models import (
     db, User, Employee, EmployeePermit, Equipment, EquipmentPermit,
     CompanyPermit, EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES,
-    COMPANY_PERMIT_TYPES, FileStorage
+    COMPANY_PERMIT_TYPES, FileStorage, NotificationLog
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -72,6 +72,122 @@ def delete_stored_file(filename):
     stored = FileStorage.query.filter_by(filename=filename).first()
     if stored:
         db.session.delete(stored)
+
+
+# ── NOTIFICATION HELPERS ──────────────────────────────────────────────
+
+def _gather_expiring_items(employee_id=None):
+    today = date.today()
+    alert_date = today + timedelta(days=app.config['ALERT_DAYS_BEFORE'])
+
+    query = Employee.query.filter(
+        Employee.status == 'activo',
+        Employee.email.isnot(None),
+        Employee.email != '',
+    )
+    if employee_id:
+        query = query.filter(Employee.id == employee_id)
+
+    results = {}
+    for emp in query.all():
+        items = []
+        if emp.license_expiration:
+            if emp.license_expiration < today:
+                items.append({'key': f'license:{emp.id}', 'name': 'Licencia de Conducir',
+                              'date': emp.license_expiration, 'status': 'expired'})
+            elif emp.license_expiration <= alert_date:
+                items.append({'key': f'license:{emp.id}', 'name': 'Licencia de Conducir',
+                              'date': emp.license_expiration, 'status': 'expiring_soon'})
+
+        for permit in emp.permits:
+            if permit.applicability == 'N/A' or permit.expiration_date is None:
+                continue
+            if permit.expiration_date < today:
+                items.append({'key': f'employee_permit:{permit.id}', 'name': permit.display_name,
+                              'date': permit.expiration_date, 'status': 'expired'})
+            elif permit.expiration_date <= alert_date:
+                items.append({'key': f'employee_permit:{permit.id}', 'name': permit.display_name,
+                              'date': permit.expiration_date, 'status': 'expiring_soon'})
+
+        if items:
+            results[emp.id] = {'employee': emp, 'items': items}
+    return results
+
+
+def _filter_already_notified(employee_id, items):
+    cutoff = datetime.utcnow() - timedelta(days=7)
+    recent = NotificationLog.query.filter(
+        NotificationLog.employee_id == employee_id,
+        NotificationLog.sent_at > cutoff,
+        NotificationLog.status == 'sent',
+    ).all()
+    notified_keys = {log.permit_key for log in recent}
+    return [item for item in items if item['key'] not in notified_keys]
+
+
+def send_notification_email(employee, items, dry_run=False):
+    if dry_run:
+        return (True, None)
+    try:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail, HtmlContent
+
+        html = render_template('email/permit_expiry_notice.html',
+                               employee=employee, items=items)
+        message = Mail(
+            from_email=app.config['SENDGRID_FROM_EMAIL'],
+            to_emails=employee.email,
+            subject='Aviso: Documentos por vencer o vencidos',
+            html_content=HtmlContent(html),
+        )
+        sg = SendGridAPIClient(app.config['SENDGRID_API_KEY'])
+        response = sg.send(message)
+        if response.status_code in (200, 201, 202):
+            return (True, None)
+        return (False, f'SendGrid status {response.status_code}')
+    except Exception as e:
+        return (False, str(e))
+
+
+def run_notification_cycle(dry_run=False, employee_id=None):
+    data = _gather_expiring_items(employee_id)
+    sent = 0
+    skipped = 0
+    failed = 0
+    details = []
+
+    for emp_id, entry in data.items():
+        emp = entry['employee']
+        remaining = _filter_already_notified(emp_id, entry['items'])
+        if not remaining:
+            skipped += 1
+            details.append(f'  SKIP {emp.name} — already notified')
+            continue
+
+        success, error = send_notification_email(emp, remaining, dry_run=dry_run)
+
+        for item in remaining:
+            log = NotificationLog(
+                employee_id=emp_id,
+                permit_key=item['key'],
+                email_to=emp.email,
+                status='sent' if success else 'failed',
+                error_message=error,
+            )
+            if not dry_run:
+                db.session.add(log)
+
+        if success:
+            sent += 1
+            details.append(f'  {"[DRY RUN] " if dry_run else ""}SENT {emp.name} ({emp.email}) — {len(remaining)} items')
+        else:
+            failed += 1
+            details.append(f'  FAIL {emp.name} ({emp.email}) — {error}')
+
+    if not dry_run:
+        db.session.commit()
+
+    return {'sent': sent, 'skipped': skipped, 'failed': failed, 'details': details}
 
 
 @login_manager.user_loader
@@ -1802,6 +1918,19 @@ def dedup_data(dry_run):
     print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {eq_permit_deleted} duplicate equipment permits removed.')
 
 
+@app.cli.command('send-notifications')
+@click.option('--dry-run', is_flag=True, help='Preview without sending emails.')
+@click.option('--employee-id', type=int, default=None, help='Send to a single employee (for testing).')
+def send_notifications(dry_run, employee_id):
+    """Send email notifications for expiring/expired permits."""
+    print(f'{"[DRY RUN] " if dry_run else ""}Running notification cycle...')
+    result = run_notification_cycle(dry_run=dry_run, employee_id=employee_id)
+    for line in result['details']:
+        print(line)
+    prefix = '[DRY RUN] ' if dry_run else ''
+    print(f'{prefix}Done: {result["sent"]} sent, {result["skipped"]} skipped, {result["failed"]} failed.')
+
+
 # For Railway — auto-init on startup
 with app.app_context():
     try:
@@ -1843,6 +1972,22 @@ with app.app_context():
             db.session.commit()
     except Exception as e:
         print(f"[WARN] Database init failed: {e}")
+
+    if app.config.get('ENABLE_SCHEDULER'):
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler(daemon=True)
+        day = app.config['NOTIFICATION_DAY'][:3].lower()
+        hour = app.config['NOTIFICATION_HOUR']
+
+        def _scheduled_notifications():
+            with app.app_context():
+                run_notification_cycle()
+
+        scheduler.add_job(_scheduled_notifications, 'cron', day_of_week=day, hour=hour, misfire_grace_time=3600)
+        scheduler.start()
+        import atexit
+        atexit.register(scheduler.shutdown)
+        app.logger.info(f"[SCHEDULER] Started — notifications every {app.config['NOTIFICATION_DAY']} at {hour}:00 UTC")
 
 
 if __name__ == '__main__':
