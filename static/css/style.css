@@ -879,12 +879,85 @@ img { max-width: 100%; }
 
 .permit-edit-form .form-group { margin-bottom: var(--space-sm); min-width: auto; }
 
+.permits-header-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
 .add-permit-form {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     padding: var(--space-md);
     margin-bottom: var(--space-md);
+}
+
+.manage-permits-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.manage-permits-panel h3 {
+    margin-bottom: var(--space-xs);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.text-muted-sm {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-md);
+}
+
+.manage-permits-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--space-sm);
+}
+
+.manage-permit-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+}
+
+.manage-permit-hidden { opacity: 0.6; }
+
+.btn-toggle {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: color var(--transition);
+}
+
+.btn-toggle:hover { color: var(--text-primary); }
+.btn-toggle.active { color: var(--color-valid); }
+.btn-toggle.active:hover { color: var(--color-expired); }
+.btn-toggle i { font-size: 1.2rem; }
+
+.manage-badge {
+    background: var(--color-expiring-bg, #fff3cd);
+    color: var(--color-expiring-text, #856404);
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 4px;
+    font-weight: 600;
 }
 
 
@@ -1095,6 +1168,8 @@ img { max-width: 100%; }
     .detail-title-row { flex-direction: column; }
     .profile-grid { grid-template-columns: 1fr; }
     .permits-grid { grid-template-columns: 1fr; }
+    .manage-permits-list { grid-template-columns: 1fr; }
+    .permits-header-actions { flex-direction: column; }
     .form-row { flex-direction: column; }
     .form-group { min-width: 100%; }
     .btn-text { display: none; }

@@ -40,7 +40,7 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 
 **Two-company model**: Every employee and equipment record has a `company` field (`LB` or `PLI`). The dashboard shows both side by side.
 
-**Permit status system**: 30-day window for "expiring soon" alerts (configured via `Config.ALERT_DAYS_BEFORE`). Status is computed at query time in model properties, not stored.
+**Permit status system**: 30-day window for "expiring soon" alerts (configured via `Config.ALERT_DAYS_BEFORE`). Status is computed at query time in model properties, not stored. N/A permits are filtered out of profile views — detail routes split permits into `active_permits` and `hidden_permits`. Managers can toggle applicability via dedicated `/toggle` endpoints. Toggling to N/A clears the expiration date.
 
 **No test suite currently exists.**
 

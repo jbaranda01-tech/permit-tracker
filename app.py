@@ -457,8 +457,11 @@ def employee_detail(id):
     if changed:
         db.session.commit()
 
-    permits = emp.permits.order_by(EmployeePermit.permit_type).all()
-    return render_template('employee.html', employee=emp, permits=permits,
+    all_permits = emp.permits.order_by(EmployeePermit.permit_type).all()
+    active_permits = [p for p in all_permits if p.applicability != 'N/A']
+    hidden_permits = [p for p in all_permits if p.applicability == 'N/A']
+    return render_template('employee.html', employee=emp,
+                           permits=active_permits, hidden_permits=hidden_permits,
                            permit_types=EMPLOYEE_PERMIT_TYPES)
 
 
@@ -611,6 +614,21 @@ def employee_permit_edit(emp_id, permit_id):
     return redirect(url_for('employee_detail', id=emp_id))
 
 
+@app.route('/employee/<int:emp_id>/permit/<int:permit_id>/toggle', methods=['POST'])
+@manager_required
+def employee_permit_toggle(emp_id, permit_id):
+    permit = EmployeePermit.query.get_or_404(permit_id)
+    if permit.employee_id != emp_id:
+        abort(403)
+    new_value = request.form.get('applicability', 'YES')
+    permit.applicability = new_value
+    if new_value == 'N/A':
+        permit.expiration_date = None
+    db.session.commit()
+    flash(f'Permiso {permit.display_name} {"activado" if new_value == "YES" else "desactivado"}.', 'success')
+    return redirect(url_for('employee_detail', id=emp_id))
+
+
 @app.route('/employee/<int:emp_id>/permit/<int:permit_id>/upload-form', methods=['POST'])
 @manager_required
 def employee_permit_upload_form(emp_id, permit_id):
@@ -680,8 +698,11 @@ def employee_permit_new(emp_id):
 @login_required
 def equipment_detail(id):
     equip = Equipment.query.get_or_404(id)
-    permits = equip.permits.order_by(EquipmentPermit.permit_type).all()
-    return render_template('equipment.html', equipment=equip, permits=permits,
+    all_permits = equip.permits.order_by(EquipmentPermit.permit_type).all()
+    active_permits = [p for p in all_permits if p.applicability != 'N/A']
+    hidden_permits = [p for p in all_permits if p.applicability == 'N/A']
+    return render_template('equipment.html', equipment=equip,
+                           permits=active_permits, hidden_permits=hidden_permits,
                            permit_types=EQUIPMENT_PERMIT_TYPES)
 
 
@@ -827,6 +848,21 @@ def equipment_permit_edit(eq_id, permit_id):
 
     db.session.commit()
     flash(f'Permiso {permit.display_name} actualizado.', 'success')
+    return redirect(url_for('equipment_detail', id=eq_id))
+
+
+@app.route('/equipment/<int:eq_id>/permit/<int:permit_id>/toggle', methods=['POST'])
+@manager_required
+def equipment_permit_toggle(eq_id, permit_id):
+    permit = EquipmentPermit.query.get_or_404(permit_id)
+    if permit.equipment_id != eq_id:
+        abort(403)
+    new_value = request.form.get('applicability', 'YES')
+    permit.applicability = new_value
+    if new_value == 'N/A':
+        permit.expiration_date = None
+    db.session.commit()
+    flash(f'Permiso {permit.display_name} {"activado" if new_value == "YES" else "desactivado"}.', 'success')
     return redirect(url_for('equipment_detail', id=eq_id))
 
 

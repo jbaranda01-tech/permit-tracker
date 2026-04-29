@@ -113,11 +113,49 @@
         <div class="permits-header">
             <h2><i class="fas fa-certificate"></i> Permisos y Certificaciones</h2>
             {% if current_user.is_manager %}
-            <button class="btn btn-secondary btn-sm" onclick="toggleAddPermit()">
-                <i class="fas fa-plus"></i> Agregar Permiso
-            </button>
+            <div class="permits-header-actions">
+                <button class="btn btn-secondary btn-sm" onclick="toggleManagePermits()">
+                    <i class="fas fa-sliders-h"></i> Administrar Permisos
+                    {% if hidden_permits %}<span class="manage-badge">{{ hidden_permits|length }}</span>{% endif %}
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="toggleAddPermit()">
+                    <i class="fas fa-plus"></i> Agregar Permiso
+                </button>
+            </div>
             {% endif %}
         </div>
+
+        <!-- Manage permits panel (hidden) -->
+        {% if current_user.is_manager %}
+        <div id="manage-permits-panel" class="manage-permits-panel" style="display:none">
+            <h3>Permisos Activos e Inactivos</h3>
+            <p class="text-muted-sm">Active los permisos que aplican a este empleado.</p>
+            <div class="manage-permits-list">
+                {% for permit in permits %}
+                <div class="manage-permit-item">
+                    <span>{{ permit.display_name }}</span>
+                    <form method="POST" action="{{ url_for('employee_permit_toggle', emp_id=employee.id, permit_id=permit.id) }}" style="display:inline">
+                        <input type="hidden" name="applicability" value="N/A">
+                        <button type="submit" class="btn-toggle active" title="Desactivar">
+                            <i class="fas fa-toggle-on"></i> Activo
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+                {% for permit in hidden_permits %}
+                <div class="manage-permit-item manage-permit-hidden">
+                    <span>{{ permit.display_name }}</span>
+                    <form method="POST" action="{{ url_for('employee_permit_toggle', emp_id=employee.id, permit_id=permit.id) }}" style="display:inline">
+                        <input type="hidden" name="applicability" value="YES">
+                        <button type="submit" class="btn-toggle" title="Activar">
+                            <i class="fas fa-toggle-off"></i> Inactivo
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Add permit form (hidden) -->
         <div id="add-permit-form" class="add-permit-form" style="display:none">
@@ -154,39 +192,35 @@
                     <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
                 </div>
                 <div class="permit-card-body">
-                    {% if permit.applicability == 'N/A' %}
-                        <div class="permit-na">No Aplica</div>
-                    {% else %}
-                        <div class="permit-field">
-                            <label>Expiración</label>
-                            <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
-                        </div>
-                        {% if permit.permit_number %}
-                        <div class="permit-field">
-                            <label>Número</label>
-                            <span>{{ permit.permit_number }}</span>
-                        </div>
-                        {% endif %}
-                        {% if permit.issuing_authority %}
-                        <div class="permit-field">
-                            <label>Autoridad</label>
-                            <span>{{ permit.issuing_authority }}</span>
-                        </div>
-                        {% endif %}
-                        {% if permit.renewal_cost %}
-                        <div class="permit-field">
-                            <label>Costo Renovación</label>
-                            <span>${{ "%.2f"|format(permit.renewal_cost) }}</span>
-                        </div>
-                        {% endif %}
-                        {% if permit.file_path %}
-                        <a href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank" class="file-link">
-                            <i class="fas fa-paperclip"></i> Ver documento
-                        </a>
-                        {% endif %}
-                        {% if permit.notes %}
-                        <div class="permit-notes">{{ permit.notes }}</div>
-                        {% endif %}
+                    <div class="permit-field">
+                        <label>Expiración</label>
+                        <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                    </div>
+                    {% if permit.permit_number %}
+                    <div class="permit-field">
+                        <label>Número</label>
+                        <span>{{ permit.permit_number }}</span>
+                    </div>
+                    {% endif %}
+                    {% if permit.issuing_authority %}
+                    <div class="permit-field">
+                        <label>Autoridad</label>
+                        <span>{{ permit.issuing_authority }}</span>
+                    </div>
+                    {% endif %}
+                    {% if permit.renewal_cost %}
+                    <div class="permit-field">
+                        <label>Costo Renovación</label>
+                        <span>${{ "%.2f"|format(permit.renewal_cost) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if permit.file_path %}
+                    <a href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank" class="file-link">
+                        <i class="fas fa-paperclip"></i> Ver documento
+                    </a>
+                    {% endif %}
+                    {% if permit.notes %}
+                    <div class="permit-notes">{{ permit.notes }}</div>
                     {% endif %}
                 </div>
                 {% if current_user.is_manager %}
@@ -263,6 +297,10 @@
 </div>
 
 <script>
+function toggleManagePermits() {
+    const panel = document.getElementById('manage-permits-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
 function toggleAddPermit() {
     const form = document.getElementById('add-permit-form');
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
