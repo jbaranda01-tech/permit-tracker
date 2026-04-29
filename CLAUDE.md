@@ -49,7 +49,7 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 - Templates use Jinja2 with a shared `base.html` layout (sidebar + navbar)
 - Dark/light theme uses `data-theme` attribute on `<html>`, persisted in `localStorage`. An inline `<script>` in `<head>` sets the theme before first paint to prevent FOUC; `app.js` handles toggle buttons and syncing.
 - File uploads go to `uploads/` directory with UUID-prefixed filenames
-- Excel import (openpyxl) includes a 2-digit year fix (1930→2030) for date handling
+- Excel import (openpyxl) includes a 2-digit year fix (1930→2030) for date handling. Both employee and equipment imports recognize N/A-like cell values ("N/A", "NA", "NO", empty string) and set `applicability='N/A'` on the corresponding permit. Equipment import also hardcodes VOUCHER as N/A for Personal company equipment.
 - PDF reports generated with WeasyPrint via `report_pdf.html` template
 - Auth uses Flask-Login with three roles: admin, manager, viewer
 - Unique constraints enforce one permit per type per employee/equipment
