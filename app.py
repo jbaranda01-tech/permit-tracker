@@ -1449,6 +1449,25 @@ def import_equipment():
             flash('El archivo no parece ser de equipos. Verifique que está usando la plantilla correcta.', 'danger')
             return redirect(url_for('import_data'))
 
+        def parse_permit_cell(val):
+            if val is None:
+                return ('YES', None)
+            if isinstance(val, str):
+                val_upper = val.strip().upper()
+                if val_upper in ('N/A', 'NA', '', 'NO'):
+                    return ('N/A', None)
+                parsed = to_date(val)
+                return ('YES', parsed)
+            if hasattr(val, 'date'):
+                d = val.date() if callable(getattr(val, 'date', None)) else val
+                if hasattr(d, 'year') and d.year < 2000:
+                    try:
+                        d = d.replace(year=d.year + 100)
+                    except ValueError:
+                        pass
+                return ('YES', d)
+            return ('YES', to_date(val))
+
         for row in rows[1:]:
             if not row or not any(row):
                 continue
@@ -1494,18 +1513,13 @@ def import_equipment():
 
             insurance_company = str(row[7]).strip() if len(row) > 7 and row[7] is not None else ''
 
-            marbete_date    = to_date(row[8])  if len(row) > 8  else None
-            inspeccion_date = to_date(row[9])  if len(row) > 9  else None
-            voucher_date    = to_date(row[10]) if len(row) > 10 else None
-            ntsp_date       = to_date(row[11]) if len(row) > 11 else None
-            cost            = to_float(row[12]) if len(row) > 12 else None
-
-            permit_dates = {
-                'MARBETE':    marbete_date,
-                'INSPECCION': inspeccion_date,
-                'VOUCHER':    voucher_date,
-                'NTSP':       ntsp_date,
+            permit_info = {
+                'MARBETE':    parse_permit_cell(row[8])  if len(row) > 8  else ('YES', None),
+                'INSPECCION': parse_permit_cell(row[9])  if len(row) > 9  else ('YES', None),
+                'VOUCHER':    parse_permit_cell(row[10]) if len(row) > 10 else ('YES', None),
+                'NTSP':       parse_permit_cell(row[11]) if len(row) > 11 else ('YES', None),
             }
+            cost            = to_float(row[12]) if len(row) > 12 else None
 
             # Look up existing equipment by VIN or plate; upsert in place so
             # corrections to the source spreadsheet propagate on re-import.
@@ -1523,13 +1537,15 @@ def import_equipment():
                 if model:             existing.model = model
 
                 existing_permits = {p.permit_type: p for p in existing.permits}
-                for ptype, pdate in permit_dates.items():
-                    applicability = 'N/A' if (ptype == 'VOUCHER' and company == 'Personal') else 'YES'
+                for ptype, (cell_applicability, pdate) in permit_info.items():
+                    if ptype == 'VOUCHER' and company == 'Personal':
+                        applicability = 'N/A'
+                    else:
+                        applicability = cell_applicability
                     if ptype in existing_permits:
                         permit = existing_permits[ptype]
                         permit.applicability = applicability
-                        if pdate is not None:
-                            permit.expiration_date = pdate
+                        permit.expiration_date = pdate if applicability == 'YES' else None
                     else:
                         db.session.add(EquipmentPermit(
                             equipment_id=existing.id,
@@ -1555,8 +1571,11 @@ def import_equipment():
             db.session.add(equip)
             db.session.flush()
 
-            for ptype, pdate in permit_dates.items():
-                applicability = 'N/A' if (ptype == 'VOUCHER' and company == 'Personal') else 'YES'
+            for ptype, (cell_applicability, pdate) in permit_info.items():
+                if ptype == 'VOUCHER' and company == 'Personal':
+                    applicability = 'N/A'
+                else:
+                    applicability = cell_applicability
                 db.session.add(EquipmentPermit(
                     equipment_id=equip.id,
                     permit_type=ptype,
