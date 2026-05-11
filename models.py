@@ -392,6 +392,12 @@ class NotificationLog(db.Model):
 
 # ── ISSUE REPORTING ──────────────────────────────────────────────────
 
+EXCLUDED_EQUIPMENT_MODELS = [
+    'carreton', 'chasis', 'generador alquiler',
+    'generador contenedor', 'tanque combustible', 'tanque harina',
+]
+
+
 ISSUE_CATEGORIES = [
     ('motor', 'Motor'),
     ('frenos', 'Frenos'),

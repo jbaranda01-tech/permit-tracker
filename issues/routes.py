@@ -1,13 +1,31 @@
 from datetime import datetime
 from flask import render_template, request, redirect, url_for, flash
 from flask_login import current_user
+from sqlalchemy import func
 
 from issues import issues_bp
 from issues.decorators import shop_required, shop_or_office_required
 from models import (
     db, Employee, Equipment, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
+    EXCLUDED_EQUIPMENT_MODELS,
 )
+
+
+def reportable_equipment_query(company=None):
+    query = Equipment.query.filter(
+        Equipment.status == 'activo',
+        Equipment.equipment_type == 'vehicle',
+        Equipment.company.in_(['LB', 'PLI']),
+    )
+    for model_name in EXCLUDED_EQUIPMENT_MODELS:
+        query = query.filter(db.or_(
+            Equipment.model == None,
+            func.lower(Equipment.model) != model_name,
+        ))
+    if company:
+        query = query.filter_by(company=company)
+    return query.order_by(Equipment.unit_number)
 
 
 def update_issue_status(issue, new_status, changed_by_user_id=None,
@@ -37,10 +55,7 @@ def update_issue_status(issue, new_status, changed_by_user_id=None,
 @issues_bp.route('/report/<token>', methods=['GET'])
 def report(token):
     employee = Employee.query.filter_by(access_token=token).first_or_404()
-    trucks = (Equipment.query
-              .filter_by(status='activo', equipment_type='vehicle', company=employee.company)
-              .order_by(Equipment.unit_number)
-              .all())
+    trucks = reportable_equipment_query(company=employee.company).all()
     return render_template('issues/report.html',
                            employee=employee,
                            trucks=trucks,
@@ -62,9 +77,7 @@ def report_submit(token):
     errors = []
     if not equipment_id:
         errors.append('Debe seleccionar un camión.')
-    elif not Equipment.query.filter_by(
-        id=equipment_id, status='activo', equipment_type='vehicle', company=employee.company
-    ).first():
+    elif not reportable_equipment_query(company=employee.company).filter_by(id=equipment_id).first():
         errors.append('Camión no válido.')
 
     valid_categories = [c[0] for c in ISSUE_CATEGORIES]
@@ -79,10 +92,7 @@ def report_submit(token):
         errors.append('Debe incluir una descripción del problema.')
 
     if errors:
-        trucks = (Equipment.query
-                  .filter_by(status='activo', equipment_type='vehicle', company=employee.company)
-                  .order_by(Equipment.unit_number)
-                  .all())
+        trucks = reportable_equipment_query(company=employee.company).all()
         for error in errors:
             flash(error, 'danger')
         return render_template('issues/report.html',
@@ -122,35 +132,36 @@ def report_success(token):
 @issues_bp.route('/', methods=['GET'])
 @shop_or_office_required
 def queue():
-    query = Issue.query
+    query = Issue.query.join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
 
     status_filter = request.args.get('status', '')
     if status_filter:
-        query = query.filter_by(current_status=status_filter)
+        query = query.filter(Issue.current_status == status_filter)
     else:
         query = query.filter(Issue.current_status.notin_(['cerrado']))
 
     severity_filter = request.args.get('severity', '')
     if severity_filter:
-        query = query.filter_by(severity=severity_filter)
+        query = query.filter(Issue.severity == severity_filter)
 
     equipment_filter = request.args.get('equipment_id', type=int)
     if equipment_filter:
-        query = query.filter_by(equipment_id=equipment_filter)
+        query = query.filter(Issue.equipment_id == equipment_filter)
 
-    issues = query.order_by(Issue.reported_at.desc()).all()
+    all_issues = query.order_by(Issue.reported_at.desc()).all()
+
+    lb_issues = [i for i in all_issues if i.equipment and i.equipment.company == 'LB']
+    pli_issues = [i for i in all_issues if i.equipment and i.equipment.company == 'PLI']
 
     status_counts = {}
     for code, label in ISSUE_STATUSES:
         status_counts[code] = Issue.query.filter_by(current_status=code).count()
 
-    trucks = (Equipment.query
-              .filter_by(status='activo', equipment_type='vehicle')
-              .order_by(Equipment.unit_number)
-              .all())
+    trucks = reportable_equipment_query().all()
 
     return render_template('issues/queue.html',
-                           issues=issues,
+                           lb_issues=lb_issues,
+                           pli_issues=pli_issues,
                            statuses=ISSUE_STATUSES,
                            severities=ISSUE_SEVERITIES,
                            categories=ISSUE_CATEGORIES,

@@ -34,46 +34,93 @@
         <select name="equipment_id" onchange="this.form.submit()">
             <option value="">Todos los camiones</option>
             {% for truck in trucks %}
-            <option value="{{ truck.id }}" {% if current_equipment == truck.id %}selected{% endif %}>{{ truck.display_name }}</option>
+            <option value="{{ truck.id }}" {% if current_equipment == truck.id %}selected{% endif %}>{{ truck.display_name }} ({{ truck.company }})</option>
             {% endfor %}
         </select>
     </form>
 </div>
 
-{% if issues %}
-<div class="issue-list">
-    {% for issue in issues %}
-    <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card">
-        <div class="issue-card-top">
-            <span class="issue-id">#{{ issue.id }}</span>
-            <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+<div class="company-panels">
+    <div class="company-panel">
+        <div class="panel-header panel-lb">
+            <h2><img src="{{ url_for('static', filename='img/logo-lb.png') }}" alt="LB Caribe" class="company-logo"> LB Caribe Services</h2>
+            <span class="panel-count">{{ lb_issues|length }}</span>
         </div>
-        <div class="issue-card-body">
-            <div class="issue-truck">
-                <i class="fas fa-truck"></i>
-                {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}
+        <div class="panel-body">
+            {% for issue in lb_issues %}
+            <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card">
+                <div class="issue-card-top">
+                    <span class="issue-id">#{{ issue.id }}</span>
+                    <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+                </div>
+                <div class="issue-card-body">
+                    <div class="issue-truck">
+                        <i class="fas fa-truck"></i>
+                        {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}
+                    </div>
+                    <div class="issue-category">
+                        <span class="category-tag">{{ issue.category_label }}</span>
+                    </div>
+                    <p class="issue-description-preview">{{ issue.description[:120] }}{% if issue.description|length > 120 %}...{% endif %}</p>
+                </div>
+                <div class="issue-card-footer">
+                    <span class="issue-reporter">
+                        <i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}
+                    </span>
+                    <span class="issue-date">
+                        <i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at else '' }}
+                    </span>
+                    <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+                </div>
+            </a>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-clipboard-check"></i>
+                <p>No hay reportes</p>
             </div>
-            <div class="issue-category">
-                <span class="category-tag">{{ issue.category_label }}</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="company-panel">
+        <div class="panel-header panel-pli">
+            <h2><img src="{{ url_for('static', filename='img/logo-pli.png') }}" alt="PLI" class="company-logo"> Professional Logistics</h2>
+            <span class="panel-count">{{ pli_issues|length }}</span>
+        </div>
+        <div class="panel-body">
+            {% for issue in pli_issues %}
+            <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card">
+                <div class="issue-card-top">
+                    <span class="issue-id">#{{ issue.id }}</span>
+                    <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+                </div>
+                <div class="issue-card-body">
+                    <div class="issue-truck">
+                        <i class="fas fa-truck"></i>
+                        {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}
+                    </div>
+                    <div class="issue-category">
+                        <span class="category-tag">{{ issue.category_label }}</span>
+                    </div>
+                    <p class="issue-description-preview">{{ issue.description[:120] }}{% if issue.description|length > 120 %}...{% endif %}</p>
+                </div>
+                <div class="issue-card-footer">
+                    <span class="issue-reporter">
+                        <i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}
+                    </span>
+                    <span class="issue-date">
+                        <i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at else '' }}
+                    </span>
+                    <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+                </div>
+            </a>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-clipboard-check"></i>
+                <p>No hay reportes</p>
             </div>
-            <p class="issue-description-preview">{{ issue.description[:120] }}{% if issue.description|length > 120 %}...{% endif %}</p>
+            {% endfor %}
         </div>
-        <div class="issue-card-footer">
-            <span class="issue-reporter">
-                <i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}
-            </span>
-            <span class="issue-date">
-                <i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at else '' }}
-            </span>
-            <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
-        </div>
-    </a>
-    {% endfor %}
+    </div>
 </div>
-{% else %}
-<div class="empty-state">
-    <i class="fas fa-clipboard-check"></i>
-    <p>No hay reportes {% if current_status %}con estado "{{ dict(statuses).get(current_status, current_status) }}"{% endif %}</p>
-</div>
-{% endif %}
 {% endblock %}
