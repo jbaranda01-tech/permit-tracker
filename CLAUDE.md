@@ -56,7 +56,7 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 - Excel import (openpyxl) includes a 2-digit year fix (1930→2030) for date handling. Both employee and equipment imports recognize N/A-like cell values ("N/A", "NA", "NO", empty string) and set `applicability='N/A'` on the corresponding permit. Equipment import also hardcodes VOUCHER as N/A for Personal company equipment.
 - PDF reports generated with WeasyPrint via `report_pdf.html` template
 - Auth uses Flask-Login with three roles for permits: admin, manager, viewer. Issue module uses a separate layered role system via `user_issue_roles` table (shop, office); admin role auto-grants full issue access.
-- Drivers access issue reporting via link-based auth: each employee has an optional `access_token` (UUID) column; URL `/issues/report/<token>` identifies the driver without login. Truck dropdown is scoped to vehicles from the driver's company.
+- Drivers access issue reporting via link-based auth: each employee has an optional `access_token` (UUID) column; URL `/issues/report/<token>` identifies the driver without login. Truck dropdown is scoped to vehicles from the driver's company, excluding Personal company and specific equipment models defined in `EXCLUDED_EQUIPMENT_MODELS` (carreton, chasis, generador alquiler, generador contenedor, tanque combustible, tanque harina). The `reportable_equipment_query()` helper in `issues/routes.py` centralizes this filtering.
 - Issue status updates are transactional: `Issue.current_status` (denormalized) and `IssueStatusHistory` are always updated in the same commit. `resolved_at` auto-sets on transition to resuelto/cerrado.
 - Unique constraints enforce one permit per type per employee/equipment
 - `dedup` CLI command uses advisory locking and idempotency tokens for safe bulk operations
@@ -97,16 +97,23 @@ Truck issue reporting for drivers (report) and shop staff (triage/resolve). Offi
 - Office: `user_issue_roles` row with `role='office'` — read-only queue and detail views
 - Admin: existing `User.role == 'admin'` — automatic full access, no `user_issue_roles` entry needed
 
+**Equipment filtering:** Only LB and PLI vehicles are reportable. Personal company equipment is excluded. Specific equipment models are excluded via `EXCLUDED_EQUIPMENT_MODELS` in `models.py` (matched case-insensitively against `Equipment.model` column). The `reportable_equipment_query()` helper in `issues/routes.py` centralizes this logic for both the driver form and the queue filter dropdown.
+
+**Queue layout:** The shop queue (`/issues/`) uses the same company panel layout as the permit dashboard — issues grouped under LB and PLI banners with company logos and counts. Status tabs and severity/truck filters sit above the panels.
+
 **Routes (all under `/issues` Blueprint):**
 - `/issues/report/<token>` — GET/POST driver report form (public, mobile-first)
 - `/issues/report/<token>/success` — confirmation page
-- `/issues/` — shop/office queue with status tabs and severity/truck filters
+- `/issues/` — shop/office queue with company panels, status tabs, severity/truck filters
 - `/issues/<id>` — issue detail with status history timeline
 - `/issues/<id>/status` — POST status change (shop/admin only)
+- `/issues/generate-link/<employee_id>` — POST generate access token for driver (admin only)
 
 **Templates:** `templates/issues/` — `report.html`, `report_success.html`, `queue.html`, `detail.html`
 
-**Pending (Increment 4):** Admin UI for assigning issue roles and generating driver access links (currently CLI-only via `flask generate-token` and `flask assign-issue-role`).
+**Admin UI integration:**
+- Admin user management page (`admin_users.html`) has "Roles Taller" checkboxes (Taller/Oficina) in both create and edit forms. Issue roles are synced via `UserIssueRole` on save.
+- Employee detail page has a "Link de Reporte" button (admin-only) that expands to show the driver's reporting URL (copyable) or a button to generate one.
 
 ## Deployment
 
