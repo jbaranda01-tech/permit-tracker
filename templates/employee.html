@@ -19,6 +19,9 @@
                     <i class="fas fa-edit"></i> Editar Perfil
                 </a>
                 {% if current_user.is_admin %}
+                <button class="btn btn-secondary" onclick="toggleDriverLink()">
+                    <i class="fas fa-link"></i> <span class="btn-text">Link de Reporte</span>
+                </button>
                 <form method="POST" action="{{ url_for('employee_delete', id=employee.id) }}" style="display:inline"
                       onsubmit="return confirm('¿Está seguro de eliminar a {{ employee.name }}?')">
                     <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i></button>
@@ -27,6 +30,29 @@
             </div>
             {% endif %}
         </div>
+
+        {% if current_user.is_admin %}
+        <div id="driver-link-section" class="driver-link-section" style="display:none">
+            {% if employee.access_token %}
+            <div class="driver-link-box">
+                <label>Link de reporte para {{ employee.name }}:</label>
+                <div class="link-row">
+                    <input type="text" readonly value="{{ url_for('issues.report', token=employee.access_token, _external=True) }}" id="link-input" class="link-input">
+                    <button class="btn btn-secondary btn-sm" onclick="copyLink()">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <div class="driver-link-box">
+                <p>Este empleado no tiene un link de reporte.</p>
+                <form method="POST" action="{{ url_for('issues.generate_link', employee_id=employee.id) }}" style="display:inline">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-key"></i> Generar Link</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 
     <!-- Profile Info -->
@@ -312,6 +338,20 @@ function toggleEditPermit(id) {
 function toggleCustomName(select) {
     const group = document.getElementById('custom-name-group');
     group.style.display = select.value === 'OTHER' ? 'block' : 'none';
+}
+function toggleDriverLink() {
+    const section = document.getElementById('driver-link-section');
+    section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
+function copyLink() {
+    const input = document.getElementById('link-input');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(function() {
+        const btn = input.nextElementSibling;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiado';
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    });
 }
 </script>
 {% endblock %}

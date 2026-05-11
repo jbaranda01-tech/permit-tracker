@@ -1,6 +1,7 @@
+import uuid
 from datetime import datetime
-from flask import render_template, request, redirect, url_for, flash
-from flask_login import current_user
+from flask import render_template, request, redirect, url_for, flash, abort
+from flask_login import login_required, current_user
 from sqlalchemy import func
 
 from issues import issues_bp
@@ -208,3 +209,17 @@ def update_status(issue_id):
     status_label = dict(ISSUE_STATUSES).get(new_status, new_status)
     flash(f'Estado actualizado a "{status_label}".', 'success')
     return redirect(url_for('issues.detail', issue_id=issue.id))
+
+
+# ── ADMIN: GENERATE DRIVER LINK ──────────────────────────────────────
+
+@issues_bp.route('/generate-link/<int:employee_id>', methods=['POST'])
+@login_required
+def generate_link(employee_id):
+    if not current_user.is_admin:
+        abort(403)
+    emp = Employee.query.get_or_404(employee_id)
+    emp.access_token = str(uuid.uuid4())
+    db.session.commit()
+    flash(f'Link de reporte generado para {emp.name}.', 'success')
+    return redirect(url_for('employee_detail', id=employee_id))

@@ -1711,6 +1711,10 @@ def admin_user_new():
     user = User(username=username, email=email, role=role)
     user.set_password(password)
     db.session.add(user)
+    db.session.flush()
+    for role_name in request.form.getlist('issue_roles'):
+        if role_name in ('shop', 'office'):
+            db.session.add(UserIssueRole(user_id=user.id, role=role_name))
     db.session.commit()
     flash(f'Usuario {username} creado como {role}.', 'success')
     return redirect(url_for('admin_users'))
@@ -1725,6 +1729,10 @@ def admin_user_edit(id):
     password = request.form.get('password', '')
     if password:
         user.set_password(password)
+    UserIssueRole.query.filter_by(user_id=user.id).delete()
+    for role_name in request.form.getlist('issue_roles'):
+        if role_name in ('shop', 'office'):
+            db.session.add(UserIssueRole(user_id=user.id, role=role_name))
     db.session.commit()
     flash(f'Usuario {user.username} actualizado.', 'success')
     return redirect(url_for('admin_users'))
