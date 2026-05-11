@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Reporte #{{ issue.id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Volver a Reportes</a>
+    <h1>Reporte #{{ issue.id }}</h1>
+    <div class="header-meta">
+        <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+        <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+    </div>
+</div>
+
+<div class="profile-grid">
+    <div class="profile-card">
+        <div class="card-header">
+            <i class="fas fa-truck"></i> Unidad
+        </div>
+        <div class="card-body">
+            <div class="permit-field">
+                <label>Camión</label>
+                <span>{{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
+            </div>
+            {% if issue.equipment %}
+            <div class="permit-field">
+                <label>Detalles</label>
+                <span>{{ issue.equipment.make or '' }} {{ issue.equipment.model or '' }}{% if issue.equipment.year %} ({{ issue.equipment.year }}){% endif %}</span>
+            </div>
+            <div class="permit-field">
+                <label>Placa</label>
+                <span>{{ issue.equipment.plate_number or '—' }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="profile-card">
+        <div class="card-header">
+            <i class="fas fa-exclamation-triangle"></i> Problema
+        </div>
+        <div class="card-body">
+            <div class="permit-field">
+                <label>Categoría</label>
+                <span>{{ issue.category_label }}</span>
+            </div>
+            <div class="permit-field">
+                <label>Descripción</label>
+                <span>{{ issue.description }}</span>
+            </div>
+            {% if issue.odometer_reading %}
+            <div class="permit-field">
+                <label>Odómetro</label>
+                <span>{{ '{:,}'.format(issue.odometer_reading) }} mi</span>
+            </div>
+            {% endif %}
+            {% if issue.location %}
+            <div class="permit-field">
+                <label>Ubicación</label>
+                <span>{{ issue.location }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="profile-card">
+        <div class="card-header">
+            <i class="fas fa-info-circle"></i> Información
+        </div>
+        <div class="card-body">
+            <div class="permit-field">
+                <label>Reportado por</label>
+                <span>{{ issue.reporter.name if issue.reporter else 'Desconocido' }}</span>
+            </div>
+            <div class="permit-field">
+                <label>Fecha de reporte</label>
+                <span>{{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at else '—' }}</span>
+            </div>
+            {% if issue.resolved_at %}
+            <div class="permit-field">
+                <label>Fecha de resolución</label>
+                <span>{{ issue.resolved_at.strftime('%d/%m/%Y %H:%M') }}</span>
+            </div>
+            {% if issue.time_to_resolution %}
+            <div class="permit-field">
+                <label>Tiempo de resolución</label>
+                <span>{{ issue.time_to_resolution.days }}d {{ issue.time_to_resolution.seconds // 3600 }}h</span>
+            </div>
+            {% endif %}
+            {% endif %}
+            {% if issue.assignee %}
+            <div class="permit-field">
+                <label>Asignado a</label>
+                <span>{{ issue.assignee.username }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if current_user.is_admin or current_user.issue_roles|selectattr('role', 'equalto', 'shop')|list %}
+<div class="profile-card" style="margin-top: var(--space-lg);">
+    <div class="card-header">
+        <i class="fas fa-exchange-alt"></i> Cambiar Estado
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('issues.update_status', issue_id=issue.id) }}" class="status-change-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="new_status">Nuevo Estado</label>
+                    <select name="new_status" id="new_status" required>
+                        {% for code, label in statuses %}
+                        {% if code != issue.current_status %}
+                        <option value="{{ code }}">{{ label }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="notes">Notas (opcional)</label>
+                    <input type="text" name="notes" id="notes" placeholder="Razón del cambio...">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Actualizar Estado
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if history %}
+<div class="profile-card" style="margin-top: var(--space-lg);">
+    <div class="card-header">
+        <i class="fas fa-history"></i> Historial de Estado
+    </div>
+    <div class="card-body">
+        <div class="status-timeline">
+            {% for entry in history %}
+            <div class="timeline-entry">
+                <div class="timeline-dot status-{{ entry.to_status }}"></div>
+                <div class="timeline-content">
+                    <div class="timeline-header">
+                        {% if entry.from_status %}
+                        <span class="issue-status-badge status-{{ entry.from_status }}">{{ dict(statuses).get(entry.from_status, entry.from_status) }}</span>
+                        <i class="fas fa-arrow-right"></i>
+                        {% endif %}
+                        <span class="issue-status-badge status-{{ entry.to_status }}">{{ dict(statuses).get(entry.to_status, entry.to_status) }}</span>
+                    </div>
+                    <div class="timeline-meta">
+                        {% if entry.changed_by_user %}
+                        <span><i class="fas fa-user"></i> {{ entry.changed_by_user.username }}</span>
+                        {% elif entry.changed_by_employee %}
+                        <span><i class="fas fa-user"></i> {{ entry.changed_by_employee.name }}</span>
+                        {% endif %}
+                        <span><i class="fas fa-clock"></i> {{ entry.changed_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                    </div>
+                    {% if entry.notes %}
+                    <p class="timeline-notes">{{ entry.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

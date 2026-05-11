@@ -59,6 +59,9 @@ class Employee(db.Model):
     # HAZMAT is a boolean flag, not date-based
     endoso_hazmat = db.Column(db.String(10), default='N/A')  # SI, NO, N/A
 
+    # Link-based access for issue reporting (UUID token)
+    access_token = db.Column(db.String(36), unique=True, nullable=True, index=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -385,3 +388,124 @@ class NotificationLog(db.Model):
     email_to = db.Column(db.String(120), nullable=False)
     status = db.Column(db.String(20), nullable=False)
     error_message = db.Column(db.Text)
+
+
+# ── ISSUE REPORTING ──────────────────────────────────────────────────
+
+ISSUE_CATEGORIES = [
+    ('motor', 'Motor'),
+    ('frenos', 'Frenos'),
+    ('electrico', 'Eléctrico'),
+    ('llantas', 'Llantas'),
+    ('transmision', 'Transmisión'),
+    ('carroceria', 'Carrocería'),
+    ('ac', 'Aire Acondicionado'),
+    ('luces', 'Luces'),
+    ('fluidos', 'Fluidos'),
+    ('otro', 'Otro'),
+]
+
+ISSUE_SEVERITIES = [
+    ('baja', 'Baja'),
+    ('media', 'Media'),
+    ('alta', 'Alta'),
+    ('critica', 'Crítica'),
+]
+
+ISSUE_STATUSES = [
+    ('reportado', 'Reportado'),
+    ('en_revision', 'En Revisión'),
+    ('en_reparacion', 'En Reparación'),
+    ('resuelto', 'Resuelto'),
+    ('cerrado', 'Cerrado'),
+]
+
+
+class Issue(db.Model):
+    __tablename__ = 'issues'
+    id = db.Column(db.Integer, primary_key=True)
+    equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id', ondelete='SET NULL'), nullable=True)
+    reported_by_employee_id = db.Column(db.Integer, db.ForeignKey('employees.id', ondelete='SET NULL'), nullable=True)
+    assigned_to_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    parent_issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='SET NULL'), nullable=True)
+    category = db.Column(db.String(50), nullable=False)
+    severity = db.Column(db.String(20), nullable=False, default='media')
+    current_status = db.Column(db.String(30), nullable=False, default='reportado')
+    description = db.Column(db.Text, nullable=False)
+    odometer_reading = db.Column(db.Integer, nullable=True)
+    location = db.Column(db.String(200), nullable=True)
+    reported_at = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    equipment = db.relationship('Equipment', backref=db.backref('issues', lazy='dynamic'))
+    reporter = db.relationship('Employee', backref=db.backref('reported_issues', lazy='dynamic'))
+    assignee = db.relationship('User', backref=db.backref('assigned_issues', lazy='dynamic'))
+    status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan')
+    children = db.relationship('Issue', backref=db.backref('parent', remote_side='Issue.id'), lazy='dynamic')
+
+    @property
+    def time_to_resolution(self):
+        if self.resolved_at and self.reported_at:
+            return self.resolved_at - self.reported_at
+        return None
+
+    @property
+    def category_label(self):
+        for code, name in ISSUE_CATEGORIES:
+            if code == self.category:
+                return name
+        return self.category
+
+    @property
+    def severity_label(self):
+        for code, name in ISSUE_SEVERITIES:
+            if code == self.severity:
+                return name
+        return self.severity
+
+    @property
+    def status_label(self):
+        for code, name in ISSUE_STATUSES:
+            if code == self.current_status:
+                return name
+        return self.current_status
+
+
+class IssueStatusHistory(db.Model):
+    __tablename__ = 'issue_status_history'
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False)
+    from_status = db.Column(db.String(30), nullable=True)
+    to_status = db.Column(db.String(30), nullable=False)
+    changed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    changed_by_employee_id = db.Column(db.Integer, db.ForeignKey('employees.id', ondelete='SET NULL'), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    changed_by_user = db.relationship('User', foreign_keys=[changed_by_user_id])
+    changed_by_employee = db.relationship('Employee', foreign_keys=[changed_by_employee_id])
+
+
+class IssuePhoto(db.Model):
+    __tablename__ = 'issue_photos'
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False)
+    uploaded_by_employee_id = db.Column(db.Integer, db.ForeignKey('employees.id', ondelete='SET NULL'), nullable=True)
+    storage_filename = db.Column(db.String(500), nullable=False)
+    caption = db.Column(db.String(300), nullable=True)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    issue = db.relationship('Issue', backref=db.backref('photos', lazy='dynamic', cascade='all, delete-orphan'))
+
+
+class UserIssueRole(db.Model):
+    __tablename__ = 'user_issue_roles'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('user_id', 'role'),
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    role = db.Column(db.String(20), nullable=False)
+
+    user = db.relationship('User', backref=db.backref('issue_roles', lazy='select', cascade='all, delete-orphan'))

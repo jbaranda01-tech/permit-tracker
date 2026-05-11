@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Reportes de Problemas{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-wrench"></i> Reportes de Problemas</h1>
+</div>
+
+<div class="issue-status-tabs">
+    <a href="{{ url_for('issues.queue') }}" class="status-tab {% if not current_status %}active{% endif %}">
+        Abiertos
+        {% set open_count = (status_counts.get('reportado', 0) + status_counts.get('en_revision', 0) + status_counts.get('en_reparacion', 0)) %}
+        {% if open_count > 0 %}<span class="badge">{{ open_count }}</span>{% endif %}
+    </a>
+    {% for code, label in statuses %}
+    <a href="{{ url_for('issues.queue', status=code) }}" class="status-tab {% if current_status == code %}active{% endif %}">
+        {{ label }}
+        {% if status_counts.get(code, 0) > 0 %}<span class="badge">{{ status_counts[code] }}</span>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+
+<div class="issue-filters">
+    <form method="GET" class="filter-form">
+        {% if current_status %}
+        <input type="hidden" name="status" value="{{ current_status }}">
+        {% endif %}
+        <select name="severity" onchange="this.form.submit()">
+            <option value="">Todas las severidades</option>
+            {% for code, label in severities %}
+            <option value="{{ code }}" {% if current_severity == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="equipment_id" onchange="this.form.submit()">
+            <option value="">Todos los camiones</option>
+            {% for truck in trucks %}
+            <option value="{{ truck.id }}" {% if current_equipment == truck.id %}selected{% endif %}>{{ truck.display_name }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if issues %}
+<div class="issue-list">
+    {% for issue in issues %}
+    <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card">
+        <div class="issue-card-top">
+            <span class="issue-id">#{{ issue.id }}</span>
+            <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+        </div>
+        <div class="issue-card-body">
+            <div class="issue-truck">
+                <i class="fas fa-truck"></i>
+                {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}
+            </div>
+            <div class="issue-category">
+                <span class="category-tag">{{ issue.category_label }}</span>
+            </div>
+            <p class="issue-description-preview">{{ issue.description[:120] }}{% if issue.description|length > 120 %}...{% endif %}</p>
+        </div>
+        <div class="issue-card-footer">
+            <span class="issue-reporter">
+                <i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}
+            </span>
+            <span class="issue-date">
+                <i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at else '' }}
+            </span>
+            <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <i class="fas fa-clipboard-check"></i>
+    <p>No hay reportes {% if current_status %}con estado "{{ dict(statuses).get(current_status, current_status) }}"{% endif %}</p>
+</div>
+{% endif %}
+{% endblock %}

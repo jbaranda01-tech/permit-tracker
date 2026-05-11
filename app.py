@@ -23,7 +23,8 @@ from config import Config
 from models import (
     db, User, Employee, EmployeePermit, Equipment, EquipmentPermit,
     CompanyPermit, EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES,
-    COMPANY_PERMIT_TYPES, FileStorage, NotificationLog
+    COMPANY_PERMIT_TYPES, FileStorage, NotificationLog,
+    Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -43,6 +44,9 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Por favor inicie sesión para acceder.'
 login_manager.login_message_category = 'warning'
+
+from issues import issues_bp
+app.register_blueprint(issues_bp)
 
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx'}
@@ -1984,6 +1988,39 @@ def send_notifications(dry_run, employee_id):
         print(line)
     prefix = '[DRY RUN] ' if dry_run else ''
     print(f'{prefix}Done: {result["sent"]} sent, {result["skipped"]} skipped, {result["failed"]} failed.')
+
+
+@app.cli.command('generate-token')
+@click.argument('employee_id', type=int)
+def generate_token(employee_id):
+    """Generate an issue-reporting access token for an employee."""
+    emp = Employee.query.get(employee_id)
+    if not emp:
+        print(f'Error: Employee with ID {employee_id} not found.')
+        return
+    import uuid
+    emp.access_token = str(uuid.uuid4())
+    db.session.commit()
+    print(f'Token generated for {emp.name} ({emp.company}):')
+    print(f'  /issues/report/{emp.access_token}')
+
+
+@app.cli.command('assign-issue-role')
+@click.argument('username')
+@click.argument('role', type=click.Choice(['shop', 'office']))
+def assign_issue_role(username, role):
+    """Assign an issue-module role (shop or office) to a user."""
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        print(f'Error: User "{username}" not found.')
+        return
+    existing = UserIssueRole.query.filter_by(user_id=user.id, role=role).first()
+    if existing:
+        print(f'User "{username}" already has the "{role}" role.')
+        return
+    db.session.add(UserIssueRole(user_id=user.id, role=role))
+    db.session.commit()
+    print(f'Assigned "{role}" role to user "{username}".')
 
 
 # For Railway — auto-init on startup

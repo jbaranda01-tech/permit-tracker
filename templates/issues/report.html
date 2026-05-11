@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Reportar Problema{% endblock %}
+
+{% block content %}
+<div class="report-container">
+    <div class="report-header">
+        <h1><i class="fas fa-exclamation-circle"></i> Reportar Problema</h1>
+        <p class="report-driver-name">{{ employee.name }} — {{ employee.company_full }}</p>
+    </div>
+
+    <form method="POST" class="report-form">
+        <div class="form-section">
+            <h3><i class="fas fa-truck"></i> Camión</h3>
+            <div class="form-group">
+                <label for="equipment_id">Unidad *</label>
+                <select name="equipment_id" id="equipment_id" required>
+                    <option value="">— Seleccionar unidad —</option>
+                    {% for truck in trucks %}
+                    <option value="{{ truck.id }}" {% if request.form.get('equipment_id')|int == truck.id %}selected{% endif %}>
+                        {{ truck.display_name }}{% if truck.make or truck.model %} — {{ truck.make }} {{ truck.model }}{% endif %}{% if truck.year %} ({{ truck.year }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-tools"></i> Problema</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="category">Categoría *</label>
+                    <select name="category" id="category" required>
+                        <option value="">— Seleccionar —</option>
+                        {% for code, label in categories %}
+                        <option value="{{ code }}" {% if request.form.get('category') == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="severity">Severidad *</label>
+                    <select name="severity" id="severity" required>
+                        {% for code, label in severities %}
+                        <option value="{{ code }}" {% if request.form.get('severity', 'media') == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="description">Descripción del problema *</label>
+                <textarea name="description" id="description" rows="4" required placeholder="Describa el problema con el mayor detalle posible...">{{ request.form.get('description', '') }}</textarea>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-info-circle"></i> Detalles Adicionales</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="odometer_reading">Lectura del Odómetro</label>
+                    <input type="number" name="odometer_reading" id="odometer_reading" min="0"
+                           value="{{ request.form.get('odometer_reading', '') }}"
+                           placeholder="Millas">
+                </div>
+                <div class="form-group">
+                    <label for="location">Ubicación</label>
+                    <input type="text" name="location" id="location"
+                           value="{{ request.form.get('location', '') }}"
+                           placeholder="Ej: Ruta 2 km 45, Ponce">
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-paper-plane"></i> Enviar Reporte
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

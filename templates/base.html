@@ -55,6 +55,16 @@
             </a>
         </div>
 
+        {% if current_user.is_admin or current_user.issue_roles|length > 0 %}
+        <div class="nav-section">
+            <div class="nav-section-title">Taller</div>
+            <a href="{{ url_for('issues.queue') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('issues.') %}active{% endif %}">
+                <i class="fas fa-wrench"></i>
+                <span>Reportes</span>
+            </a>
+        </div>
+        {% endif %}
+
         <div class="nav-section">
             <div class="nav-section-title">Herramientas</div>
             <a href="{{ url_for('generate_pdf') }}" class="nav-link">
