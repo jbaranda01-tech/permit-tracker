@@ -72,8 +72,6 @@ def report_submit(token):
     category = request.form.get('category', '')
     severity = request.form.get('severity', 'media')
     description = request.form.get('description', '').strip()
-    odometer = request.form.get('odometer_reading', type=int)
-    location = request.form.get('location', '').strip() or None
 
     errors = []
     if not equipment_id:
@@ -108,8 +106,6 @@ def report_submit(token):
         category=category,
         severity=severity,
         description=description,
-        odometer_reading=odometer,
-        location=location,
     )
     db.session.add(issue)
     db.session.flush()

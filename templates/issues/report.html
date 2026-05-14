@@ -51,23 +51,6 @@
             </div>
         </div>
 
-        <div class="form-section">
-            <h3><i class="fas fa-info-circle"></i> Detalles Adicionales</h3>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="odometer_reading">Lectura del Odómetro</label>
-                    <input type="number" name="odometer_reading" id="odometer_reading" min="0"
-                           value="{{ request.form.get('odometer_reading', '') }}"
-                           placeholder="Millas">
-                </div>
-                <div class="form-group">
-                    <label for="location">Ubicación</label>
-                    <input type="text" name="location" id="location"
-                           value="{{ request.form.get('location', '') }}"
-                           placeholder="Ej: Ruta 2 km 45, Ponce">
-                </div>
-            </div>
-        </div>
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary btn-lg">

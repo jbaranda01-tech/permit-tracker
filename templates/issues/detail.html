@@ -47,18 +47,6 @@
                 <label>Descripción</label>
                 <span>{{ issue.description }}</span>
             </div>
-            {% if issue.odometer_reading %}
-            <div class="permit-field">
-                <label>Odómetro</label>
-                <span>{{ '{:,}'.format(issue.odometer_reading) }} mi</span>
-            </div>
-            {% endif %}
-            {% if issue.location %}
-            <div class="permit-field">
-                <label>Ubicación</label>
-                <span>{{ issue.location }}</span>
-            </div>
-            {% endif %}
         </div>
     </div>
 
