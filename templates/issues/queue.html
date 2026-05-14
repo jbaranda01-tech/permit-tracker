@@ -44,39 +44,58 @@
     <div class="company-panel">
         <div class="panel-header panel-lb">
             <h2><img src="{{ url_for('static', filename='img/logo-lb.png') }}" alt="LB Caribe" class="company-logo"> LB Caribe Services</h2>
-            <span class="panel-count">{{ lb_issues|length }}</span>
+            <span class="panel-count">{{ lb_issue_count }} reportes &middot; {{ lb_trucks|length }} unidades</span>
         </div>
         <div class="panel-body">
-            {% for issue in lb_issues %}
-            <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card">
-                <div class="issue-card-top">
-                    <span class="issue-id">#{{ issue.id }}</span>
-                    <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
-                </div>
-                <div class="issue-card-body">
-                    <div class="issue-truck">
-                        <i class="fas fa-truck"></i>
-                        {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}
+            {% for truck in lb_trucks %}
+            <div class="truck-profile">
+                <div class="truck-profile-header" onclick="toggleTruckIssues({{ truck.equipment.id }})">
+                    <div class="truck-info">
+                        <div class="truck-name">
+                            <i class="fas fa-truck"></i>
+                            {{ truck.equipment.display_name }}
+                        </div>
+                        <div class="truck-meta">
+                            {{ truck.equipment.make or '' }} {{ truck.equipment.model or '' }}
+                            {%- if truck.equipment.year %} ({{ truck.equipment.year }}){% endif %}
+                            {%- if truck.equipment.plate_number %} &middot; {{ truck.equipment.plate_number }}{% endif %}
+                        </div>
                     </div>
-                    <div class="issue-category">
-                        <span class="category-tag">{{ issue.category_label }}</span>
+                    <div class="truck-indicators">
+                        {% if truck.issue_count > 0 %}
+                        <span class="truck-issue-count">{{ truck.issue_count }}</span>
+                        {% endif %}
+                        {% if truck.worst_severity %}
+                        <span class="issue-severity severity-{{ truck.worst_severity }}">{{ dict(severities).get(truck.worst_severity, truck.worst_severity) }}</span>
+                        {% endif %}
+                        <i class="fas fa-chevron-{% if truck.auto_expand %}up{% else %}down{% endif %} truck-chevron" id="chevron-{{ truck.equipment.id }}"></i>
                     </div>
-                    <p class="issue-description-preview">{{ issue.description[:120] }}{% if issue.description|length > 120 %}...{% endif %}</p>
                 </div>
-                <div class="issue-card-footer">
-                    <span class="issue-reporter">
-                        <i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}
-                    </span>
-                    <span class="issue-date">
-                        <i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at else '' }}
-                    </span>
-                    <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+                <div class="truck-issues" id="issues-{{ truck.equipment.id }}" {% if not truck.auto_expand %}style="display:none"{% endif %}>
+                    {% if truck.issues %}
+                    {% for issue in truck.issues %}
+                    <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card-compact">
+                        <div class="issue-card-compact-left">
+                            <span class="issue-id">#{{ issue.id }}</span>
+                            <span class="category-tag">{{ issue.category_label }}</span>
+                            <span class="issue-description-preview">{{ issue.description[:80] }}{% if issue.description|length > 80 %}...{% endif %}</span>
+                        </div>
+                        <div class="issue-card-compact-right">
+                            <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+                            <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+                            <span class="issue-date-compact">{{ issue.reported_at.strftime('%d/%m') if issue.reported_at }}</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                    {% else %}
+                    <div class="truck-no-issues">Sin reportes</div>
+                    {% endif %}
                 </div>
-            </a>
+            </div>
             {% else %}
             <div class="empty-state">
-                <i class="fas fa-clipboard-check"></i>
-                <p>No hay reportes</p>
+                <i class="fas fa-truck"></i>
+                <p>No hay unidades</p>
             </div>
             {% endfor %}
         </div>
@@ -85,42 +104,104 @@
     <div class="company-panel">
         <div class="panel-header panel-pli">
             <h2><img src="{{ url_for('static', filename='img/logo-pli.png') }}" alt="PLI" class="company-logo"> Professional Logistics</h2>
-            <span class="panel-count">{{ pli_issues|length }}</span>
+            <span class="panel-count">{{ pli_issue_count }} reportes &middot; {{ pli_trucks|length }} unidades</span>
         </div>
         <div class="panel-body">
-            {% for issue in pli_issues %}
-            <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card">
-                <div class="issue-card-top">
-                    <span class="issue-id">#{{ issue.id }}</span>
-                    <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
-                </div>
-                <div class="issue-card-body">
-                    <div class="issue-truck">
-                        <i class="fas fa-truck"></i>
-                        {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}
+            {% for truck in pli_trucks %}
+            <div class="truck-profile">
+                <div class="truck-profile-header" onclick="toggleTruckIssues({{ truck.equipment.id }})">
+                    <div class="truck-info">
+                        <div class="truck-name">
+                            <i class="fas fa-truck"></i>
+                            {{ truck.equipment.display_name }}
+                        </div>
+                        <div class="truck-meta">
+                            {{ truck.equipment.make or '' }} {{ truck.equipment.model or '' }}
+                            {%- if truck.equipment.year %} ({{ truck.equipment.year }}){% endif %}
+                            {%- if truck.equipment.plate_number %} &middot; {{ truck.equipment.plate_number }}{% endif %}
+                        </div>
                     </div>
-                    <div class="issue-category">
-                        <span class="category-tag">{{ issue.category_label }}</span>
+                    <div class="truck-indicators">
+                        {% if truck.issue_count > 0 %}
+                        <span class="truck-issue-count">{{ truck.issue_count }}</span>
+                        {% endif %}
+                        {% if truck.worst_severity %}
+                        <span class="issue-severity severity-{{ truck.worst_severity }}">{{ dict(severities).get(truck.worst_severity, truck.worst_severity) }}</span>
+                        {% endif %}
+                        <i class="fas fa-chevron-{% if truck.auto_expand %}up{% else %}down{% endif %} truck-chevron" id="chevron-{{ truck.equipment.id }}"></i>
                     </div>
-                    <p class="issue-description-preview">{{ issue.description[:120] }}{% if issue.description|length > 120 %}...{% endif %}</p>
                 </div>
-                <div class="issue-card-footer">
-                    <span class="issue-reporter">
-                        <i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}
-                    </span>
-                    <span class="issue-date">
-                        <i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at else '' }}
-                    </span>
-                    <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+                <div class="truck-issues" id="issues-{{ truck.equipment.id }}" {% if not truck.auto_expand %}style="display:none"{% endif %}>
+                    {% if truck.issues %}
+                    {% for issue in truck.issues %}
+                    <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card-compact">
+                        <div class="issue-card-compact-left">
+                            <span class="issue-id">#{{ issue.id }}</span>
+                            <span class="category-tag">{{ issue.category_label }}</span>
+                            <span class="issue-description-preview">{{ issue.description[:80] }}{% if issue.description|length > 80 %}...{% endif %}</span>
+                        </div>
+                        <div class="issue-card-compact-right">
+                            <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+                            <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+                            <span class="issue-date-compact">{{ issue.reported_at.strftime('%d/%m') if issue.reported_at }}</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                    {% else %}
+                    <div class="truck-no-issues">Sin reportes</div>
+                    {% endif %}
                 </div>
-            </a>
+            </div>
             {% else %}
             <div class="empty-state">
-                <i class="fas fa-clipboard-check"></i>
-                <p>No hay reportes</p>
+                <i class="fas fa-truck"></i>
+                <p>No hay unidades</p>
             </div>
             {% endfor %}
         </div>
     </div>
 </div>
+
+{% if recent_issues %}
+<div class="recent-issues-section">
+    <div class="profile-card">
+        <div class="card-header">
+            <i class="fas fa-clock"></i> Reportes Recientes
+        </div>
+        <div class="card-body" style="padding: 0;">
+            {% for issue in recent_issues %}
+            <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card-compact">
+                <div class="issue-card-compact-left">
+                    <span class="issue-id">#{{ issue.id }}</span>
+                    <span class="issue-truck-tag"><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
+                    <span class="category-tag">{{ issue.category_label }}</span>
+                    <span class="issue-description-preview">{{ issue.description[:60] }}{% if issue.description|length > 60 %}...{% endif %}</span>
+                </div>
+                <div class="issue-card-compact-right">
+                    <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+                    <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+                    <span class="issue-date-compact">{{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function toggleTruckIssues(equipmentId) {
+    var issues = document.getElementById('issues-' + equipmentId);
+    var chevron = document.getElementById('chevron-' + equipmentId);
+    if (issues.style.display === 'none') {
+        issues.style.display = '';
+        chevron.classList.remove('fa-chevron-down');
+        chevron.classList.add('fa-chevron-up');
+    } else {
+        issues.style.display = 'none';
+        chevron.classList.remove('fa-chevron-up');
+        chevron.classList.add('fa-chevron-down');
+    }
+}
+</script>
 {% endblock %}

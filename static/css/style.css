@@ -1443,6 +1443,123 @@ img { max-width: 100%; }
     color: var(--text-primary);
 }
 
+/* ── Truck Profile Cards (Issue Queue) ───────────────────────────── */
+.truck-profile {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-sm);
+    overflow: hidden;
+    background: var(--bg-primary);
+}
+.truck-profile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    transition: background var(--transition);
+    user-select: none;
+}
+.truck-profile-header:hover { background: var(--bg-hover); }
+.truck-info { flex: 1; min-width: 0; }
+.truck-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+.truck-name i { color: var(--text-tertiary); font-size: 0.85rem; }
+.truck-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    padding-left: calc(var(--space-sm) + 18px);
+}
+.truck-indicators {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+}
+.truck-issue-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 11px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.truck-chevron {
+    color: var(--text-tertiary);
+    font-size: 0.7rem;
+    transition: transform var(--transition);
+}
+.truck-issues { border-top: 1px solid var(--border); }
+.truck-no-issues {
+    padding: var(--space-sm) var(--space-md);
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+/* Compact issue rows */
+.issue-card-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-xs) var(--space-md);
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: background var(--transition);
+    gap: var(--space-sm);
+}
+.issue-card-compact:last-child { border-bottom: none; }
+.issue-card-compact:hover { background: var(--bg-hover); }
+.issue-card-compact-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+.issue-card-compact-left .issue-id { flex-shrink: 0; }
+.issue-card-compact-left .issue-description-preview {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.85rem;
+}
+.issue-card-compact-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+}
+.issue-date-compact {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+.issue-truck-tag {
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.issue-truck-tag i { color: var(--text-tertiary); margin-right: 2px; }
+
+/* Recent issues section */
+.recent-issues-section { margin-top: var(--space-xl); }
+
 @media (max-width: 768px) {
     .report-container { padding: var(--space-md); }
     .issue-status-tabs { gap: 2px; }
@@ -1450,6 +1567,13 @@ img { max-width: 100%; }
     .filter-form { flex-direction: column; }
     .filter-form select { width: 100%; }
     .issue-card-footer { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .issue-card-compact {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-xs);
+        padding: var(--space-sm) var(--space-md);
+    }
+    .issue-card-compact-right { width: 100%; justify-content: flex-start; }
     .link-row { flex-direction: column; }
     .link-input { width: 100%; }
 }

@@ -1,8 +1,10 @@
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from flask import render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from issues import issues_bp
 from issues.decorators import shop_required, shop_or_office_required
@@ -11,6 +13,8 @@ from models import (
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     EXCLUDED_EQUIPMENT_MODELS,
 )
+
+SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
 
 
 def reportable_equipment_query(company=None):
@@ -129,7 +133,9 @@ def report_success(token):
 @issues_bp.route('/', methods=['GET'])
 @shop_or_office_required
 def queue():
-    query = Issue.query.join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
+    query = (Issue.query
+             .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
+             .options(joinedload(Issue.reporter)))
 
     status_filter = request.args.get('status', '')
     if status_filter:
@@ -147,18 +153,46 @@ def queue():
 
     all_issues = query.order_by(Issue.reported_at.desc()).all()
 
-    lb_issues = [i for i in all_issues if i.equipment and i.equipment.company == 'LB']
-    pli_issues = [i for i in all_issues if i.equipment and i.equipment.company == 'PLI']
+    issues_by_equipment = defaultdict(list)
+    for issue in all_issues:
+        if issue.equipment_id:
+            issues_by_equipment[issue.equipment_id].append(issue)
+
+    def build_truck_profiles(company):
+        all_trucks = reportable_equipment_query(company=company).all()
+        profiles = []
+        for eq in all_trucks:
+            issues = issues_by_equipment.get(eq.id, [])
+            worst_rank = max((SEVERITY_RANK.get(i.severity, 0) for i in issues), default=0)
+            worst_sev = next((s for s, r in SEVERITY_RANK.items() if r == worst_rank), None)
+            profiles.append({
+                'equipment': eq,
+                'issues': issues,
+                'issue_count': len(issues),
+                'worst_severity': worst_sev,
+                'worst_severity_rank': worst_rank,
+                'auto_expand': len(issues) > 0,
+            })
+        profiles.sort(key=lambda p: (-p['worst_severity_rank'], -p['issue_count'],
+                                     p['equipment'].display_name))
+        return profiles
+
+    lb_trucks = build_truck_profiles('LB')
+    pli_trucks = build_truck_profiles('PLI')
 
     status_counts = {}
     for code, label in ISSUE_STATUSES:
         status_counts[code] = Issue.query.filter_by(current_status=code).count()
 
     trucks = reportable_equipment_query().all()
+    recent_issues = all_issues[:20]
 
     return render_template('issues/queue.html',
-                           lb_issues=lb_issues,
-                           pli_issues=pli_issues,
+                           lb_trucks=lb_trucks,
+                           pli_trucks=pli_trucks,
+                           lb_issue_count=sum(t['issue_count'] for t in lb_trucks),
+                           pli_issue_count=sum(t['issue_count'] for t in pli_trucks),
+                           recent_issues=recent_issues,
                            statuses=ISSUE_STATUSES,
                            severities=ISSUE_SEVERITIES,
                            categories=ISSUE_CATEGORIES,
