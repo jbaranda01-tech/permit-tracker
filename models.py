@@ -30,6 +30,18 @@ class User(UserMixin, db.Model):
     def is_manager(self):
         return self.role in ('admin', 'manager')
 
+    @property
+    def is_shop_only(self):
+        if self.role in ('admin', 'manager'):
+            return False
+        return any(ir.role == 'shop' for ir in self.issue_roles)
+
+    @property
+    def has_shop_role(self):
+        if self.role == 'admin':
+            return True
+        return any(ir.role == 'shop' for ir in self.issue_roles)
+
 
 # ── EMPLOYEES ──────────────────────────────────────────────────────────
 

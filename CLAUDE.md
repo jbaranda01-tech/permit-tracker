@@ -27,7 +27,6 @@ flask send-notifications                    # Send all pending notifications
 flask send-notifications --employee-id 42   # Single employee (testing)
 flask generate-token <employee_id>          # Generate issue-reporting access link for a driver
 flask assign-issue-role <username> shop     # Assign shop role for issue module
-flask assign-issue-role <username> office   # Assign office (read-only) role for issue module
 
 # Production (Railway)
 gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
@@ -55,7 +54,7 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 - File uploads go to `uploads/` directory with UUID-prefixed filenames
 - Excel import (openpyxl) includes a 2-digit year fix (1930→2030) for date handling. Both employee and equipment imports recognize N/A-like cell values ("N/A", "NA", "NO", empty string) and set `applicability='N/A'` on the corresponding permit. Equipment import also hardcodes VOUCHER as N/A for Personal company equipment.
 - PDF reports generated with WeasyPrint via `report_pdf.html` template
-- Auth uses Flask-Login with three roles for permits: admin, manager, viewer. Issue module uses a separate layered role system via `user_issue_roles` table (shop, office); admin role auto-grants full issue access.
+- Auth uses Flask-Login with strict module separation enforced by a `before_request` hook. Base roles: admin, manager, viewer. Issue module uses `user_issue_roles` table (shop role only; office role is deprecated). Shop-only users (viewer + shop role) can ONLY access the issue module — they are redirected away from all permit routes. Permit users (viewer/manager without shop role) can ONLY access the permit module. Admin has full access to both modules. `User.is_shop_only` and `User.has_shop_role` model properties centralize this logic.
 - Drivers access issue reporting via link-based auth: each employee has an optional `access_token` (UUID) column; URL `/issues/report/<token>` identifies the driver without login. The report form collects truck, category, severity, and description only (odometer/location columns exist in the DB but are not exposed in the UI). Truck dropdown is scoped to vehicles from the driver's company, excluding Personal company and specific equipment models defined in `EXCLUDED_EQUIPMENT_MODELS` (carreton, chasis, generador alquiler, generador contenedor, tanque combustible, tanque harina). The `reportable_equipment_query()` helper in `issues/routes.py` centralizes this filtering.
 - Issue status updates are transactional: `Issue.current_status` (denormalized) and `IssueStatusHistory` are always updated in the same commit. `resolved_at` auto-sets on transition to resuelto/cerrado.
 - Unique constraints enforce one permit per type per employee/equipment
@@ -91,11 +90,11 @@ Truck issue reporting for drivers (report) and shop staff (triage/resolve). Offi
 
 **Issue severities:** baja, media, alta, crítica
 
-**Role access:**
+**Role access (strict module separation):**
 - Driver: link-based access via `Employee.access_token` — no login, reports issues only
-- Shop: `user_issue_roles` row with `role='shop'` — triage, change status, view queue
-- Office: `user_issue_roles` row with `role='office'` — read-only queue and detail views
-- Admin: existing `User.role == 'admin'` — automatic full access, no `user_issue_roles` entry needed
+- Shop: `user_issue_roles` row with `role='shop'` — triage, change status, view queue. Shop-only users (viewer + shop) are blocked from all permit routes via `before_request` hook
+- Admin: existing `User.role == 'admin'` — automatic full access to both modules, no `user_issue_roles` entry needed
+- Office role: deprecated, no longer assigned via UI or CLI. Existing DB rows are inert
 
 **Equipment filtering:** Only LB and PLI vehicles are reportable. Personal company equipment is excluded. Specific equipment models are excluded via `EXCLUDED_EQUIPMENT_MODELS` in `models.py` (matched case-insensitively against `Equipment.model` column). The `reportable_equipment_query()` helper in `issues/routes.py` centralizes this logic for both the driver form and the queue filter dropdown.
 

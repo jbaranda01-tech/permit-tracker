@@ -241,6 +241,14 @@ def inject_globals():
     today = date.today()
     alert_date = today + timedelta(days=30)
 
+    if current_user.is_authenticated and current_user.is_shop_only:
+        return {
+            'permisos_por_vencer': 0,
+            'permisos_vencidos': 0,
+            'today': today,
+            'alert_date': alert_date,
+        }
+
     try:
         # Count expiring permits (employees)
         expiring_emp = EmployeePermit.query.filter(
@@ -321,11 +329,38 @@ def log_request(response):
     return response
 
 
+# ── MODULE ACCESS ENFORCEMENT ─────────────────────────────────────────
+
+SHOP_EXEMPT_PREFIXES = ('issues.', 'static')
+SHOP_EXEMPT_ENDPOINTS = {'login', 'logout', 'health'}
+
+@app.before_request
+def enforce_module_access():
+    if not current_user.is_authenticated:
+        return
+
+    endpoint = request.endpoint
+    if endpoint is None:
+        return
+
+    if endpoint in SHOP_EXEMPT_ENDPOINTS:
+        return
+
+    if any(endpoint.startswith(p) for p in SHOP_EXEMPT_PREFIXES):
+        return
+
+    if current_user.is_shop_only:
+        flash('Su cuenta solo tiene acceso al módulo de taller.', 'warning')
+        return redirect(url_for('issues.queue'))
+
+
 # ── AUTH ROUTES ────────────────────────────────────────────────────────
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
+        if current_user.is_shop_only:
+            return redirect(url_for('issues.queue'))
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
@@ -335,7 +370,11 @@ def login():
             login_user(user, remember=True)
             next_page = request.args.get('next')
             flash(f'Bienvenido, {user.username}!', 'success')
-            return redirect(next_page or url_for('dashboard'))
+            if next_page:
+                return redirect(next_page)
+            if user.is_shop_only:
+                return redirect(url_for('issues.queue'))
+            return redirect(url_for('dashboard'))
         flash('Usuario o contraseña incorrectos.', 'danger')
     return render_template('login.html')
 
@@ -1713,7 +1752,7 @@ def admin_user_new():
     db.session.add(user)
     db.session.flush()
     for role_name in request.form.getlist('issue_roles'):
-        if role_name in ('shop', 'office'):
+        if role_name == 'shop':
             db.session.add(UserIssueRole(user_id=user.id, role=role_name))
     db.session.commit()
     flash(f'Usuario {username} creado como {role}.', 'success')
@@ -1731,7 +1770,7 @@ def admin_user_edit(id):
         user.set_password(password)
     UserIssueRole.query.filter_by(user_id=user.id).delete()
     for role_name in request.form.getlist('issue_roles'):
-        if role_name in ('shop', 'office'):
+        if role_name == 'shop':
             db.session.add(UserIssueRole(user_id=user.id, role=role_name))
     db.session.commit()
     flash(f'Usuario {user.username} actualizado.', 'success')
@@ -2015,9 +2054,9 @@ def generate_token(employee_id):
 
 @app.cli.command('assign-issue-role')
 @click.argument('username')
-@click.argument('role', type=click.Choice(['shop', 'office']))
+@click.argument('role', type=click.Choice(['shop']))
 def assign_issue_role(username, role):
-    """Assign an issue-module role (shop or office) to a user."""
+    """Assign an issue-module role (shop) to a user."""
     user = User.query.filter_by(username=username).first()
     if not user:
         print(f'Error: User "{username}" not found.')

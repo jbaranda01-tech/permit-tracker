@@ -27,12 +27,3 @@ def shop_required(f):
     return decorated
 
 
-def shop_or_office_required(f):
-    @wraps(f)
-    @login_required
-    def decorated(*args, **kwargs):
-        if not (_has_issue_role(current_user, 'shop') or _has_issue_role(current_user, 'office')):
-            flash('No tiene permisos para esta sección.', 'danger')
-            return redirect(url_for('dashboard'))
-        return f(*args, **kwargs)
-    return decorated

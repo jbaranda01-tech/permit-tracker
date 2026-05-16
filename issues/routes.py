@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from issues import issues_bp
-from issues.decorators import shop_required, shop_or_office_required
+from issues.decorators import shop_required
 from models import (
     db, Employee, Equipment, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
@@ -131,7 +131,7 @@ def report_success(token):
 # ── SHOP QUEUE ────────────────────────────────────────────────────────
 
 @issues_bp.route('/', methods=['GET'])
-@shop_or_office_required
+@shop_required
 def queue():
     query = (Issue.query
              .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
@@ -206,7 +206,7 @@ def queue():
 # ── ISSUE DETAIL ──────────────────────────────────────────────────────
 
 @issues_bp.route('/<int:issue_id>', methods=['GET'])
-@shop_or_office_required
+@shop_required
 def detail(issue_id):
     issue = Issue.query.get_or_404(issue_id)
     history = issue.status_history.order_by(IssueStatusHistory.changed_at.asc()).all()
