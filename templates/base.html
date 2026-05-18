@@ -3,12 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#b91c1c" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b0f19" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PermitTracker">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/icon-180.png') }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/icon-152.png') }}">
     <script>(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)})()</script>
     <title>{% block title %}PermitTracker{% endblock %} — LB Caribe</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ versioned_static('css/style.css') }}">
 </head>
 <body>
     {% if current_user.is_authenticated %}
@@ -98,6 +107,22 @@
             </a>
         </div>
     </nav>
+    <div class="drawer-backdrop" id="drawer-backdrop" onclick="closeDrawer()"></div>
+
+    <div class="mobile-topbar" id="mobile-topbar">
+        <button class="mobile-menu-btn" onclick="openDrawer()" aria-label="Abrir menú">
+            <i class="fas fa-bars"></i>
+        </button>
+        <span class="mobile-topbar-title">Portal de Documentos</span>
+        <div class="theme-toggle theme-toggle-mobile">
+            <button class="theme-btn" data-theme-value="light" onclick="setTheme('light')" title="Modo Claro">
+                <i class="fas fa-sun"></i>
+            </button>
+            <button class="theme-btn" data-theme-value="dark" onclick="setTheme('dark')" title="Modo Oscuro">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
+    </div>
 
     <div class="theme-toggle theme-toggle-floating">
         <button class="theme-btn" data-theme-value="light" onclick="setTheme('light')" title="Modo Claro">
@@ -140,6 +165,11 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ versioned_static('js/app.js') }}"></script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js', {scope: '/'});
+    }
+    </script>
 </body>
 </html>

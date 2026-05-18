@@ -36,7 +36,7 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 
 **Flask app with one Blueprint** — permit routes in `app.py`, issue reporting in the `issues/` Blueprint:
 
-- `app.py` (~2050 lines): All permit routes, CLI commands, Excel import logic, PDF generation, file upload handling, email notification helpers. Contains role decorators (`@admin_required`, `@manager_required`) and a context processor that injects global alert counts into every template. Registers the `issues` Blueprint.
+- `app.py` (~2080 lines): All permit routes, CLI commands, Excel import logic, PDF generation, file upload handling, email notification helpers. Contains role decorators (`@admin_required`, `@manager_required`) and context processors: one injects global alert counts into every template, another provides `versioned_static()` for cache-busted asset URLs. Registers the `issues` Blueprint. Uses `flask-compress` for gzip/brotli compression. Serves `/manifest.json` for PWA support. Static assets get `Cache-Control: public, max-age=604800` headers.
 - `issues/` (Blueprint): Truck issue reporting module. `__init__.py` defines `issues_bp` with `/issues` prefix. `routes.py` has driver report flow, truck-profile shop queue, issue detail, and status update routes. `SEVERITY_RANK` dict and `build_truck_profiles()` helper power the queue's truck-centric grouping. `decorators.py` has `@shop_required` and `@shop_or_office_required` (admin auto-grants access).
 - `models.py`: SQLAlchemy models — `User`, `Employee`, `EmployeePermit`, `Equipment`, `EquipmentPermit`, `NotificationLog`, `Issue`, `IssueStatusHistory`, `IssuePhoto`, `UserIssueRole`. Permit types and issue constants (categories, severities, statuses) are defined as module-level lists. Status logic (expired/expiring_soon/valid/missing/na) lives in model `@property` methods. `NotificationLog` tracks sent email notifications with 7-day dedup.
 - `config.py`: Single `Config` class. Prefers `DATABASE_PRIVATE_URL` (Railway internal network) over `DATABASE_URL`, falling back to SQLite for local dev. Auto-converts Railway's `postgres://` to `postgresql://`. Sets PostgreSQL connection timeout only when using PostgreSQL. Email notification config: `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `ENABLE_SCHEDULER`, `NOTIFICATION_DAY`, `NOTIFICATION_HOUR`.
@@ -45,12 +45,16 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 
 **Permit status system**: 30-day window for "expiring soon" alerts (configured via `Config.ALERT_DAYS_BEFORE`). Status is computed at query time in model properties, not stored. N/A permits are filtered out of profile views — detail routes split permits into `active_permits` and `hidden_permits`. Managers can toggle applicability via dedicated `/toggle` endpoints. Toggling to N/A clears the expiration date.
 
+**Mobile optimization**: CSS has three responsive breakpoints (1024px, 768px, 480px). At 768px: sidebar becomes off-canvas drawer, main content gets full viewport width, grids collapse to 1 column, touch targets enforce 44px minimum, form inputs are 16px+ font-size to prevent iOS auto-zoom. At 480px: modals go full-screen, report form submit button is sticky, tighter spacing. Touch feedback via `@media (hover: none) and (pointer: coarse)` targets touch devices with `:active` states without affecting desktop hover.
+
 **No test suite currently exists.**
 
 ## Key Patterns
 
-- Templates use Jinja2 with a shared `base.html` layout (sidebar + navbar)
-- Dark/light theme uses `data-theme` attribute on `<html>`, persisted in `localStorage`. An inline `<script>` in `<head>` sets the theme before first paint to prevent FOUC; `app.js` handles toggle buttons and syncing.
+- Templates use Jinja2 with a shared `base.html` layout (sidebar + navbar). Use `versioned_static('path')` instead of `url_for('static', filename='path')` for CSS/JS to enable cache busting.
+- Dark/light theme uses `data-theme` attribute on `<html>`, persisted in `localStorage`. An inline `<script>` in `<head>` sets the theme before first paint to prevent FOUC; `app.js` handles toggle buttons, syncing, and updating `<meta name="theme-color">` dynamically.
+- Mobile navigation: On screens <= 768px, the sidebar becomes a hidden off-canvas drawer (280px, slides from left). A fixed 56px mobile top bar with hamburger menu, app title, and theme toggle replaces the desktop sidebar. `openDrawer()`/`closeDrawer()` in `app.js` manage state. Swipe gestures (edge-swipe to open, swipe-left to close) are supported via passive touch listeners. `toggleSidebar()` delegates to drawer functions on mobile.
+- PWA: `static/manifest.json` (served also at `/manifest.json`), `static/sw.js` (service worker with cache-first for static assets, network-first for HTML), and app icons in `static/img/icon-*.png`. Meta tags in `base.html` enable iOS standalone mode and Android installability.
 - File uploads go to `uploads/` directory with UUID-prefixed filenames
 - Excel import (openpyxl) includes a 2-digit year fix (1930→2030) for date handling. Both employee and equipment imports recognize N/A-like cell values ("N/A", "NA", "NO", empty string) and set `applicability='N/A'` on the corresponding permit. Equipment import also hardcodes VOUCHER as N/A for Personal company equipment.
 - PDF reports generated with WeasyPrint via `report_pdf.html` template
@@ -113,6 +117,15 @@ Truck issue reporting for drivers (report) and shop staff (triage/resolve). Offi
 **Admin UI integration:**
 - Admin user management page (`admin_users.html`) has "Roles Taller" checkboxes (Taller/Oficina) in both create and edit forms. Issue roles are synced via `UserIssueRole` on save.
 - Employee detail page has a "Link de Reporte" button (admin-only) that expands to show the driver's reporting URL (copyable) or a button to generate one.
+
+## Static Assets
+
+- `static/css/style.css` — All CSS in one file (~1730 lines). Custom CSS with CSS variables, no framework. Three responsive breakpoints (1024px, 768px, 480px). Dual theme (light/dark) via `data-theme` attribute.
+- `static/js/app.js` — All JS in one file (~200 lines). Vanilla JS, no framework. Theme toggle, sidebar/drawer, alerts modal, flash messages, swipe gestures.
+- `static/manifest.json` — PWA manifest. Also served at `/manifest.json` via Flask route.
+- `static/sw.js` — Service worker. Caches CSS, JS, and Font Awesome on install. Cache-first for `/static/` and CDN assets, network-first with cache fallback for HTML.
+- `static/img/` — Company logos (`logo-lb.png`, `logo-pli.png`) and PWA icons (`icon-152.png`, `icon-180.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`).
+- No build pipeline — assets served directly by Flask. `flask-compress` handles gzip/brotli. `versioned_static()` appends `?v=<hash>` for cache busting.
 
 ## Deployment
 

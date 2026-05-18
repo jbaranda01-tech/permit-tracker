@@ -19,7 +19,9 @@ from flask_login import (
 from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
 
+import hashlib
 from config import Config
+from flask_compress import Compress
 from models import (
     db, User, Employee, EmployeePermit, Equipment, EquipmentPermit,
     CompanyPermit, EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES,
@@ -31,6 +33,7 @@ from models import (
 
 app = Flask(__name__)
 app.config.from_object(Config)
+Compress(app)
 
 # Ensure logs go to stdout for Railway
 if not app.debug:
@@ -321,11 +324,28 @@ def inject_globals():
         }
 
 
+# ── ASSET VERSIONING ──────────────────────────────────────────────────
+
+@app.context_processor
+def asset_hash():
+    def versioned_static(filename):
+        filepath = os.path.join(app.static_folder, filename)
+        try:
+            mtime = str(os.path.getmtime(filepath))
+            h = hashlib.md5(mtime.encode()).hexdigest()[:8]
+        except OSError:
+            h = ''
+        return url_for('static', filename=filename) + '?v=' + h
+    return {'versioned_static': versioned_static}
+
+
 # ── REQUEST LOGGING ────────────────────────────────────────────────────
 
 @app.after_request
 def log_request(response):
     app.logger.info(f"{request.method} {request.path} → {response.status_code}")
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'public, max-age=604800'
     return response
 
 
@@ -352,6 +372,13 @@ def enforce_module_access():
     if current_user.is_shop_only:
         flash('Su cuenta solo tiene acceso al módulo de taller.', 'warning')
         return redirect(url_for('issues.queue'))
+
+
+# ── PWA ────────────────────────────────────────────────────────────────
+
+@app.route('/manifest.json')
+def manifest():
+    return app.send_static_file('manifest.json')
 
 
 # ── AUTH ROUTES ────────────────────────────────────────────────────────

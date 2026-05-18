@@ -1149,6 +1149,51 @@ img { max-width: 100%; }
 }
 
 
+/* ── Mobile Top Bar ────────────────────────────────────────────────── */
+.mobile-topbar {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 90;
+    align-items: center;
+    padding: 0 var(--space-md);
+    gap: var(--space-md);
+}
+.mobile-menu-btn {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    -webkit-tap-highlight-color: transparent;
+}
+.mobile-menu-btn:active { background: var(--bg-hover); }
+.mobile-topbar-title { font-weight: 700; font-size: 1rem; color: var(--text-primary); }
+.theme-toggle-mobile { margin-left: auto; }
+
+.drawer-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+.drawer-backdrop.active { display: block; opacity: 1; }
+
+
 /* ── Responsive ────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
     .company-panels { grid-template-columns: 1fr; }
@@ -1156,12 +1201,20 @@ img { max-width: 100%; }
 }
 
 @media (max-width: 768px) {
+    .mobile-topbar { display: flex; }
+    .theme-toggle-floating { display: none; }
+
     .sidebar {
-        width: var(--sidebar-collapsed);
+        width: 280px;
+        transform: translateX(-100%);
+        transition: transform 300ms ease;
+        z-index: 100;
     }
-    .sidebar span, .nav-section-title, .user-info, .logo span { display: none; }
-    .sidebar-header { justify-content: center; }
-    .main-content { margin-left: var(--sidebar-collapsed); padding: var(--space-md); }
+    .sidebar.drawer-open { transform: translateX(0); }
+    .sidebar span, .nav-section-title, .user-info, .logo span { display: revert; }
+    .sidebar-header { justify-content: space-between; }
+
+    .main-content { margin-left: 0; padding: var(--space-md); padding-top: calc(56px + var(--space-md)); }
     .dashboard-header { flex-direction: column; align-items: stretch; }
     .dashboard-actions { flex-direction: column; }
     .search-input { min-width: 100%; }
@@ -1173,6 +1226,49 @@ img { max-width: 100%; }
     .form-row { flex-direction: column; }
     .form-group { min-width: 100%; }
     .btn-text { display: none; }
+
+    /* Touch targets (44px minimum) */
+    .nav-link { min-height: 44px; display: flex; align-items: center; }
+    .btn { min-height: 44px; }
+    .btn-sm { min-height: 36px; }
+    .entity-card { min-height: 48px; }
+    .status-tab { min-height: 44px; padding: var(--space-sm) var(--space-md); }
+    .truck-profile-header { min-height: 48px; }
+    .issue-card-compact { min-height: 48px; }
+    .back-link, .file-link { min-height: 44px; display: inline-flex; align-items: center; }
+
+    /* Prevent iOS auto-zoom on input focus (requires >= 16px) */
+    .form-group input,
+    .form-group select,
+    .form-group textarea,
+    .filter-form select,
+    .input-icon input {
+        min-height: 44px;
+        font-size: 1rem;
+    }
+
+    /* Typography floor — raise smallest text for mobile readability */
+    .badge, .permit-badge, .col-tag, .manage-badge,
+    .issue-severity, .issue-status-badge, .role-badge { font-size: 0.8rem; }
+
+    .user-role, .company-tag, .status-tag,
+    .issue-date-compact { font-size: 0.85rem; }
+
+    .entity-meta, .permit-field label, .profile-field label,
+    .form-help, .timeline-meta, .issue-card-footer { font-size: 0.85rem; }
+}
+
+
+/* ── Touch Feedback (touch devices only) ──────────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+    .btn:active { opacity: 0.7; transform: scale(0.98); }
+    .nav-link:active { background: var(--bg-sidebar-hover); }
+    .entity-card:active { background: var(--bg-hover); }
+    .issue-card-compact:active { background: var(--bg-hover); }
+    .truck-profile-header:active { background: var(--bg-hover); }
+    .status-tab:active { opacity: 0.7; }
+    .alert-item:active { opacity: 0.85; }
+    .mobile-menu-btn:active { background: var(--bg-hover); }
 }
 
 
@@ -1573,7 +1669,76 @@ img { max-width: 100%; }
         gap: var(--space-xs);
         padding: var(--space-sm) var(--space-md);
     }
-    .issue-card-compact-right { width: 100%; justify-content: flex-start; }
+    .issue-card-compact-right { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
     .link-row { flex-direction: column; }
     .link-input { width: 100%; }
+
+    /* Queue mobile tweaks */
+    .truck-profile-header { padding: var(--space-md); }
+    .truck-name { font-size: 1rem; }
+}
+
+
+/* ── Small Phone (480px) ──────────────────────────────────────────── */
+@media (max-width: 480px) {
+    html { font-size: 14px; }
+    .main-content { padding: var(--space-sm); padding-top: calc(56px + var(--space-sm)); }
+
+    /* Full-screen modals */
+    .modal {
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+    .modal-body { max-height: calc(100vh - 60px); }
+
+    /* Stack panel headers */
+    .panel-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
+    .panel-count { align-self: flex-end; }
+
+    /* Headings */
+    .detail-title-row h1 { font-size: 1.3rem; }
+    .detail-actions { flex-wrap: wrap; }
+    .detail-actions .btn { flex: 1; min-width: 0; justify-content: center; }
+
+    /* Login card */
+    .login-card { padding: var(--space-lg) var(--space-md); }
+
+    /* Report form optimization */
+    .report-container { padding: var(--space-sm); }
+    .form-section { padding: var(--space-md); }
+    .report-form .btn-lg {
+        min-height: 52px;
+        font-size: 1.15rem;
+        border-radius: var(--radius-md);
+    }
+    .report-form textarea { min-height: 120px; }
+    .report-form .form-actions {
+        position: sticky;
+        bottom: 0;
+        background: var(--bg-primary);
+        padding: var(--space-md);
+        margin: 0 calc(-1 * var(--space-sm));
+        border-top: 1px solid var(--border-color);
+        z-index: 10;
+    }
+
+    /* Profile/detail cards */
+    .profile-grid { gap: var(--space-sm); }
+    .profile-card { border-radius: var(--radius-sm); }
+    .profile-field, .permit-field {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    /* Timeline */
+    .timeline-entry { gap: var(--space-sm); }
+    .timeline-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .timeline-meta { flex-direction: column; gap: 2px; }
+
+    /* Status change form */
+    .status-change-form .form-row { flex-direction: column; }
 }

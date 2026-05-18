@@ -4,6 +4,8 @@ function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
     syncThemeButtons(theme);
+    var color = theme === 'dark' ? '#0b0f19' : '#b91c1c';
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function(m) { m.content = color; });
 }
 
 function syncThemeButtons(theme) {
@@ -31,6 +33,15 @@ function syncThemeButtons(theme) {
 // ── Sidebar Toggle ───────────────────────────────────────────────────
 
 function toggleSidebar() {
+    if (window.innerWidth <= 768) {
+        var sidebar = document.getElementById('sidebar');
+        if (sidebar && sidebar.classList.contains('drawer-open')) {
+            closeDrawer();
+        } else {
+            openDrawer();
+        }
+        return;
+    }
     const sidebar = document.getElementById('sidebar');
     const main = document.querySelector('.main-content');
     sidebar.classList.toggle('collapsed');
@@ -38,11 +49,9 @@ function toggleSidebar() {
     if (sidebar.classList.contains('collapsed')) {
         sidebar.style.width = '64px';
         if (main) main.style.marginLeft = '64px';
-        // Hide text elements
         sidebar.querySelectorAll('span, .nav-section-title, .user-info').forEach(el => {
             el.style.display = 'none';
         });
-        // Keep logo icon visible
         const logoIcon = sidebar.querySelector('.logo i');
         if (logoIcon) logoIcon.style.display = '';
     } else {
@@ -53,6 +62,37 @@ function toggleSidebar() {
         });
     }
 }
+
+
+// ── Mobile Drawer ────────────────────────────────────────────────────
+
+function openDrawer() {
+    var sidebar = document.getElementById('sidebar');
+    var backdrop = document.getElementById('drawer-backdrop');
+    if (sidebar) sidebar.classList.add('drawer-open');
+    if (backdrop) backdrop.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDrawer() {
+    var sidebar = document.getElementById('sidebar');
+    var backdrop = document.getElementById('drawer-backdrop');
+    if (sidebar) sidebar.classList.remove('drawer-open');
+    if (backdrop) backdrop.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// Close drawer when a nav link is clicked
+document.addEventListener('DOMContentLoaded', function() {
+    var sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        sidebar.querySelectorAll('.nav-link').forEach(function(link) {
+            link.addEventListener('click', function() {
+                if (window.innerWidth <= 768) closeDrawer();
+            });
+        });
+    }
+});
 
 
 // ── Alerts Modal ─────────────────────────────────────────────────────
@@ -129,3 +169,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     });
 });
+
+
+// ── Swipe Gesture for Drawer ─────────────────────────────────────────
+
+(function() {
+    var startX = 0, startY = 0, tracking = false;
+    var THRESHOLD = 60;
+
+    document.addEventListener('touchstart', function(e) {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        var sidebar = document.getElementById('sidebar');
+        tracking = startX < 30 || (sidebar && sidebar.classList.contains('drawer-open'));
+    }, {passive: true});
+
+    document.addEventListener('touchend', function(e) {
+        if (!tracking) return;
+        var dx = e.changedTouches[0].clientX - startX;
+        var dy = Math.abs(e.changedTouches[0].clientY - startY);
+        if (dy > Math.abs(dx)) return;
+
+        if (dx > THRESHOLD && startX < 30) openDrawer();
+        else if (dx < -THRESHOLD) closeDrawer();
+        tracking = false;
+    }, {passive: true});
+})();
