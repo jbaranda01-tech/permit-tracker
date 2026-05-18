@@ -36,8 +36,8 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 
 **Flask app with one Blueprint** — permit routes in `app.py`, issue reporting in the `issues/` Blueprint:
 
-- `app.py` (~2080 lines): All permit routes, CLI commands, Excel import logic, PDF generation, file upload handling, email notification helpers. Contains role decorators (`@admin_required`, `@manager_required`) and context processors: one injects global alert counts into every template, another provides `versioned_static()` for cache-busted asset URLs. Registers the `issues` Blueprint. Uses `flask-compress` for gzip/brotli compression. Serves `/manifest.json` for PWA support. Static assets get `Cache-Control: public, max-age=604800` headers.
-- `issues/` (Blueprint): Truck issue reporting module. `__init__.py` defines `issues_bp` with `/issues` prefix. `routes.py` has driver report flow, truck-profile shop queue, issue detail, and status update routes. `SEVERITY_RANK` dict and `build_truck_profiles()` helper power the queue's truck-centric grouping. `decorators.py` has `@shop_required` and `@shop_or_office_required` (admin auto-grants access).
+- `app.py` (~2160 lines): All permit routes, CLI commands, Excel import logic, PDF generation, file upload handling, email notification helpers. Contains role decorators (`@admin_required`, `@manager_required`) and context processors: one injects global alert counts into every template, another provides `versioned_static()` for cache-busted asset URLs. Registers the `issues` Blueprint. Uses `flask-compress` for gzip/brotli compression. Serves `/manifest.json` for PWA support. Static assets get `Cache-Control: public, max-age=604800` headers.
+- `issues/` (Blueprint): Truck issue reporting module. `__init__.py` defines `issues_bp` with `/issues` prefix. `routes.py` has driver report flow, truck-profile shop queue, issue detail, and status update routes. `SEVERITY_RANK` dict and `build_truck_profiles()` helper power the queue's truck-centric grouping. `decorators.py` has `@shop_required` (admin auto-grants access).
 - `models.py`: SQLAlchemy models — `User`, `Employee`, `EmployeePermit`, `Equipment`, `EquipmentPermit`, `NotificationLog`, `Issue`, `IssueStatusHistory`, `IssuePhoto`, `UserIssueRole`. Permit types and issue constants (categories, severities, statuses) are defined as module-level lists. Status logic (expired/expiring_soon/valid/missing/na) lives in model `@property` methods. `NotificationLog` tracks sent email notifications with 7-day dedup.
 - `config.py`: Single `Config` class. Prefers `DATABASE_PRIVATE_URL` (Railway internal network) over `DATABASE_URL`, falling back to SQLite for local dev. Auto-converts Railway's `postgres://` to `postgresql://`. Sets PostgreSQL connection timeout only when using PostgreSQL. Email notification config: `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `ENABLE_SCHEDULER`, `NOTIFICATION_DAY`, `NOTIFICATION_HOUR`.
 
@@ -84,7 +84,7 @@ Weekly automated emails to employees with expiring/expired permits via SendGrid.
 
 ## Issue Reporting Module
 
-Truck issue reporting for drivers (report) and shop staff (triage/resolve). Office staff have read-only visibility.
+Truck issue reporting for drivers (report) and shop staff (triage/resolve).
 
 **Models:** `Issue` (linked to equipment + reporting employee), `IssueStatusHistory` (audit log of status transitions), `IssuePhoto` (schema defined, upload routes pending), `UserIssueRole` (junction table for shop/office roles).
 
@@ -120,7 +120,7 @@ Truck issue reporting for drivers (report) and shop staff (triage/resolve). Offi
 
 ## Static Assets
 
-- `static/css/style.css` — All CSS in one file (~1730 lines). Custom CSS with CSS variables, no framework. Three responsive breakpoints (1024px, 768px, 480px). Dual theme (light/dark) via `data-theme` attribute.
+- `static/css/style.css` — All CSS in one file (~1740 lines). Custom CSS with CSS variables, no framework. Three responsive breakpoints (1024px, 768px, 480px). Dual theme (light/dark) via `data-theme` attribute.
 - `static/js/app.js` — All JS in one file (~200 lines). Vanilla JS, no framework. Theme toggle, sidebar/drawer, alerts modal, flash messages, swipe gestures.
 - `static/manifest.json` — PWA manifest. Also served at `/manifest.json` via Flask route.
 - `static/sw.js` — Service worker. Caches CSS, JS, and Font Awesome on install. Cache-first for `/static/` and CDN assets, network-first with cache fallback for HTML.
