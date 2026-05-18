@@ -34,7 +34,7 @@ function syncThemeButtons(theme) {
 
 function toggleSidebar() {
     if (window.innerWidth <= 768) {
-        var sidebar = document.getElementById('sidebar');
+        const sidebar = document.getElementById('sidebar');
         if (sidebar && sidebar.classList.contains('drawer-open')) {
             closeDrawer();
         } else {
