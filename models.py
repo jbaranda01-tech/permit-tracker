@@ -32,7 +32,7 @@ class User(UserMixin, db.Model):
 
     @property
     def is_shop_only(self):
-        if self.role in ('admin', 'manager'):
+        if self.role == 'admin':
             return False
         return any(ir.role == 'shop' for ir in self.issue_roles)
 
