@@ -1,5 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Reportar Problema{% endblock %}
+{% block pwa_meta %}{% endblock %}
+{% block service_worker %}
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(r) { r.unregister(); });
+    });
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="report-container">
