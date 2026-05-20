@@ -244,7 +244,7 @@ def inject_globals():
     today = date.today()
     alert_date = today + timedelta(days=30)
 
-    if current_user.is_authenticated and current_user.is_shop_only:
+    if current_user and current_user.is_authenticated and current_user.is_shop_only:
         return {
             'permisos_por_vencer': 0,
             'permisos_vencidos': 0,
