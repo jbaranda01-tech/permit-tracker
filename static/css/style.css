@@ -593,6 +593,11 @@ img { max-width: 100%; }
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .panel-lb { background: var(--color-lb); }
@@ -605,6 +610,7 @@ img { max-width: 100%; }
     border-radius: 10px;
     font-size: 0.8rem;
     font-weight: 700;
+    flex-shrink: 0;
 }
 
 .panel-body {
@@ -629,7 +635,8 @@ img { max-width: 100%; }
 .entity-card:last-child { border-bottom: none; }
 .entity-card:hover { background: var(--bg-hover); }
 
-.entity-name { font-weight: 600; font-size: 0.9rem; }
+.entity-info { flex: 1; min-width: 0; }
+.entity-name { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity-meta { font-size: 0.8rem; color: var(--text-secondary); text-transform: capitalize; }
 
 .entity-status { display: flex; gap: 4px; align-items: center; }
@@ -674,12 +681,15 @@ img { max-width: 100%; }
     justify-content: space-between;
     align-items: flex-start;
     gap: var(--space-lg);
+    flex-wrap: wrap;
 }
 
 .detail-title-row h1 {
     font-size: 1.6rem;
     font-weight: 700;
     margin-bottom: var(--space-xs);
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .detail-meta {
@@ -689,7 +699,7 @@ img { max-width: 100%; }
     flex-wrap: wrap;
 }
 
-.detail-actions { display: flex; gap: var(--space-sm); }
+.detail-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
 
 .company-tag {
     padding: 2px 10px;
@@ -759,7 +769,8 @@ img { max-width: 100%; }
     font-size: 0.9rem;
 }
 .profile-field:last-child { border-bottom: none; }
-.profile-field label { color: var(--text-secondary); font-size: 0.8rem; font-weight: 500; }
+.profile-field label { color: var(--text-secondary); font-size: 0.8rem; font-weight: 500; flex-shrink: 0; }
+.profile-field > span { min-width: 0; overflow-wrap: break-word; word-break: break-word; text-align: right; }
 
 .permit-status-valid { color: var(--color-valid); font-weight: 600; }
 .permit-status-expiring { color: var(--color-expiring); font-weight: 700; }
@@ -820,9 +831,10 @@ img { max-width: 100%; }
     align-items: center;
     padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--border-color);
+    gap: var(--space-sm);
 }
 
-.permit-name { font-weight: 700; font-size: 0.9rem; }
+.permit-name { font-weight: 700; font-size: 0.9rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .permit-badge {
     padding: 2px 8px;
@@ -831,6 +843,7 @@ img { max-width: 100%; }
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    flex-shrink: 0;
 }
 .permit-badge-valid { background: var(--color-valid-bg); color: var(--color-valid-text); }
 .permit-badge-expiring_soon { background: var(--color-expiring-bg); color: var(--color-expiring-text); }
@@ -853,7 +866,8 @@ img { max-width: 100%; }
     margin-bottom: var(--space-xs);
     font-size: 0.85rem;
 }
-.permit-field label { color: var(--text-secondary); }
+.permit-field label { color: var(--text-secondary); flex-shrink: 0; }
+.permit-field > span { min-width: 0; overflow-wrap: break-word; word-break: break-word; text-align: right; }
 
 .permit-na { color: var(--text-tertiary); font-style: italic; text-align: center; padding: var(--space-sm); }
 
@@ -869,6 +883,10 @@ img { max-width: 100%; }
 .permit-card-footer {
     padding: var(--space-xs) var(--space-md);
     border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 .permit-edit-form {
@@ -927,7 +945,9 @@ img { max-width: 100%; }
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     font-size: 0.9rem;
+    gap: var(--space-sm);
 }
+.manage-permit-item > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .manage-permit-hidden { opacity: 0.6; }
 
@@ -1046,6 +1066,7 @@ img { max-width: 100%; }
     padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--border-color);
     font-size: 0.9rem;
+    word-break: break-word;
 }
 
 .table-actions { display: flex; gap: var(--space-xs); }
@@ -1700,7 +1721,6 @@ img { max-width: 100%; }
 
     /* Headings */
     .detail-title-row h1 { font-size: 1.3rem; }
-    .detail-actions { flex-wrap: wrap; }
     .detail-actions .btn { flex: 1; min-width: 0; justify-content: center; }
 
     /* Login card */
