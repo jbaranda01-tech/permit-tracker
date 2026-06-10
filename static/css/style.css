@@ -1677,6 +1677,35 @@ img { max-width: 100%; }
 /* Recent issues section */
 .recent-issues-section { margin-top: var(--space-xl); }
 
+/* Resolved issues section (collapsible) */
+.collapsible-card-header {
+    padding: var(--space-sm) var(--space-md);
+    font-weight: 700;
+    font-size: 0.85rem;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+.collapsible-card-header .badge {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    margin-left: var(--space-xs);
+}
+.resolved-more-note {
+    padding: var(--space-sm) var(--space-md);
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    border-top: 1px solid var(--border-color);
+}
+.resolved-more-note a { color: #3b82f6; font-weight: 600; }
+
 @media (max-width: 768px) {
     .report-container { padding: var(--space-md); }
     .issue-status-tabs { gap: 2px; }

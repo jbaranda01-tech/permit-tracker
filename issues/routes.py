@@ -15,6 +15,7 @@ from models import (
 )
 
 SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
+RESOLVED_STATUSES = ['resuelto', 'cerrado']
 
 
 def reportable_equipment_query(company=None):
@@ -141,7 +142,7 @@ def queue():
     if status_filter:
         query = query.filter(Issue.current_status == status_filter)
     else:
-        query = query.filter(Issue.current_status.notin_(['cerrado']))
+        query = query.filter(Issue.current_status.notin_(RESOLVED_STATUSES))
 
     severity_filter = request.args.get('severity', '')
     if severity_filter:
@@ -187,12 +188,30 @@ def queue():
     trucks = reportable_equipment_query().all()
     recent_issues = all_issues[:20]
 
+    resolved_issues = []
+    resolved_count = 0
+    if not status_filter:
+        resolved_query = (Issue.query
+                          .options(joinedload(Issue.reporter))
+                          .filter(Issue.current_status.in_(RESOLVED_STATUSES)))
+        if severity_filter:
+            resolved_query = resolved_query.filter(Issue.severity == severity_filter)
+        if equipment_filter:
+            resolved_query = resolved_query.filter(Issue.equipment_id == equipment_filter)
+        resolved_count = resolved_query.count()
+        resolved_issues = (resolved_query
+                           .order_by(Issue.resolved_at.desc().nullslast(),
+                                     Issue.reported_at.desc())
+                           .limit(20).all())
+
     return render_template('issues/queue.html',
                            lb_trucks=lb_trucks,
                            pli_trucks=pli_trucks,
                            lb_issue_count=sum(t['issue_count'] for t in lb_trucks),
                            pli_issue_count=sum(t['issue_count'] for t in pli_trucks),
                            recent_issues=recent_issues,
+                           resolved_issues=resolved_issues,
+                           resolved_count=resolved_count,
                            statuses=ISSUE_STATUSES,
                            severities=ISSUE_SEVERITIES,
                            categories=ISSUE_CATEGORIES,
