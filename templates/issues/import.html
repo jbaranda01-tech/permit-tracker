@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Importar Reportes{% endblock %}
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Reportes</a>
+        <h1><i class="fas fa-file-import"></i> Importar Reportes (Backlog)</h1>
+    </div>
+
+    {% if import_errors is defined %}
+    <div class="profile-card" style="margin-bottom: var(--space-lg);">
+        <div class="card-header">
+            <i class="fas fa-list-check"></i> Resultado de la Importación
+        </div>
+        <div class="card-body">
+            <p><strong>{{ imported_count }}</strong> reporte(s) importado(s){% if import_errors %}, <strong>{{ import_errors|length }}</strong> fila(s) omitida(s){% endif %}.</p>
+            {% if import_errors %}
+            <ul class="import-error-list">
+                {% for err in import_errors %}
+                <li><i class="fas fa-exclamation-triangle"></i> {{ err }}</li>
+                {% endfor %}
+            </ul>
+            <p class="import-error-hint">Corrija las filas indicadas en su archivo y vuelva a subirlo.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="import-container">
+        <div class="import-info">
+            <h3>Formato Esperado — Reportes</h3>
+            <p>El archivo Excel debe tener las siguientes columnas en orden:</p>
+            <div class="column-list">
+                <span class="col-tag">Unidad</span>
+                <span class="col-tag">Categoría</span>
+                <span class="col-tag">Severidad</span>
+                <span class="col-tag">Descripción</span>
+                <span class="col-tag">Estado</span>
+                <span class="col-tag">Fecha Reporte</span>
+                <span class="col-tag">Fecha Resuelto</span>
+            </div>
+            <div class="import-notes">
+                <p><i class="fas fa-info-circle"></i> <strong>Unidad</strong> debe coincidir con el número de unidad de un camión existente (LB o PLI). Las filas sin coincidencia se omiten y se listan como error.</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Categoría</strong>: {{ categories|map(attribute=1)|join(', ') }}.</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Severidad</strong>: {{ severities|map(attribute=1)|join(', ') }} (por defecto: Media).</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Estado</strong>: {{ statuses|map(attribute=1)|join(', ') }} (por defecto: Reportado). Los estados <strong>Resuelto</strong>/<strong>Cerrado</strong> usan la Fecha Resuelto.</p>
+                <p><i class="fas fa-info-circle"></i> Se acepta el nombre en español o el código interno. <strong>Fecha Reporte</strong> usa la fecha de hoy si se deja en blanco.</p>
+            </div>
+        </div>
+
+        <form method="POST" action="{{ url_for('issues.import_issues') }}" enctype="multipart/form-data" class="import-form" id="import-form-issues">
+            <input type="hidden" name="import_token" value="{{ import_token }}">
+            <div class="upload-area" id="upload-area-issues">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
+                <input type="file" name="file" id="file-input-issues" accept=".xlsx,.xls">
+                <span class="file-name" id="file-name-issues"></span>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="import-btn-issues">
+                <i class="fas fa-upload"></i> Importar Reportes
+            </button>
+        </form>
+    </div>
+</div>
+
+<style>
+.import-error-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-md) 0 0;
+}
+.import-error-list li {
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    color: var(--color-expired-text, #b91c1c);
+    font-size: 0.9rem;
+}
+.import-error-hint {
+    margin-top: var(--space-md);
+    color: var(--text-secondary, #64748b);
+    font-size: 0.9rem;
+}
+</style>
+
+<script>
+function setupUpload(areaId, inputId, nameId, formId, btnId) {
+    const area = document.getElementById(areaId);
+    const input = document.getElementById(inputId);
+    const name = document.getElementById(nameId);
+
+    area.addEventListener('click', () => input.click());
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('drag-over'); });
+    area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+    area.addEventListener('drop', (e) => {
+        e.preventDefault();
+        area.classList.remove('drag-over');
+        input.files = e.dataTransfer.files;
+        name.textContent = e.dataTransfer.files[0]?.name || '';
+    });
+    input.addEventListener('change', () => {
+        name.textContent = input.files[0]?.name || '';
+    });
+
+    document.getElementById(formId).addEventListener('submit', function(e) {
+        const btn = document.getElementById(btnId);
+        if (btn.dataset.submitted === 'true') {
+            e.preventDefault();
+            return;
+        }
+        btn.dataset.submitted = 'true';
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+    });
+}
+
+setupUpload('upload-area-issues', 'file-input-issues', 'file-name-issues', 'import-form-issues', 'import-btn-issues');
+</script>
+{% endblock %}

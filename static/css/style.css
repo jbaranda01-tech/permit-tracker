@@ -660,6 +660,21 @@ img { max-width: 100%; }
 .empty-state i { font-size: 2rem; margin-bottom: var(--space-sm); display: block; }
 
 
+/* ── Page Header (title + actions) ─────────────────────────────────── */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+}
+.page-actions {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+
 /* ── Detail Page ───────────────────────────────────────────────────── */
 .detail-page { max-width: 1100px; }
 

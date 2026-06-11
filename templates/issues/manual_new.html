@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Agregar Reporte{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Reportes</a>
+        <h1><i class="fas fa-plus-circle"></i> Agregar Reporte Manual</h1>
+    </div>
+
+    <form method="POST" action="{{ url_for('issues.create') }}" class="report-form">
+        <div class="form-section">
+            <h3><i class="fas fa-truck"></i> Camión</h3>
+            <div class="form-group">
+                <label for="equipment_id">Unidad *</label>
+                <select name="equipment_id" id="equipment_id" required>
+                    <option value="">— Seleccionar unidad —</option>
+                    {% for truck in trucks %}
+                    <option value="{{ truck.id }}" {% if request.form.get('equipment_id')|int == truck.id %}selected{% endif %}>
+                        {{ truck.display_name }} ({{ truck.company }}){% if truck.make or truck.model %} — {{ truck.make }} {{ truck.model }}{% endif %}{% if truck.year %} ({{ truck.year }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-tools"></i> Problema</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="category">Categoría *</label>
+                    <select name="category" id="category" required>
+                        <option value="">— Seleccionar —</option>
+                        {% for code, label in categories %}
+                        <option value="{{ code }}" {% if request.form.get('category') == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="severity">Severidad *</label>
+                    <select name="severity" id="severity" required>
+                        {% for code, label in severities %}
+                        <option value="{{ code }}" {% if request.form.get('severity', 'media') == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="description">Descripción del problema *</label>
+                <textarea name="description" id="description" rows="4" required autocapitalize="sentences" placeholder="Describa el problema con el mayor detalle posible...">{{ request.form.get('description', '') }}</textarea>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-clipboard-check"></i> Estado e Historial</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="status">Estado *</label>
+                    <select name="status" id="status" required>
+                        {% for code, label in statuses %}
+                        <option value="{{ code }}" {% if request.form.get('status', 'reportado') == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="fecha_reporte">Fecha de Reporte</label>
+                    <input type="date" name="fecha_reporte" id="fecha_reporte" value="{{ request.form.get('fecha_reporte', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="fecha_resuelto">Fecha de Resolución</label>
+                    <input type="date" name="fecha_resuelto" id="fecha_resuelto" value="{{ request.form.get('fecha_resuelto', '') }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="notes">Nota inicial (opcional)</label>
+                <input type="text" name="notes" id="notes" value="{{ request.form.get('notes', '') }}" placeholder="Ej. reportado por teléfono por Juan...">
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-save"></i> Guardar Reporte
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

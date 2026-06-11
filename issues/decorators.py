@@ -27,3 +27,15 @@ def shop_required(f):
     return decorated
 
 
+def admin_required(f):
+    # Local copy (instead of importing from app.py) to avoid a circular import.
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        if not current_user.is_admin:
+            flash('Solo administradores pueden acceder.', 'danger')
+            return redirect(url_for('issues.queue'))
+        return f(*args, **kwargs)
+    return decorated
+
+
