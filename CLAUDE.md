@@ -22,6 +22,8 @@ flask db migrate -m "message"    # Generate migration (Flask-Migrate, but no mig
 flask db upgrade                 # Apply migrations
 flask dedup --dry-run            # Preview duplicate cleanup
 flask dedup                      # Remove duplicate employees/permits
+flask migrate-shared-insurance --dry-run    # Preview moving per-vehicle SEGURO into shared CompanyPermit
+flask migrate-shared-insurance              # Pre-fill LB/PLI shared insurance, hide per-vehicle copies
 flask send-notifications --dry-run          # Preview without sending emails
 flask send-notifications                    # Send all pending notifications
 flask send-notifications --employee-id 42   # Single employee (testing)
@@ -45,7 +47,9 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 
 **Permit status system**: 30-day window for "expiring soon" alerts (configured via `Config.ALERT_DAYS_BEFORE`). Status is computed at query time in model properties, not stored. N/A permits are filtered out of profile views — detail routes split permits into `active_permits` and `hidden_permits`. Managers can toggle applicability via dedicated `/toggle` endpoints. Toggling to N/A clears the expiration date.
 
-**Company-level permits**: `CompanyPermit` model tracks permits scoped to companies (LB/PLI) rather than individual employees or equipment. `COMPANY_PERMIT_TYPES` defines four types: Certificado HazMat, Certificado NMFTA, USDOT Biennial Report, Franquicia NTSP — each with a list of applicable companies. Same status property pattern (expired/expiring_soon/valid/missing/na) as employee and equipment permits. Unique constraint enforces one permit per type per company.
+**Company-level permits**: `CompanyPermit` model tracks permits scoped to companies (LB/PLI) rather than individual employees or equipment. `COMPANY_PERMIT_TYPES` defines five types: Seguro / Insurance, Certificado HazMat, Certificado NMFTA, USDOT Biennial Report, Franquicia NTSP — each with a list of applicable companies. Same status property pattern (expired/expiring_soon/valid/missing/na) as employee and equipment permits. Unique constraint enforces one permit per type per company. Edited via the "Empresa" dashboard view (`company_permit_edit` / `company_permit_upload_form` routes).
+
+**Shared company insurance (SEGURO)**: Every LB/PLI vehicle shares one insurance policy, so insurance is a company-level permit, not per-vehicle. On LB/PLI vehicle profiles the SEGURO `EquipmentPermit` is set to N/A and a read-only "Seguro (compartido)" card is shown instead (pulled from the company `CompanyPermit`, with a link to edit it on the Empresa page) — see `shared_insurance` in `equipment_detail` and the card in `equipment.html`. `equipment_new` creates SEGURO as N/A for LB/PLI. **Personal** vehicles keep their own editable per-vehicle SEGURO. The one-time `flask migrate-shared-insurance` command pre-fills each company's shared record from the best existing per-vehicle insurance (prefers one with an attached PDF, then latest expiration) and sets the per-vehicle copies to N/A. Alert counts in `inject_globals` are not double-counted: LB/PLI per-vehicle SEGURO is N/A (excluded) and the shared policy is counted once as a `CompanyPermit`.
 
 **Mobile optimization**: CSS has three responsive breakpoints (1024px, 768px, 480px). At 768px: sidebar becomes off-canvas drawer, main content gets full viewport width, grids collapse to 1 column, touch targets enforce 44px minimum, form inputs are 16px+ font-size to prevent iOS auto-zoom. At 480px: modals go full-screen, report form submit button is sticky, tighter spacing. Touch feedback via `@media (hover: none) and (pointer: coarse)` targets touch devices with `:active` states without affecting desktop hover.
 
