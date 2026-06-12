@@ -319,6 +319,7 @@ class EquipmentPermit(db.Model):
 # ── COMPANY PERMITS ───────────────────────────────────────────────────
 
 COMPANY_PERMIT_TYPES = [
+    ('SEGURO', 'Seguro / Insurance', ['LB', 'PLI']),
     ('HAZMAT_CERT', 'Certificado HazMat', ['LB', 'PLI']),
     ('NMFTA_CERT', 'Certificado NMFTA', ['PLI']),
     ('USDOT_BIENNIAL', 'USDOT Biennial Report', ['LB', 'PLI']),

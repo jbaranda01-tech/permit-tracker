@@ -771,8 +771,19 @@ def equipment_detail(id):
     all_permits = equip.permits.order_by(EquipmentPermit.permit_type).all()
     active_permits = [p for p in all_permits if p.applicability != 'N/A']
     hidden_permits = [p for p in all_permits if p.applicability == 'N/A']
+
+    # Insurance is shared at the company level for LB/PLI — show it read-only and
+    # drop the redundant per-vehicle SEGURO permit from the lists.
+    shared_insurance = None
+    if equip.company in ('LB', 'PLI'):
+        shared_insurance = CompanyPermit.query.filter_by(
+            company=equip.company, permit_type='SEGURO').first()
+        active_permits = [p for p in active_permits if p.permit_type != 'SEGURO']
+        hidden_permits = [p for p in hidden_permits if p.permit_type != 'SEGURO']
+
     return render_template('equipment.html', equipment=equip,
                            permits=active_permits, hidden_permits=hidden_permits,
+                           shared_insurance=shared_insurance,
                            permit_types=EQUIPMENT_PERMIT_TYPES)
 
 
@@ -813,8 +824,13 @@ def equipment_new():
         # Create default permit slots
         for code, name in EQUIPMENT_PERMIT_TYPES:
             if code != 'OTHER':
+                applicability = 'YES'
                 # Voucher does not apply to Personal equipment
-                applicability = 'N/A' if code == 'VOUCHER' and equip.company == 'Personal' else 'YES'
+                if code == 'VOUCHER' and equip.company == 'Personal':
+                    applicability = 'N/A'
+                # Insurance is shared at the company level for LB/PLI
+                if code == 'SEGURO' and equip.company in ('LB', 'PLI'):
+                    applicability = 'N/A'
                 permit = EquipmentPermit(
                     equipment_id=equip.id,
                     permit_type=code,
@@ -2049,6 +2065,56 @@ def dedup_data(dry_run):
 
     prefix = '[DRY RUN] ' if dry_run else ''
     print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {eq_permit_deleted} duplicate equipment permits removed.')
+
+
+@app.cli.command('migrate-shared-insurance')
+@click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
+def migrate_shared_insurance(dry_run):
+    """Move per-vehicle SEGURO into shared CompanyPermit for LB/PLI, then hide the per-vehicle copies."""
+    prefix = '[DRY RUN] ' if dry_run else ''
+
+    for company in ('LB', 'PLI'):
+        permits = (
+            EquipmentPermit.query
+            .join(Equipment, EquipmentPermit.equipment_id == Equipment.id)
+            .filter(Equipment.company == company, EquipmentPermit.permit_type == 'SEGURO')
+            .all()
+        )
+
+        # Pick the best source row: prefer one with an attached file, then the latest expiration.
+        def _rank(p):
+            return (1 if p.file_path else 0,
+                    p.expiration_date or date.min)
+        source = max(permits, key=_rank) if permits else None
+
+        company_permit = CompanyPermit.query.filter_by(company=company, permit_type='SEGURO').first()
+        if not company_permit:
+            company_permit = CompanyPermit(company=company, permit_type='SEGURO', applicability='YES')
+            if not dry_run:
+                db.session.add(company_permit)
+
+        if source:
+            print(f'  {prefix}{company}: pre-fill shared insurance from equipment_permit id={source.id} '
+                  f'(exp={source.expiration_date}, file={"yes" if source.file_path else "no"})')
+            company_permit.applicability = 'YES'
+            company_permit.expiration_date = source.expiration_date
+            company_permit.permit_number = source.permit_number
+            company_permit.issuing_authority = source.issuing_authority
+            company_permit.file_path = source.file_path
+        else:
+            print(f'  {prefix}{company}: no per-vehicle insurance found — leaving shared record blank')
+
+        hidden = 0
+        for p in permits:
+            if p.applicability != 'N/A':
+                p.applicability = 'N/A'
+                hidden += 1
+        print(f'  {prefix}{company}: hid {hidden} per-vehicle insurance permit(s)')
+
+    if not dry_run:
+        db.session.commit()
+
+    print(f'{prefix}Shared-insurance migration complete.')
 
 
 @app.cli.command('send-notifications')

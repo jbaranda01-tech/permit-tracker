@@ -895,6 +895,15 @@ img { max-width: 100%; }
     border-top: 1px solid var(--border-color);
 }
 
+.permit-shared-note {
+    margin-top: var(--space-sm);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    padding-top: var(--space-xs);
+    border-top: 1px solid var(--border-color);
+}
+.permit-shared-note i { margin-right: 4px; }
+
 .permit-card-footer {
     padding: var(--space-xs) var(--space-md);
     border-top: 1px solid var(--border-color);

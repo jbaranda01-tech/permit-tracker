@@ -154,6 +154,35 @@
         </div>
 
         <div class="permits-grid">
+            {% if shared_insurance %}
+            <div class="permit-card permit-{{ shared_insurance.status }}">
+                <div class="permit-card-header">
+                    <span class="permit-name">Seguro (compartido)</span>
+                    <span class="permit-badge permit-badge-{{ shared_insurance.status }}">{{ shared_insurance.status_label }}</span>
+                </div>
+                <div class="permit-card-body">
+                    <div class="permit-field">
+                        <label>Expiración</label>
+                        <span>{{ shared_insurance.expiration_date.strftime('%d/%m/%Y') if shared_insurance.expiration_date else 'Sin fecha' }}</span>
+                    </div>
+                    {% if shared_insurance.permit_number %}
+                    <div class="permit-field">
+                        <label>Número</label>
+                        <span>{{ shared_insurance.permit_number }}</span>
+                    </div>
+                    {% endif %}
+                    {% if shared_insurance.file_path %}
+                    <a href="{{ url_for('uploaded_file', filename=shared_insurance.file_path) }}" target="_blank" class="file-link">
+                        <i class="fas fa-paperclip"></i> Ver documento
+                    </a>
+                    {% endif %}
+                    <p class="permit-shared-note">
+                        <i class="fas fa-building"></i> Seguro compartido a nivel de empresa.
+                        <a href="{{ url_for('dashboard', view='company') }}">Editar en Empresa</a>
+                    </p>
+                </div>
+            </div>
+            {% endif %}
             {% for permit in permits %}
             <div class="permit-card permit-{{ permit.status }}">
                 <div class="permit-card-header">
