@@ -21,7 +21,7 @@ flask init-db                    # Creates tables + default admin user (admin/ad
 flask db migrate -m "message"    # Generate migration (Flask-Migrate, but no migrations dir yet)
 flask db upgrade                 # Apply migrations
 flask dedup --dry-run            # Preview duplicate cleanup
-flask dedup                      # Remove duplicate employees/permits
+flask dedup                      # Remove duplicate employees/permits/equipment (vehicles)
 flask migrate-shared-insurance --dry-run    # Preview moving per-vehicle SEGURO into shared CompanyPermit
 flask migrate-shared-insurance              # Pre-fill LB/PLI shared insurance, hide per-vehicle copies
 flask send-notifications --dry-run          # Preview without sending emails
@@ -68,7 +68,8 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --preload
 - Drivers access issue reporting via link-based auth: each employee has an optional `access_token` (UUID) column; URL `/issues/report/<token>` identifies the driver without login. Report pages extend `base.html` but override `{% block pwa_meta %}` and `{% block service_worker %}` to disable PWA installation — drivers who save the link to their homescreen get a browser bookmark, not the full app. The report form collects truck, category, severity, and description only (odometer/location columns exist in the DB but are not exposed in the UI). Truck dropdown is scoped to vehicles from the driver's company, excluding Personal company and specific equipment models defined in `EXCLUDED_EQUIPMENT_MODELS` (carreton, chasis, generador alquiler, generador contenedor, tanque combustible, tanque harina). The `reportable_equipment_query()` helper in `issues/routes.py` centralizes this filtering.
 - Issue status updates are transactional: `Issue.current_status` (denormalized) and `IssueStatusHistory` are always updated in the same commit. `resolved_at` auto-sets on transition to resuelto/cerrado.
 - Unique constraints enforce one permit per type per employee/equipment
-- `dedup` CLI command uses advisory locking and idempotency tokens for safe bulk operations
+- `dedup` CLI command uses advisory locking and idempotency tokens for safe bulk operations. It merges duplicate employees (by name+company), employee permits, equipment permits, and **duplicate equipment/vehicle rows**. Equipment has no DB-level unique constraint; `dedup` groups vehicles by a cascade key — `vin_serial`, then `plate_number`, then `unit_number`+`company` (normalized lowercase/trimmed; rows with all three blank are never auto-merged) — keeps the lowest-id row, fills its empty fields from dups, merges/re-points child `EquipmentPermit` rows, and reassigns linked `Issue` reports to the keeper before deleting (the `Issue.equipment_id` FK is `SET NULL`, so issues would otherwise be orphaned).
+- **Duplicate-vehicle prevention on create**: `find_duplicate_equipment(vin, plate, unit, company)` in `app.py` does the same case-insensitive VIN→plate→unit#+company cascade lookup. `equipment_new` blocks the save on a match (flashes a Spanish warning, re-renders `equipment_form.html` with submitted values via `form_data`, HTTP 422). `vehicle_create` (`issues/routes.py`, lazy-imports the helper) adds a Spanish error to its existing 422 re-render flow. Excel import still has its own separate VIN/plate matching (app.py ~1650).
 
 ## Email Notifications
 
