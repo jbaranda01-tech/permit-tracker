@@ -781,10 +781,14 @@ def equipment_detail(id):
         active_permits = [p for p in active_permits if p.permit_type != 'SEGURO']
         hidden_permits = [p for p in hidden_permits if p.permit_type != 'SEGURO']
 
+    # Full vehicle history: this equipment's issue reports (newest first).
+    issues = equip.issues.order_by(Issue.reported_at.desc()).all()
+
     return render_template('equipment.html', equipment=equip,
                            permits=active_permits, hidden_permits=hidden_permits,
                            shared_insurance=shared_insurance,
-                           permit_types=EQUIPMENT_PERMIT_TYPES)
+                           permit_types=EQUIPMENT_PERMIT_TYPES,
+                           issues=issues)
 
 
 @app.route('/equipment/new', methods=['GET', 'POST'])

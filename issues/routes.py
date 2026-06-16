@@ -22,6 +22,32 @@ SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
 RESOLVED_STATUSES = ['resuelto', 'cerrado']
 
 
+def _normalize_unit(raw):
+    """Normalize a unit identifier for matching: handle numeric Excel cells,
+    a leading '#', and case/whitespace."""
+    if raw is None:
+        return ''
+    if isinstance(raw, float) and raw.is_integer():
+        raw = int(raw)            # 204.0 -> 204, avoids "204.0"
+    s = str(raw).strip()
+    s = s.lstrip('#').strip()     # "#204" -> "204"
+    return s.lower()
+
+
+def _unreportable_reason(eq):
+    """If equipment exists but won't appear in the driver report form, explain why.
+    Returns a Spanish reason string, or None if the equipment is reportable."""
+    if eq.company not in ('LB', 'PLI'):
+        return f'empresa "{eq.company}"'
+    if eq.equipment_type != 'vehicle':
+        return f'tipo "{eq.equipment_type}"'
+    if eq.status != 'activo':
+        return f'estado "{eq.status}"'
+    if eq.model and eq.model.strip().lower() in EXCLUDED_EQUIPMENT_MODELS:
+        return f'modelo "{eq.model}" excluido'
+    return None
+
+
 def reportable_equipment_query(company=None):
     query = Equipment.query.filter(
         Equipment.status == 'activo',
@@ -543,14 +569,21 @@ def import_issues():
     status_map = {s[0]: s[0] for s in ISSUE_STATUSES}
     status_map.update({s[1].lower(): s[0] for s in ISSUE_STATUSES})
 
-    # Truck lookup by unit_number (case-insensitive), restricted to reportable units.
+    # Truck lookup by unit_number, falling back to plate_number (both normalized).
+    # Matches against ALL equipment so a historical backlog issue can attach to any
+    # truck, including currently inactive/non-reportable ones. unit_number wins over
+    # plate_number when both resolve to the same key.
     truck_by_unit = {}
-    for eq in reportable_equipment_query().all():
+    for eq in Equipment.query.all():
         if eq.unit_number:
-            truck_by_unit[eq.unit_number.strip().lower()] = eq
+            truck_by_unit[_normalize_unit(eq.unit_number)] = eq
+    for eq in Equipment.query.all():
+        if eq.plate_number:
+            truck_by_unit.setdefault(_normalize_unit(eq.plate_number), eq)
 
     imported = 0
     errors = []
+    notices = []
     filepath = None
     try:
         fd, filepath = tempfile.mkstemp(suffix='.xlsx')
@@ -603,11 +636,15 @@ def import_issues():
             reported_raw = cell(5)
             resolved_raw = cell(6)
 
-            unit = str(unit_raw).strip() if unit_raw is not None else ''
-            truck = truck_by_unit.get(unit.lower())
+            unit = _normalize_unit(unit_raw)
+            truck = truck_by_unit.get(unit)
             if not truck:
-                errors.append(f'Fila {idx}: unidad "{unit or "(vacía)"}" no encontrada.')
+                display = str(unit_raw).strip() if unit_raw is not None else ''
+                errors.append(
+                    f'Fila {idx}: no existe ninguna unidad con número/placa '
+                    f'"{display or "(vacía)"}".')
                 continue
+            reason = _unreportable_reason(truck)
 
             description = str(desc_raw).strip() if desc_raw is not None else ''
             if not description:
@@ -642,6 +679,11 @@ def import_issues():
             synthesize_status_history(issue, status, reported_at, resolved_at)
             imported += 1
 
+            if reason:
+                notices.append(
+                    f'Fila {idx}: unidad "{truck.display_name}" importada, pero está '
+                    f'marcada con {reason} y no aparece en el formulario del chofer.')
+
         wb.close()
         db.session.commit()
 
@@ -671,4 +713,5 @@ def import_issues():
                            severities=ISSUE_SEVERITIES,
                            statuses=ISSUE_STATUSES,
                            import_errors=errors,
+                           import_notices=notices,
                            imported_count=imported)

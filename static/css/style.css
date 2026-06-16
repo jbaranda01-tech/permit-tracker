@@ -1617,6 +1617,22 @@ img { max-width: 100%; }
     margin-top: 2px;
     padding-left: calc(var(--space-sm) + 18px);
 }
+.truck-edit-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    margin-left: calc(var(--space-sm) + 18px);
+    font-size: 0.78rem;
+    color: var(--accent);
+    text-decoration: none;
+}
+.truck-edit-link:hover { text-decoration: underline; }
+.issue-history-list {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
 .truck-indicators {
     display: flex;
     align-items: center;

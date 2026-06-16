@@ -22,6 +22,13 @@
             </ul>
             <p class="import-error-hint">Corrija las filas indicadas en su archivo y vuelva a subirlo.</p>
             {% endif %}
+            {% if import_notices %}
+            <ul class="import-notice-list">
+                {% for note in import_notices %}
+                <li><i class="fas fa-info-circle"></i> {{ note }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
         </div>
     </div>
     {% endif %}
@@ -40,7 +47,7 @@
                 <span class="col-tag">Fecha Resuelto</span>
             </div>
             <div class="import-notes">
-                <p><i class="fas fa-info-circle"></i> <strong>Unidad</strong> debe coincidir con el número de unidad de un camión existente (LB o PLI). Las filas sin coincidencia se omiten y se listan como error.</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Unidad</strong> debe ser solo el número de unidad (o la placa) de un camión existente — sin el símbolo <strong>#</strong> (ej. <code>204</code>, no <code>#204</code>). Las filas sin coincidencia se omiten y se listan como error.</p>
                 <p><i class="fas fa-info-circle"></i> <strong>Categoría</strong>: {{ categories|map(attribute=1)|join(', ') }}.</p>
                 <p><i class="fas fa-info-circle"></i> <strong>Severidad</strong>: {{ severities|map(attribute=1)|join(', ') }} (por defecto: Media).</p>
                 <p><i class="fas fa-info-circle"></i> <strong>Estado</strong>: {{ statuses|map(attribute=1)|join(', ') }} (por defecto: Reportado). Los estados <strong>Resuelto</strong>/<strong>Cerrado</strong> usan la Fecha Resuelto.</p>
@@ -77,6 +84,17 @@
 }
 .import-error-hint {
     margin-top: var(--space-md);
+    color: var(--text-secondary, #64748b);
+    font-size: 0.9rem;
+}
+.import-notice-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-md) 0 0;
+}
+.import-notice-list li {
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
     color: var(--text-secondary, #64748b);
     font-size: 0.9rem;
 }

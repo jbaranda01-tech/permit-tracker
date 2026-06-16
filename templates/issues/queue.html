@@ -73,6 +73,11 @@
                             {%- if truck.equipment.year %} ({{ truck.equipment.year }}){% endif %}
                             {%- if truck.equipment.plate_number %} &middot; {{ truck.equipment.plate_number }}{% endif %}
                         </div>
+                        {% if current_user.is_admin %}
+                        <a href="{{ url_for('equipment_detail', id=truck.equipment.id) }}" class="truck-edit-link" onclick="event.stopPropagation()">
+                            <i class="fas fa-edit"></i> Ver ficha / editar camión
+                        </a>
+                        {% endif %}
                     </div>
                     <div class="truck-indicators">
                         {% if truck.issue_count > 0 %}
@@ -133,6 +138,11 @@
                             {%- if truck.equipment.year %} ({{ truck.equipment.year }}){% endif %}
                             {%- if truck.equipment.plate_number %} &middot; {{ truck.equipment.plate_number }}{% endif %}
                         </div>
+                        {% if current_user.is_admin %}
+                        <a href="{{ url_for('equipment_detail', id=truck.equipment.id) }}" class="truck-edit-link" onclick="event.stopPropagation()">
+                            <i class="fas fa-edit"></i> Ver ficha / editar camión
+                        </a>
+                        {% endif %}
                     </div>
                     <div class="truck-indicators">
                         {% if truck.issue_count > 0 %}
