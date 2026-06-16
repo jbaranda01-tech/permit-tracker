@@ -13,9 +13,9 @@ from sqlalchemy.orm import joinedload
 from issues import issues_bp
 from issues.decorators import shop_required, admin_required
 from models import (
-    db, Employee, Equipment, Issue, IssueStatusHistory,
+    db, Employee, Equipment, EquipmentPermit, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
-    EXCLUDED_EQUIPMENT_MODELS,
+    EXCLUDED_EQUIPMENT_MODELS, EQUIPMENT_PERMIT_TYPES,
 )
 
 SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
@@ -429,6 +429,78 @@ def create():
 
     flash(f'Reporte #{issue.id} agregado.', 'success')
     return redirect(url_for('issues.detail', issue_id=issue.id))
+
+
+# ── ADMIN: QUICK-ADD REPORTABLE VEHICLE ──────────────────────────────
+
+@issues_bp.route('/vehicle/new', methods=['GET'])
+@admin_required
+def vehicle_new():
+    return render_template('issues/vehicle_new.html', companies=['LB', 'PLI'])
+
+
+@issues_bp.route('/vehicle/new', methods=['POST'])
+@admin_required
+def vehicle_create():
+    company = request.form.get('company', '')
+    unit_number = request.form.get('unit_number', '').strip()
+    plate_number = request.form.get('plate_number', '').strip()
+    make = request.form.get('make', '').strip()
+    model = request.form.get('model', '').strip()
+    year_raw = request.form.get('year', '').strip()
+
+    errors = []
+    if company not in ('LB', 'PLI'):
+        errors.append('Debe seleccionar una empresa (LB o PLI).')
+    if not unit_number:
+        errors.append('Debe incluir el número de unidad.')
+    if model and model.lower() in EXCLUDED_EQUIPMENT_MODELS:
+        errors.append(f'El modelo "{model}" está excluido de los reportes; '
+                      'el camión no aparecería en la lista.')
+
+    year = None
+    if year_raw:
+        try:
+            year = int(year_raw)
+        except ValueError:
+            errors.append('El año no es válido.')
+
+    if errors:
+        for error in errors:
+            flash(error, 'danger')
+        return render_template('issues/vehicle_new.html',
+                               companies=['LB', 'PLI']), 422
+
+    equip = Equipment(
+        company=company,
+        equipment_type='vehicle',
+        status='activo',
+        unit_number=unit_number,
+        plate_number=plate_number,
+        make=make,
+        model=model,
+        year=year,
+    )
+    db.session.add(equip)
+    db.session.flush()
+
+    # Create default permit slots (mirrors equipment_new in app.py).
+    for code, name in EQUIPMENT_PERMIT_TYPES:
+        if code == 'OTHER':
+            continue
+        applicability = 'YES'
+        # Insurance is shared at the company level for LB/PLI.
+        if code == 'SEGURO' and equip.company in ('LB', 'PLI'):
+            applicability = 'N/A'
+        db.session.add(EquipmentPermit(
+            equipment_id=equip.id,
+            permit_type=code,
+            applicability=applicability,
+        ))
+
+    db.session.commit()
+    flash(f'Camión {equip.display_name} agregado.', 'success')
+    return redirect(url_for('issues.queue'))
 
 
 @issues_bp.route('/import', methods=['GET'])

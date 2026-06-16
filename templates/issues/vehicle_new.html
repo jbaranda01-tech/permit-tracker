@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Agregar Camión{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Reportes</a>
+        <h1><i class="fas fa-truck"></i> Agregar Camión</h1>
+    </div>
+
+    <form method="POST" action="{{ url_for('issues.vehicle_create') }}" class="report-form">
+        <div class="form-section">
+            <h3><i class="fas fa-building"></i> Empresa</h3>
+            <div class="form-group">
+                <label for="company">Empresa *</label>
+                <select name="company" id="company" required>
+                    <option value="">— Seleccionar —</option>
+                    {% for c in companies %}
+                    <option value="{{ c }}" {% if request.form.get('company') == c %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-id-card"></i> Identificación</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="unit_number">Unidad *</label>
+                    <input type="text" name="unit_number" id="unit_number" value="{{ request.form.get('unit_number', '') }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="plate_number">Tablilla</label>
+                    <input type="text" name="plate_number" id="plate_number" value="{{ request.form.get('plate_number', '') }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-cog"></i> Detalles del Vehículo</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="make">Marca</label>
+                    <input type="text" name="make" id="make" value="{{ request.form.get('make', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="model">Modelo</label>
+                    <input type="text" name="model" id="model" value="{{ request.form.get('model', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="year">Año</label>
+                    <input type="number" name="year" id="year" min="1900" max="2100" value="{{ request.form.get('year', '') }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-save"></i> Guardar Camión
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
