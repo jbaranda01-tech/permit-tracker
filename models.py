@@ -421,6 +421,7 @@ ISSUE_CATEGORIES = [
     ('ac', 'Aire Acondicionado'),
     ('luces', 'Luces'),
     ('fluidos', 'Fluidos'),
+    ('suspension', 'Suspensión'),
     ('otro', 'Otro'),
 ]
 

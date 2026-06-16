@@ -96,7 +96,7 @@ Truck issue reporting for drivers (report) and shop staff (triage/resolve).
 
 **Issue statuses:** reportado → en_revision → en_reparacion → resuelto → cerrado
 
-**Issue categories:** motor, frenos, eléctrico, llantas, transmisión, carrocería, aire acondicionado, luces, fluidos, otro
+**Issue categories:** motor, frenos, eléctrico, llantas, transmisión, carrocería, aire acondicionado, luces, fluidos, suspensión, otro
 
 **Issue severities:** baja, media, alta, crítica
 
