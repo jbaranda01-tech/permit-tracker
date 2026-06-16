@@ -484,6 +484,12 @@ def vehicle_create():
         errors.append(f'El modelo "{model}" está excluido de los reportes; '
                       'el camión no aparecería en la lista.')
 
+    from app import find_duplicate_equipment
+    match = find_duplicate_equipment(None, plate_number, unit_number, company)
+    if match:
+        errors.append(f'Ya existe un camión con esa unidad/placa: {match.display_name} '
+                      f'({match.company_full}). Verifique antes de crear un duplicado.')
+
     year = None
     if year_raw:
         try:

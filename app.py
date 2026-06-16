@@ -791,10 +791,45 @@ def equipment_detail(id):
                            issues=issues)
 
 
+def find_duplicate_equipment(vin_serial, plate_number, unit_number, company):
+    """Return an existing Equipment matching by VIN, then plate, then unit#+company."""
+    vin = (vin_serial or '').strip()
+    if vin:
+        m = Equipment.query.filter(db.func.lower(Equipment.vin_serial) == vin.lower()).first()
+        if m:
+            return m
+    plate = (plate_number or '').strip()
+    if plate:
+        m = Equipment.query.filter(db.func.lower(Equipment.plate_number) == plate.lower()).first()
+        if m:
+            return m
+    unit = (unit_number or '').strip()
+    if unit:
+        return Equipment.query.filter(
+            db.func.lower(Equipment.unit_number) == unit.lower(),
+            Equipment.company == company,
+        ).first()
+    return None
+
+
 @app.route('/equipment/new', methods=['GET', 'POST'])
 @manager_required
 def equipment_new():
     if request.method == 'POST':
+        match = find_duplicate_equipment(
+            request.form.get('vin_serial', ''),
+            request.form.get('plate_number', ''),
+            request.form.get('unit_number', ''),
+            request.form.get('company', ''),
+        )
+        if match:
+            flash(
+                f'Ya existe un equipo con esa unidad/placa/VIN: {match.display_name} '
+                f'({match.company_full}). Verifique antes de crear un duplicado.',
+                'danger',
+            )
+            return render_template('equipment_form.html', equipment=None,
+                                   form_data=request.form, duplicate=match), 422
         equip = Equipment(
             company=request.form['company'],
             equipment_type=request.form.get('equipment_type', 'vehicle'),
@@ -2047,6 +2082,67 @@ def dedup_data(dry_run):
                 db.session.delete(dup)
             eq_permit_deleted += 1
 
+    # --- Deduplicate equipment (vehicles) by VIN, then plate, then unit#+company ---
+    # Key is a fallback cascade, not a single column, so group in Python rather
+    # than SQL. Each row joins at most one group; rows with all three keys blank
+    # are never auto-merged.
+    equip_groups = {}
+    for equip in Equipment.query.order_by(Equipment.id).all():
+        vin = (equip.vin_serial or '').strip()
+        plate = (equip.plate_number or '').strip()
+        unit = (equip.unit_number or '').strip()
+        if vin:
+            key = ('vin', vin.lower())
+        elif plate:
+            key = ('plate', plate.lower())
+        elif unit:
+            key = ('unit', equip.company, unit.lower())
+        else:
+            continue
+        equip_groups.setdefault(key, []).append(equip)
+
+    equip_deleted = 0
+    for key, group in equip_groups.items():
+        if len(group) < 2:
+            continue
+        keeper = group[0]
+        for dup in group[1:]:
+            # Merge non-empty scalar fields into keeper where keeper's is empty.
+            for col in ['titular', 'unit_number', 'plate_number', 'make', 'model',
+                        'year', 'vin_serial', 'insurance_company', 'cost', 'notes',
+                        'equipment_type', 'status']:
+                keeper_val = getattr(keeper, col)
+                dup_val = getattr(dup, col)
+                keeper_empty = keeper_val is None or keeper_val == ''
+                dup_present = dup_val is not None and dup_val != ''
+                if keeper_empty and dup_present:
+                    setattr(keeper, col, dup_val)
+
+            # Merge child permits: fill keeper's gaps, or re-point dup's permit to
+            # keeper when keeper lacks that type (avoids cascade-deleting real data).
+            for dup_permit in dup.permits.all():
+                keeper_permit = keeper.permits.filter_by(permit_type=dup_permit.permit_type).first()
+                if keeper_permit:
+                    if keeper_permit.expiration_date is None and dup_permit.expiration_date is not None:
+                        keeper_permit.expiration_date = dup_permit.expiration_date
+                    if keeper_permit.applicability == 'N/A' and dup_permit.applicability == 'YES':
+                        keeper_permit.applicability = dup_permit.applicability
+                    for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
+                        if getattr(keeper_permit, field) is None and getattr(dup_permit, field) is not None:
+                            setattr(keeper_permit, field, getattr(dup_permit, field))
+                elif not dry_run:
+                    dup_permit.equipment_id = keeper.id
+
+            # Reassign linked issue reports (FK is SET NULL, so they'd be orphaned).
+            if not dry_run:
+                Issue.query.filter_by(equipment_id=dup.id).update({'equipment_id': keeper.id})
+
+            print(f'  {"[DRY RUN] " if dry_run else ""}Delete duplicate equipment: {dup.display_name} ({dup.company}) id={dup.id}, keeping id={keeper.id}')
+            if not dry_run:
+                db.session.flush()
+                db.session.delete(dup)
+            equip_deleted += 1
+
     if not dry_run:
         db.session.commit()
 
@@ -2068,7 +2164,7 @@ def dedup_data(dry_run):
                     print(f'  Constraint already exists or skipped: {sql.split("ADD CONSTRAINT ")[1].split(" ")[0]}')
 
     prefix = '[DRY RUN] ' if dry_run else ''
-    print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {eq_permit_deleted} duplicate equipment permits removed.')
+    print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {equip_deleted} duplicate equipment, {eq_permit_deleted} duplicate equipment permits removed.')
 
 
 @app.cli.command('migrate-shared-insurance')
