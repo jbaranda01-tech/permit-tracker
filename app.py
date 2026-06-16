@@ -1682,13 +1682,10 @@ def import_equipment():
             }
             cost            = to_float(row[12]) if len(row) > 12 else None
 
-            # Look up existing equipment by VIN or plate; upsert in place so
-            # corrections to the source spreadsheet propagate on re-import.
-            existing = None
-            if vin_serial:
-                existing = Equipment.query.filter_by(vin_serial=vin_serial).first()
-            if not existing and plate_number:
-                existing = Equipment.query.filter_by(plate_number=plate_number).first()
+            # Look up existing equipment via the shared case-insensitive cascade
+            # (VIN → plate → unit#+company) and upsert in place, so re-imports never
+            # create duplicates — even when VIN/plate are blank but the unit# is known.
+            existing = find_duplicate_equipment(vin_serial, plate_number, unit_number, company)
 
             if existing:
                 if titulo:            existing.titular = titulo
@@ -2082,29 +2079,52 @@ def dedup_data(dry_run):
                 db.session.delete(dup)
             eq_permit_deleted += 1
 
-    # --- Deduplicate equipment (vehicles) by VIN, then plate, then unit#+company ---
-    # Key is a fallback cascade, not a single column, so group in Python rather
-    # than SQL. Each row joins at most one group; rows with all three keys blank
-    # are never auto-merged.
-    equip_groups = {}
-    for equip in Equipment.query.order_by(Equipment.id).all():
-        vin = (equip.vin_serial or '').strip()
-        plate = (equip.plate_number or '').strip()
-        unit = (equip.unit_number or '').strip()
+    # --- Deduplicate equipment (vehicles) by shared VIN / plate / unit#+company ---
+    # Two rows are the same vehicle if they share ANY non-blank key. A single
+    # cascade key would miss true duplicates where one copy has a VIN and the other
+    # only a plate, so union rows that share any signature (union-find) instead.
+    # VIN/plate are global; unit# is per-company (each company numbers its own units).
+    equipment_list = Equipment.query.order_by(Equipment.id).all()
+    parent = {e.id: e.id for e in equipment_list}
+
+    def _find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def _union(a, b):
+        ra, rb = _find(a), _find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    sig_to_id = {}
+    for equip in equipment_list:
+        vin = (equip.vin_serial or '').strip().lower()
+        plate = (equip.plate_number or '').strip().lower()
+        unit = (equip.unit_number or '').strip().lower()
+        sigs = []
         if vin:
-            key = ('vin', vin.lower())
-        elif plate:
-            key = ('plate', plate.lower())
-        elif unit:
-            key = ('unit', equip.company, unit.lower())
-        else:
-            continue
-        equip_groups.setdefault(key, []).append(equip)
+            sigs.append(('vin', vin))
+        if plate:
+            sigs.append(('plate', plate))
+        if unit:
+            sigs.append(('unit', equip.company, unit))
+        for sig in sigs:
+            if sig in sig_to_id:
+                _union(equip.id, sig_to_id[sig])
+            else:
+                sig_to_id[sig] = equip.id
+
+    equip_groups = {}
+    for equip in equipment_list:
+        equip_groups.setdefault(_find(equip.id), []).append(equip)
 
     equip_deleted = 0
-    for key, group in equip_groups.items():
+    for root, group in equip_groups.items():
         if len(group) < 2:
             continue
+        group.sort(key=lambda e: e.id)
         keeper = group[0]
         for dup in group[1:]:
             # Merge non-empty scalar fields into keeper where keeper's is empty.
@@ -2162,6 +2182,29 @@ def dedup_data(dry_run):
                 except Exception:
                     db.session.rollback()
                     print(f'  Constraint already exists or skipped: {sql.split("ADD CONSTRAINT ")[1].split(" ")[0]}')
+
+            # Permanent backstop against duplicate vehicles: partial unique indexes
+            # on non-blank keys (blanks excluded so unidentified rows can coexist).
+            # VIN/plate global, unit# per-company — mirrors find_duplicate_equipment.
+            equip_indexes = [
+                ("uq_equipment_vin",
+                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_equipment_vin ON equipment (lower(vin_serial)) "
+                 "WHERE vin_serial IS NOT NULL AND vin_serial <> ''"),
+                ("uq_equipment_plate",
+                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_equipment_plate ON equipment (lower(plate_number)) "
+                 "WHERE plate_number IS NOT NULL AND plate_number <> ''"),
+                ("uq_equipment_company_unit",
+                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_equipment_company_unit ON equipment (company, lower(unit_number)) "
+                 "WHERE unit_number IS NOT NULL AND unit_number <> ''"),
+            ]
+            for name, sql in equip_indexes:
+                try:
+                    db.session.execute(db.text(sql))
+                    db.session.commit()
+                    print(f'  Applied: {name}')
+                except Exception as exc:
+                    db.session.rollback()
+                    print(f'  WARNING: could not create {name} — residual duplicates likely remain: {exc}')
 
     prefix = '[DRY RUN] ' if dry_run else ''
     print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {equip_deleted} duplicate equipment, {eq_permit_deleted} duplicate equipment permits removed.')
