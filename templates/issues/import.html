@@ -13,7 +13,7 @@
             <i class="fas fa-list-check"></i> Resultado de la Importación
         </div>
         <div class="card-body">
-            <p><strong>{{ imported_count }}</strong> reporte(s) importado(s){% if import_errors %}, <strong>{{ import_errors|length }}</strong> fila(s) omitida(s){% endif %}.</p>
+            <p><strong>{{ imported_count }}</strong> reporte(s) importado(s){% if duplicate_count %}, <strong>{{ duplicate_count }}</strong> duplicado(s) omitido(s){% endif %}{% if import_errors %}, <strong>{{ import_errors|length }}</strong> fila(s) con error{% endif %}.</p>
             {% if import_errors %}
             <ul class="import-error-list">
                 {% for err in import_errors %}
@@ -26,6 +26,13 @@
             <ul class="import-notice-list">
                 {% for note in import_notices %}
                 <li><i class="fas fa-info-circle"></i> {{ note }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% if dup_notices %}
+            <ul class="import-notice-list">
+                {% for note in dup_notices %}
+                <li><i class="fas fa-copy"></i> {{ note }}</li>
                 {% endfor %}
             </ul>
             {% endif %}

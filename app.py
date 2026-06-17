@@ -791,8 +791,14 @@ def equipment_detail(id):
                            issues=issues)
 
 
-def find_duplicate_equipment(vin_serial, plate_number, unit_number, company):
-    """Return an existing Equipment matching by VIN, then plate, then unit#+company."""
+def find_duplicate_equipment(vin_serial, plate_number, unit_number, company,
+                             titular=None, model=None, year=None):
+    """Return an existing Equipment matching by VIN, then plate, then unit#+company.
+
+    When a vehicle has no VIN, plate, or unit number (e.g. carretones, generadores,
+    tanques), fall back to a normalized (company, titular, model, year) match so
+    re-imports of these keyless rows don't create complete duplicates.
+    """
     vin = (vin_serial or '').strip()
     if vin:
         m = Equipment.query.filter(db.func.lower(Equipment.vin_serial) == vin.lower()).first()
@@ -809,6 +815,21 @@ def find_duplicate_equipment(vin_serial, plate_number, unit_number, company):
             db.func.lower(Equipment.unit_number) == unit.lower(),
             Equipment.company == company,
         ).first()
+
+    # Keyless fallback: no VIN/plate/unit. Only attempt when there is enough to
+    # identify the row (titular or model present) so we never match on an empty tuple.
+    titular_n = (titular or '').strip()
+    model_n = (model or '').strip()
+    if titular_n or model_n:
+        return Equipment.query.filter(
+            (Equipment.vin_serial.is_(None) | (db.func.trim(Equipment.vin_serial) == '')),
+            (Equipment.plate_number.is_(None) | (db.func.trim(Equipment.plate_number) == '')),
+            (Equipment.unit_number.is_(None) | (db.func.trim(Equipment.unit_number) == '')),
+            Equipment.company == company,
+            db.func.lower(db.func.coalesce(Equipment.titular, '')) == titular_n.lower(),
+            db.func.lower(db.func.coalesce(Equipment.model, '')) == model_n.lower(),
+            (Equipment.year == year) if year is not None else Equipment.year.is_(None),
+        ).first()
     return None
 
 
@@ -816,11 +837,20 @@ def find_duplicate_equipment(vin_serial, plate_number, unit_number, company):
 @manager_required
 def equipment_new():
     if request.method == 'POST':
+        form_year = None
+        if request.form.get('year', '').strip():
+            try:
+                form_year = int(request.form['year'])
+            except ValueError:
+                form_year = None
         match = find_duplicate_equipment(
             request.form.get('vin_serial', ''),
             request.form.get('plate_number', ''),
             request.form.get('unit_number', ''),
             request.form.get('company', ''),
+            titular=request.form.get('titular', ''),
+            model=request.form.get('model', ''),
+            year=form_year,
         )
         if match:
             flash(
@@ -1685,7 +1715,8 @@ def import_equipment():
             # Look up existing equipment via the shared case-insensitive cascade
             # (VIN → plate → unit#+company) and upsert in place, so re-imports never
             # create duplicates — even when VIN/plate are blank but the unit# is known.
-            existing = find_duplicate_equipment(vin_serial, plate_number, unit_number, company)
+            existing = find_duplicate_equipment(vin_serial, plate_number, unit_number, company,
+                                                titular=titulo, model=model, year=year)
 
             if existing:
                 if titulo:            existing.titular = titulo
@@ -2110,6 +2141,14 @@ def dedup_data(dry_run):
             sigs.append(('plate', plate))
         if unit:
             sigs.append(('unit', equip.company, unit))
+        # Keyless fallback: rows with no VIN/plate/unit (carretones, generadores,
+        # tanques, etc.) get no signature above and would never merge. Group exact
+        # copies by (company, titular, model, year) when titular or model is present.
+        if not sigs:
+            titular = (equip.titular or '').strip().lower()
+            model = (equip.model or '').strip().lower()
+            if titular or model:
+                sigs.append(('keyless', equip.company, titular, model, equip.year))
         for sig in sigs:
             if sig in sig_to_id:
                 _union(equip.id, sig_to_id[sig])
@@ -2163,6 +2202,35 @@ def dedup_data(dry_run):
                 db.session.delete(dup)
             equip_deleted += 1
 
+    # --- Deduplicate issue reports created by repeated bulk imports ---
+    # Identity mirrors the importer: (equipment_id, category, normalized
+    # description, reported date). Child IssueStatusHistory rows cascade-delete.
+    def _norm_desc(text):
+        return ' '.join((text or '').split()).lower()
+
+    issue_groups = {}
+    for issue in Issue.query.order_by(Issue.id).all():
+        day = issue.reported_at.date() if issue.reported_at else None
+        key = (issue.equipment_id, issue.category, _norm_desc(issue.description), day)
+        issue_groups.setdefault(key, []).append(issue)
+
+    issue_deleted = 0
+    for key, group in issue_groups.items():
+        if len(group) < 2:
+            continue
+        group.sort(key=lambda i: i.id)
+        keeper = group[0]
+        for dup in group[1:]:
+            # Re-point any child issues referencing the doomed dup to the keeper.
+            if not dry_run:
+                Issue.query.filter_by(parent_issue_id=dup.id).update({'parent_issue_id': keeper.id})
+            print(f'  {"[DRY RUN] " if dry_run else ""}Delete duplicate issue: equipment_id={dup.equipment_id} '
+                  f'cat={dup.category} id={dup.id}, keeping id={keeper.id}')
+            if not dry_run:
+                db.session.flush()
+                db.session.delete(dup)
+            issue_deleted += 1
+
     if not dry_run:
         db.session.commit()
 
@@ -2207,7 +2275,7 @@ def dedup_data(dry_run):
                     print(f'  WARNING: could not create {name} — residual duplicates likely remain: {exc}')
 
     prefix = '[DRY RUN] ' if dry_run else ''
-    print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {equip_deleted} duplicate equipment, {eq_permit_deleted} duplicate equipment permits removed.')
+    print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {equip_deleted} duplicate equipment, {eq_permit_deleted} duplicate equipment permits, {issue_deleted} duplicate issues removed.')
 
 
 @app.cli.command('migrate-shared-insurance')

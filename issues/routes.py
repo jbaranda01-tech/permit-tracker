@@ -390,6 +390,31 @@ def _as_datetime(d):
     return datetime(d.year, d.month, d.day)
 
 
+def _normalize_desc(text):
+    """Lower-case and collapse whitespace for duplicate comparison."""
+    return ' '.join((text or '').split()).lower()
+
+
+def find_duplicate_issue(equipment_id, category, description, reported_at):
+    """Return an existing Issue matching the import natural key, else None.
+
+    Identity = (equipment_id, category, normalized description, reported date).
+    Compared in Python over the small per-truck+category candidate set so the
+    normalization (whitespace/case, date-vs-datetime) behaves identically on
+    SQLite and Postgres.
+    """
+    norm = _normalize_desc(description)
+    day = reported_at.date() if reported_at else None
+    candidates = Issue.query.filter_by(equipment_id=equipment_id, category=category).all()
+    for existing in candidates:
+        if _normalize_desc(existing.description) != norm:
+            continue
+        existing_day = existing.reported_at.date() if existing.reported_at else None
+        if existing_day == day:
+            return existing
+    return None
+
+
 @issues_bp.route('/new', methods=['GET'])
 @admin_required
 def new():
@@ -588,8 +613,11 @@ def import_issues():
             truck_by_unit.setdefault(_normalize_unit(eq.plate_number), eq)
 
     imported = 0
+    duplicates = 0
     errors = []
     notices = []
+    dup_notices = []
+    seen = {}
     filepath = None
     try:
         fd, filepath = tempfile.mkstemp(suffix='.xlsx')
@@ -674,6 +702,24 @@ def import_issues():
             reported_at = _as_datetime(_coerce_date(reported_raw)) or datetime.utcnow()
             resolved_at = _as_datetime(_coerce_date(resolved_raw))
 
+            # Skip duplicates so re-importing the same file is idempotent. Match
+            # against rows already created in this batch (seen) and rows already
+            # in the DB from a previous import (find_duplicate_issue). On a hit we
+            # update the existing issue rather than create a new one.
+            dup_key = (truck.id, category, _normalize_desc(description),
+                       reported_at.date())
+            existing = seen.get(dup_key) or find_duplicate_issue(
+                truck.id, category, description, reported_at)
+            if existing:
+                existing.severity = severity
+                if status != existing.current_status:
+                    synthesize_status_history(existing, status, reported_at, resolved_at)
+                duplicates += 1
+                dup_notices.append(
+                    f'Fila {idx}: duplicado de "{truck.display_name}" — '
+                    f'actualizado (no se creó uno nuevo).')
+                continue
+
             issue = Issue(
                 equipment_id=truck.id,
                 category=category,
@@ -683,6 +729,7 @@ def import_issues():
             db.session.add(issue)
             db.session.flush()
             synthesize_status_history(issue, status, reported_at, resolved_at)
+            seen[dup_key] = issue
             imported += 1
 
             if reason:
@@ -705,9 +752,9 @@ def import_issues():
         if filepath and os.path.exists(filepath):
             os.remove(filepath)
 
-    if imported:
+    if imported or duplicates:
         flash(f'Importación completa: {imported} reportes importados, '
-              f'{len(errors)} omitidos.', 'success')
+              f'{duplicates} duplicados omitidos, {len(errors)} con errores.', 'success')
     else:
         flash(f'No se importó ningún reporte. {len(errors)} fila(s) con errores.', 'warning')
 
@@ -720,4 +767,6 @@ def import_issues():
                            statuses=ISSUE_STATUSES,
                            import_errors=errors,
                            import_notices=notices,
-                           imported_count=imported)
+                           dup_notices=dup_notices,
+                           imported_count=imported,
+                           duplicate_count=duplicates)
