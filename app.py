@@ -2204,14 +2204,17 @@ def dedup_data(dry_run):
 
     # --- Deduplicate issue reports created by repeated bulk imports ---
     # Identity mirrors the importer: (equipment_id, category, normalized
-    # description, reported date). Child IssueStatusHistory rows cascade-delete.
-    def _norm_desc(text):
-        return ' '.join((text or '').split()).lower()
+    # description, canonical report day). Reuse the importer's helpers so the
+    # two layers can never drift. _canonical_report_day collapses dateless rows
+    # (stored at a volatile utcnow timestamp) regardless of import day, so the
+    # duplicates that previously escaped both layers now merge. Child
+    # IssueStatusHistory rows cascade-delete.
+    from issues.routes import _canonical_report_day, _normalize_desc
 
     issue_groups = {}
     for issue in Issue.query.order_by(Issue.id).all():
-        day = issue.reported_at.date() if issue.reported_at else None
-        key = (issue.equipment_id, issue.category, _norm_desc(issue.description), day)
+        day = _canonical_report_day(issue.reported_at)
+        key = (issue.equipment_id, issue.category, _normalize_desc(issue.description), day)
         issue_groups.setdefault(key, []).append(issue)
 
     issue_deleted = 0

@@ -395,22 +395,37 @@ def _normalize_desc(text):
     return ' '.join((text or '').split()).lower()
 
 
-def find_duplicate_issue(equipment_id, category, description, reported_at):
+def _canonical_report_day(reported_at):
+    """The report DATE used for dedup, or None when the timestamp is volatile.
+
+    Real spreadsheet dates are stored at midnight via _as_datetime(); a
+    non-midnight time means "Fecha Reporte" was blank at import and a utcnow()
+    fallback was used, so it must NOT anchor the dedup key (otherwise every
+    re-import mints a new duplicate).
+    """
+    if not reported_at:
+        return None
+    if reported_at.hour or reported_at.minute or reported_at.second or reported_at.microsecond:
+        return None
+    return reported_at.date()
+
+
+def find_duplicate_issue(equipment_id, category, description, report_day):
     """Return an existing Issue matching the import natural key, else None.
 
-    Identity = (equipment_id, category, normalized description, reported date).
-    Compared in Python over the small per-truck+category candidate set so the
-    normalization (whitespace/case, date-vs-datetime) behaves identically on
-    SQLite and Postgres.
+    Identity = (equipment_id, category, normalized description, canonical report
+    day). ``report_day`` is the row's parsed date or None; a dateless row
+    (None) matches a prior dateless issue regardless of which day each was
+    imported (see _canonical_report_day). Compared in Python over the small
+    per-truck+category candidate set so the normalization behaves identically
+    on SQLite and Postgres.
     """
     norm = _normalize_desc(description)
-    day = reported_at.date() if reported_at else None
     candidates = Issue.query.filter_by(equipment_id=equipment_id, category=category).all()
     for existing in candidates:
         if _normalize_desc(existing.description) != norm:
             continue
-        existing_day = existing.reported_at.date() if existing.reported_at else None
-        if existing_day == day:
+        if _canonical_report_day(existing.reported_at) == report_day:
             return existing
     return None
 
@@ -699,17 +714,20 @@ def import_issues():
                 errors.append(f'Fila {idx}: estado "{status_raw}" no válido.')
                 continue
 
-            reported_at = _as_datetime(_coerce_date(reported_raw)) or datetime.utcnow()
+            report_date = _coerce_date(reported_raw)                      # date or None
+            reported_at = _as_datetime(report_date) or datetime.utcnow()  # stored value
             resolved_at = _as_datetime(_coerce_date(resolved_raw))
 
             # Skip duplicates so re-importing the same file is idempotent. Match
             # against rows already created in this batch (seen) and rows already
             # in the DB from a previous import (find_duplicate_issue). On a hit we
-            # update the existing issue rather than create a new one.
+            # update the existing issue rather than create a new one. Key on the
+            # PARSED date (None for dateless rows) — never the volatile utcnow
+            # fallback — so dateless rows collapse instead of duplicating.
             dup_key = (truck.id, category, _normalize_desc(description),
-                       reported_at.date())
+                       report_date)
             existing = seen.get(dup_key) or find_duplicate_issue(
-                truck.id, category, description, reported_at)
+                truck.id, category, description, report_date)
             if existing:
                 existing.severity = severity
                 if status != existing.current_status:
