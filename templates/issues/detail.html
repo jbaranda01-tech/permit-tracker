@@ -2,13 +2,9 @@
 {% block title %}Reporte #{{ issue.id }}{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="detail-header">
     <a href="{{ url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Volver a Reportes</a>
     <h1>Reporte #{{ issue.id }}</h1>
-    <div class="header-meta">
-        <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
-        <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
-    </div>
 </div>
 
 <div class="issue-hero issue-hero--{{ issue.severity }}">
@@ -91,7 +87,7 @@
 </div>
 
 {% if current_user.is_admin or current_user.issue_roles|selectattr('role', 'equalto', 'shop')|list %}
-<div class="profile-card" style="margin-top: var(--space-lg);">
+<div class="profile-card card-stack">
     <div class="card-header">
         <i class="fas fa-exchange-alt"></i> Cambiar Estado
     </div>
@@ -124,7 +120,7 @@
 {% endif %}
 
 {% if history %}
-<div class="profile-card" style="margin-top: var(--space-lg);">
+<div class="profile-card card-stack">
     <div class="card-header">
         <i class="fas fa-history"></i> Historial de Estado
     </div>
