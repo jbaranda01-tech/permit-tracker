@@ -1,6 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Reportes de Problemas{% endblock %}
 
+{% macro issue_row(issue, show_truck=false) %}
+<a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-row issue-row--{{ issue.severity }}">
+    <div class="issue-row-top">
+        <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+        <span class="category-tag">{{ issue.category_label }}</span>
+        {% if show_truck %}
+        <span class="issue-truck-tag"><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
+        {% endif %}
+        <span class="issue-id">#{{ issue.id }}</span>
+    </div>
+    <p class="issue-row-desc">{{ issue.description }}</p>
+    <div class="issue-row-meta">
+        <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+        {% if issue.reporter %}<span><i class="fas fa-user"></i> {{ issue.reporter.name }}</span>{% endif %}
+        {% if issue.reported_at %}<span><i class="fas fa-clock"></i> {{ issue.reported_at|time_ago }}</span>{% endif %}
+    </div>
+</a>
+{% endmacro %}
+
 {% block content %}
 <div class="page-header">
     <h1><i class="fas fa-wrench"></i> Reportes de Problemas</h1>
@@ -92,18 +111,7 @@
                 <div class="truck-issues" id="issues-{{ truck.equipment.id }}" {% if not truck.auto_expand %}style="display:none"{% endif %}>
                     {% if truck.issues %}
                     {% for issue in truck.issues %}
-                    <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card-compact">
-                        <div class="issue-card-compact-left">
-                            <span class="issue-id">#{{ issue.id }}</span>
-                            <span class="category-tag">{{ issue.category_label }}</span>
-                            <span class="issue-description-preview">{{ issue.description[:80] }}{% if issue.description|length > 80 %}...{% endif %}</span>
-                        </div>
-                        <div class="issue-card-compact-right">
-                            <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
-                            <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
-                            <span class="issue-date-compact">{{ issue.reported_at.strftime('%d/%m') if issue.reported_at }}</span>
-                        </div>
-                    </a>
+                    {{ issue_row(issue) }}
                     {% endfor %}
                     {% else %}
                     <div class="truck-no-issues">Sin reportes</div>
@@ -157,18 +165,7 @@
                 <div class="truck-issues" id="issues-{{ truck.equipment.id }}" {% if not truck.auto_expand %}style="display:none"{% endif %}>
                     {% if truck.issues %}
                     {% for issue in truck.issues %}
-                    <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card-compact">
-                        <div class="issue-card-compact-left">
-                            <span class="issue-id">#{{ issue.id }}</span>
-                            <span class="category-tag">{{ issue.category_label }}</span>
-                            <span class="issue-description-preview">{{ issue.description[:80] }}{% if issue.description|length > 80 %}...{% endif %}</span>
-                        </div>
-                        <div class="issue-card-compact-right">
-                            <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
-                            <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
-                            <span class="issue-date-compact">{{ issue.reported_at.strftime('%d/%m') if issue.reported_at }}</span>
-                        </div>
-                    </a>
+                    {{ issue_row(issue) }}
                     {% endfor %}
                     {% else %}
                     <div class="truck-no-issues">Sin reportes</div>
@@ -193,19 +190,7 @@
         </div>
         <div class="card-body" style="padding: 0;">
             {% for issue in recent_issues %}
-            <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card-compact">
-                <div class="issue-card-compact-left">
-                    <span class="issue-id">#{{ issue.id }}</span>
-                    <span class="issue-truck-tag"><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
-                    <span class="category-tag">{{ issue.category_label }}</span>
-                    <span class="issue-description-preview">{{ issue.description[:60] }}{% if issue.description|length > 60 %}...{% endif %}</span>
-                </div>
-                <div class="issue-card-compact-right">
-                    <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
-                    <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
-                    <span class="issue-date-compact">{{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at }}</span>
-                </div>
-            </a>
+            {{ issue_row(issue, show_truck=true) }}
             {% endfor %}
         </div>
     </div>
@@ -221,20 +206,7 @@
         </div>
         <div class="card-body" id="resolved-issues-body" style="padding: 0; display: none;">
             {% for issue in resolved_issues %}
-            <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-card-compact">
-                <div class="issue-card-compact-left">
-                    <span class="issue-id">#{{ issue.id }}</span>
-                    <span class="issue-truck-tag"><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
-                    <span class="category-tag">{{ issue.category_label }}</span>
-                    <span class="issue-description-preview">{{ issue.description[:60] }}{% if issue.description|length > 60 %}...{% endif %}</span>
-                </div>
-                <div class="issue-card-compact-right">
-                    <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
-                    <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
-                    {% set resolved_date = issue.resolved_at or issue.reported_at %}
-                    <span class="issue-date-compact">{{ resolved_date.strftime('%d/%m/%Y %H:%M') if resolved_date }}</span>
-                </div>
-            </a>
+            {{ issue_row(issue, show_truck=true) }}
             {% endfor %}
             {% if resolved_count > resolved_issues|length %}
             <div class="resolved-more-note">

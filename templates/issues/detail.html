@@ -11,6 +11,20 @@
     </div>
 </div>
 
+<div class="issue-hero issue-hero--{{ issue.severity }}">
+    <div class="issue-hero-head">
+        <span class="issue-hero-category"><i class="fas fa-exclamation-triangle"></i> {{ issue.category_label }}</span>
+        <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+        <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+    </div>
+    <p class="issue-hero-desc">{{ issue.description }}</p>
+    <div class="issue-hero-meta">
+        <span><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
+        <span><i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}</span>
+        {% if issue.reported_at %}<span><i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%d/%m/%Y %H:%M') }}</span>{% endif %}
+    </div>
+</div>
+
 <div class="profile-grid">
     <div class="profile-card">
         <div class="card-header">
@@ -38,22 +52,6 @@
             </div>
             {% endif %}
             {% endif %}
-        </div>
-    </div>
-
-    <div class="profile-card">
-        <div class="card-header">
-            <i class="fas fa-exclamation-triangle"></i> Problema
-        </div>
-        <div class="card-body">
-            <div class="permit-field">
-                <label>Categoría</label>
-                <span>{{ issue.category_label }}</span>
-            </div>
-            <div class="permit-field">
-                <label>Descripción</label>
-                <span>{{ issue.description }}</span>
-            </div>
         </div>
     </div>
 

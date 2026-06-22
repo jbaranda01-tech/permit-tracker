@@ -239,6 +239,31 @@ def format_phone(value):
         return f'{digits[:3]}-{digits[3:]}'
     return value
 
+@app.template_filter('time_ago')
+def time_ago(value):
+    """Spanish relative time for issue timestamps (naive UTC). Falls back to
+    an absolute date beyond ~7 days."""
+    if not value:
+        return ''
+    delta = datetime.utcnow() - value
+    seconds = delta.total_seconds()
+    if seconds < 0:
+        return value.strftime('%d/%m/%Y')
+    minutes = int(seconds // 60)
+    hours = int(seconds // 3600)
+    days = delta.days
+    if seconds < 60:
+        return 'hace un momento'
+    if minutes < 60:
+        return f'hace {minutes}m'
+    if hours < 24:
+        return f'hace {hours}h'
+    if days == 1:
+        return 'ayer'
+    if days < 7:
+        return f'hace {days}d'
+    return value.strftime('%d/%m/%Y')
+
 @app.context_processor
 def inject_globals():
     today = date.today()
