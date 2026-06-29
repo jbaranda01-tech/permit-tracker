@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from issues import issues_bp
-from issues.decorators import shop_required, admin_required
+from issues.decorators import shop_required, admin_required, shop_manager_required
 from models import (
     db, Employee, Equipment, EquipmentPermit, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
@@ -431,7 +431,7 @@ def find_duplicate_issue(equipment_id, category, description, report_day):
 
 
 @issues_bp.route('/new', methods=['GET'])
-@admin_required
+@shop_manager_required
 def new():
     trucks = reportable_equipment_query().all()
     return render_template('issues/manual_new.html',
@@ -442,7 +442,7 @@ def new():
 
 
 @issues_bp.route('/new', methods=['POST'])
-@admin_required
+@shop_manager_required
 def create():
     equipment_id = request.form.get('equipment_id', type=int)
     category = request.form.get('category', '')
@@ -488,9 +488,16 @@ def create():
     db.session.add(issue)
     db.session.flush()
 
-    initial_note = f'{BACKLOG_NOTE} — {notes}' if notes else BACKLOG_NOTE
-    synthesize_status_history(issue, status, reported_at, resolved_at,
-                              initial_note=initial_note)
+    if current_user.is_admin:
+        # Admins backfill the backlog: honor status, backdated dates, and note.
+        initial_note = f'{BACKLOG_NOTE} — {notes}' if notes else BACKLOG_NOTE
+        synthesize_status_history(issue, status, reported_at, resolved_at,
+                                  initial_note=initial_note)
+    else:
+        # Shop managers add a live report: always a fresh 'reportado' dated now,
+        # attributed to the manager's user id.
+        update_issue_status(issue, 'reportado', changed_by_user_id=current_user.id,
+                            notes='Reporte agregado manualmente por taller')
     db.session.commit()
 
     flash(f'Reporte #{issue.id} agregado.', 'success')

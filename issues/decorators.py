@@ -27,6 +27,17 @@ def shop_required(f):
     return decorated
 
 
+def shop_manager_required(f):
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        if not current_user.is_shop_manager:
+            flash('No tiene permisos para agregar reportes.', 'danger')
+            return redirect(url_for('issues.queue'))
+        return f(*args, **kwargs)
+    return decorated
+
+
 def admin_required(f):
     # Local copy (instead of importing from app.py) to avoid a circular import.
     @wraps(f)

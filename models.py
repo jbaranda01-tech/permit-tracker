@@ -42,6 +42,11 @@ class User(UserMixin, db.Model):
             return True
         return any(ir.role == 'shop' for ir in self.issue_roles)
 
+    @property
+    def is_shop_manager(self):
+        # Base-role manager (or admin) who also has the shop/taller role.
+        return self.is_manager and self.has_shop_role
+
 
 # ── EMPLOYEES ──────────────────────────────────────────────────────────
 
