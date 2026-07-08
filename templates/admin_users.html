@@ -87,6 +87,10 @@
                             </form>
                             {% endif %}
                         </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="6" class="inline-edit-cell">
                         <div id="edit-user-{{ user.id }}" class="inline-edit-form" style="display:none">
                             <form method="POST" action="{{ url_for('admin_user_edit', id=user.id) }}">
                                 <div class="form-row">

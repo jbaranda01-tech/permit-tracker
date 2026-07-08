@@ -158,6 +158,7 @@ body {
     min-height: 100vh;
     transition: background var(--transition), color var(--transition);
     -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: contain;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -1189,10 +1190,15 @@ img { max-width: 100%; }
 
 
 /* ── Data Table ────────────────────────────────────────────────────── */
-.users-table-container { margin-top: var(--space-lg); }
+.users-table-container {
+    margin-top: var(--space-lg);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
 
 .data-table {
     width: 100%;
+    min-width: 640px;
     border-collapse: collapse;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
@@ -1232,11 +1238,13 @@ img { max-width: 100%; }
 .role-manager { background: var(--color-expiring-bg); color: var(--color-expiring-text); }
 .role-viewer { background: var(--color-missing-bg); color: var(--color-missing-text); }
 
+/* Full-width row hosting the expanded edit form — collapses to nothing when hidden */
+.data-table td.inline-edit-cell { padding: 0; border-bottom: none; }
+
 .inline-edit-form {
-    margin-top: var(--space-sm);
     padding: var(--space-md);
     background: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .inline-edit-form .form-group { min-width: 150px; }
@@ -1327,12 +1335,14 @@ img { max-width: 100%; }
     top: 0;
     left: 0;
     right: 0;
-    height: 56px;
+    height: calc(56px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
     background: var(--bg-sidebar);
     border-bottom: 1px solid var(--border-color);
     z-index: 90;
     align-items: center;
-    padding: 0 var(--space-md);
+    padding-left: max(var(--space-md), env(safe-area-inset-left));
+    padding-right: max(var(--space-md), env(safe-area-inset-right));
     gap: var(--space-md);
 }
 .mobile-menu-btn {
@@ -1380,12 +1390,21 @@ img { max-width: 100%; }
         transform: translateX(-100%);
         transition: transform 300ms ease;
         z-index: 100;
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
     }
     .sidebar.drawer-open { transform: translateX(0); }
     .sidebar span, .nav-section-title, .user-info, .logo span { display: revert; }
     .sidebar-header { justify-content: space-between; }
 
-    .main-content { margin-left: 0; padding: var(--space-md); padding-top: calc(56px + var(--space-md)); }
+    .main-content {
+        margin-left: 0;
+        padding: var(--space-md);
+        padding-top: calc(56px + env(safe-area-inset-top) + var(--space-md));
+        padding-left: max(var(--space-md), env(safe-area-inset-left));
+        padding-right: max(var(--space-md), env(safe-area-inset-right));
+        padding-bottom: max(var(--space-md), env(safe-area-inset-bottom));
+    }
     .dashboard-header { flex-direction: column; align-items: stretch; }
     .dashboard-actions { flex-direction: column; }
     .search-input { min-width: 100%; }
@@ -1408,14 +1427,15 @@ img { max-width: 100%; }
     .issue-card-compact { min-height: 48px; }
     .back-link, .file-link { min-height: 44px; display: inline-flex; align-items: center; }
 
-    /* Prevent iOS auto-zoom on input focus (requires >= 16px) */
+    /* Prevent iOS auto-zoom on input focus (requires >= 16px literal — see the
+       touch-device rule below; rem would compute below 16px against the 15px/14px root) */
     .form-group input,
     .form-group select,
     .form-group textarea,
     .filter-form select,
     .input-icon input {
         min-height: 44px;
-        font-size: 1rem;
+        font-size: 16px;
     }
 
     /* Typography floor — raise smallest text for mobile readability */
@@ -1440,6 +1460,17 @@ img { max-width: 100%; }
     .status-tab:active { opacity: 0.7; }
     .alert-item:active { opacity: 0.85; }
     .mobile-menu-btn:active { background: var(--bg-hover); }
+
+    /* Bulletproof iOS zoom prevention: a literal 16px on every text control,
+       independent of the responsive rem root (15px, 14px @480px). */
+    input, select, textarea { font-size: 16px; }
+
+    /* Keep small buttons a comfortable tap target */
+    .btn-sm { min-height: 40px; }
+
+    /* Admin "Ver ficha / editar camión" link sits inside a tappable card header —
+       give it real vertical hit area so it's separable from the toggle. */
+    .truck-edit-link { padding: 6px 0; }
 }
 
 
@@ -1985,7 +2016,13 @@ img { max-width: 100%; }
 /* ── Small Phone (480px) ──────────────────────────────────────────── */
 @media (max-width: 480px) {
     html { font-size: 14px; }
-    .main-content { padding: var(--space-sm); padding-top: calc(56px + var(--space-sm)); }
+    .main-content {
+        padding: var(--space-sm);
+        padding-top: calc(56px + env(safe-area-inset-top) + var(--space-sm));
+        padding-left: max(var(--space-sm), env(safe-area-inset-left));
+        padding-right: max(var(--space-sm), env(safe-area-inset-right));
+        padding-bottom: max(var(--space-sm), env(safe-area-inset-bottom));
+    }
 
     /* Full-screen modals */
     .modal {
@@ -1994,8 +2031,10 @@ img { max-width: 100%; }
         height: 100vh;
         max-height: 100vh;
         border-radius: 0;
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
     }
-    .modal-body { max-height: calc(100vh - 60px); }
+    .modal-body { max-height: calc(100vh - 60px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 
     /* Stack panel headers */
     .panel-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
@@ -2022,6 +2061,7 @@ img { max-width: 100%; }
         bottom: 0;
         background: var(--bg-primary);
         padding: var(--space-md);
+        padding-bottom: max(var(--space-md), env(safe-area-inset-bottom));
         margin: 0 calc(-1 * var(--space-sm));
         border-top: 1px solid var(--border-color);
         z-index: 10;
