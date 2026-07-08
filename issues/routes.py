@@ -177,6 +177,10 @@ def report_submit(token):
                                categories=ISSUE_CATEGORIES,
                                severities=ISSUE_SEVERITIES), 422
 
+    # reported_at is intentionally NOT sourced from the request: it defaults to
+    # the model's datetime.utcnow (see models.py). The driver form has no date
+    # field and must never gain one — a future date can only enter via the
+    # admin/import paths, which validate against _is_future_date.
     issue = Issue(
         equipment_id=equipment_id,
         reported_by_employee_id=employee.id,
@@ -390,6 +394,19 @@ def _as_datetime(d):
     return datetime(d.year, d.month, d.day)
 
 
+def _is_future_date(d):
+    """True if date/datetime d is after today (server date). None ⇒ False.
+
+    Guards against absurd report/resolution dates (e.g. a spreadsheet's 2-digit
+    year 35 bumped to 2035 by _coerce_date's +100 rule). Applied at every
+    admin/import path that sets a date; the driver flow never sets one.
+    """
+    if d is None:
+        return False
+    day = d.date() if isinstance(d, datetime) else d
+    return day > datetime.utcnow().date()
+
+
 def _normalize_desc(text):
     """Lower-case and collapse whitespace for duplicate comparison."""
     return ' '.join((text or '').split()).lower()
@@ -466,9 +483,15 @@ def create():
     if not description:
         errors.append('Debe incluir una descripción del problema.')
 
-    reported_at = _as_datetime(_coerce_date(request.form.get('fecha_reporte', ''))) \
-        or datetime.utcnow()
-    resolved_at = _as_datetime(_coerce_date(request.form.get('fecha_resuelto', '')))
+    report_date = _coerce_date(request.form.get('fecha_reporte', ''))
+    resolved_date = _coerce_date(request.form.get('fecha_resuelto', ''))
+    reported_at = _as_datetime(report_date) or datetime.utcnow()
+    resolved_at = _as_datetime(resolved_date)
+
+    if _is_future_date(report_date):
+        errors.append('La fecha de reporte no puede estar en el futuro.')
+    if _is_future_date(resolved_date):
+        errors.append('La fecha de resolución no puede estar en el futuro.')
 
     if errors:
         for error in errors:
@@ -723,7 +746,19 @@ def import_issues():
 
             report_date = _coerce_date(reported_raw)                      # date or None
             reported_at = _as_datetime(report_date) or datetime.utcnow()  # stored value
-            resolved_at = _as_datetime(_coerce_date(resolved_raw))
+            resolved_date = _coerce_date(resolved_raw)
+            resolved_at = _as_datetime(resolved_date)
+
+            # Reject future dates (e.g. a 2-digit year 35 bumped to 2035) so the
+            # bad row is counted as errored and skipped instead of persisted.
+            if _is_future_date(report_date):
+                errors.append(
+                    f'Fila {idx}: la fecha de reporte ({report_date}) está en el futuro.')
+                continue
+            if _is_future_date(resolved_date):
+                errors.append(
+                    f'Fila {idx}: la fecha de resolución ({resolved_date}) está en el futuro.')
+                continue
 
             # Skip duplicates so re-importing the same file is idempotent. Match
             # against rows already created in this batch (seen) and rows already
