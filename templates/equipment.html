@@ -165,9 +165,11 @@
                     <span class="permit-badge permit-badge-{{ shared_insurance.status }}">{{ shared_insurance.status_label }}</span>
                 </div>
                 <div class="permit-card-body">
-                    <div class="permit-field">
-                        <label>Expiración</label>
-                        <span>{{ shared_insurance.expiration_date.strftime('%d/%m/%Y') if shared_insurance.expiration_date else 'Sin fecha' }}</span>
+                    <div class="permit-field permit-field--highlight">
+                        <span class="data-highlight data-highlight--{{ shared_insurance.status }}">
+                            <span class="dh-label">Expira</span>
+                            {{ shared_insurance.expiration_date.strftime('%d/%m/%Y') if shared_insurance.expiration_date else 'Sin fecha' }}
+                        </span>
                     </div>
                     {% if shared_insurance.permit_number %}
                     <div class="permit-field">
@@ -194,9 +196,11 @@
                     <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
                 </div>
                 <div class="permit-card-body">
-                    <div class="permit-field">
-                        <label>Expiración</label>
-                        <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                    <div class="permit-field permit-field--highlight">
+                        <span class="data-highlight data-highlight--{{ permit.status }}">
+                            <span class="dh-label">Expira</span>
+                            {{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}
+                        </span>
                     </div>
                     {% if permit.permit_number %}
                     <div class="permit-field">

@@ -113,14 +113,14 @@
                 <label>Expiración</label>
                 {% if employee.license_expiration %}
                     {% if employee.license_expiration < today %}
-                        <span class="permit-status-expired">{{ employee.license_expiration.strftime('%d/%m/%Y') }} — VENCIDA</span>
+                        <span class="data-highlight data-highlight--expired"><span class="dh-label">Vencida</span>{{ employee.license_expiration.strftime('%d/%m/%Y') }}</span>
                     {% elif employee.license_expiration <= alert_date %}
-                        <span class="permit-status-expiring">{{ employee.license_expiration.strftime('%d/%m/%Y') }} — POR VENCER</span>
+                        <span class="data-highlight data-highlight--expiring_soon"><span class="dh-label">Por vencer</span>{{ employee.license_expiration.strftime('%d/%m/%Y') }}</span>
                     {% else %}
-                        <span class="permit-status-valid">{{ employee.license_expiration.strftime('%d/%m/%Y') }}</span>
+                        <span class="data-highlight data-highlight--valid"><span class="dh-label">Vigente</span>{{ employee.license_expiration.strftime('%d/%m/%Y') }}</span>
                     {% endif %}
                 {% else %}
-                    <span class="permit-status-missing">—</span>
+                    <span class="data-highlight data-highlight--missing">—</span>
                 {% endif %}
             </div>
             {% if employee.license_file %}
@@ -218,9 +218,11 @@
                     <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
                 </div>
                 <div class="permit-card-body">
-                    <div class="permit-field">
-                        <label>Expiración</label>
-                        <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                    <div class="permit-field permit-field--highlight">
+                        <span class="data-highlight data-highlight--{{ permit.status }}">
+                            <span class="dh-label">Expira</span>
+                            {{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}
+                        </span>
                     </div>
                     {% if permit.permit_number %}
                     <div class="permit-field">

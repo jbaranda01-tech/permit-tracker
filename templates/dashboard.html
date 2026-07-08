@@ -28,6 +28,30 @@
     </div>
     {% endif %}
 
+    {% if view != 'company' %}
+    {% set stats = namespace(expired=0, expiring=0) %}
+    {% set all_items = lb_items + pli_items + personal_items %}
+    {% for item in all_items %}
+        {% set s = item.permit_status_summary %}
+        {% set stats.expired = stats.expired + s.expired %}
+        {% set stats.expiring = stats.expiring + s.expiring_soon %}
+    {% endfor %}
+    <div class="stat-tiles">
+        <div class="stat-tile stat-tile--expired">
+            <div class="stat-tile__num">{{ stats.expired }}</div>
+            <div class="stat-tile__label">Vencidos</div>
+        </div>
+        <div class="stat-tile stat-tile--expiring">
+            <div class="stat-tile__num">{{ stats.expiring }}</div>
+            <div class="stat-tile__label">Por Vencer</div>
+        </div>
+        <div class="stat-tile stat-tile--valid">
+            <div class="stat-tile__num">{{ all_items|length }}</div>
+            <div class="stat-tile__label">{{ 'Empleados' if view == 'employees' else 'Equipos' }}</div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if view == 'company' %}
     <!-- Company Permits -->
     <div class="company-panels">
@@ -49,9 +73,11 @@
                             {% if permit.applicability == 'N/A' %}
                                 <div class="permit-na">No Aplica</div>
                             {% else %}
-                                <div class="permit-field">
-                                    <label>Expiraci&oacute;n</label>
-                                    <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                                <div class="permit-field permit-field--highlight">
+                                    <span class="data-highlight data-highlight--{{ permit.status }}">
+                                        <span class="dh-label">Expira</span>
+                                        {{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}
+                                    </span>
                                 </div>
                                 {% if permit.permit_number %}
                                 <div class="permit-field">
@@ -165,9 +191,11 @@
                             {% if permit.applicability == 'N/A' %}
                                 <div class="permit-na">No Aplica</div>
                             {% else %}
-                                <div class="permit-field">
-                                    <label>Expiraci&oacute;n</label>
-                                    <span>{{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}</span>
+                                <div class="permit-field permit-field--highlight">
+                                    <span class="data-highlight data-highlight--{{ permit.status }}">
+                                        <span class="dh-label">Expira</span>
+                                        {{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}
+                                    </span>
                                 </div>
                                 {% if permit.permit_number %}
                                 <div class="permit-field">
@@ -284,16 +312,16 @@
                         <div class="entity-status">
                             {% set summary = emp.permit_status_summary %}
                             {% if summary.expired > 0 %}
-                                <span class="status-dot status-expired" title="{{ summary.expired }} vencido(s)"></span>
+                                <span class="status-pill status-pill--expired" title="{{ summary.expired }} vencido(s)">{{ summary.expired }}</span>
                             {% endif %}
                             {% if summary.expiring_soon > 0 %}
-                                <span class="status-dot status-expiring" title="{{ summary.expiring_soon }} por vencer"></span>
+                                <span class="status-pill status-pill--expiring" title="{{ summary.expiring_soon }} por vencer">{{ summary.expiring_soon }}</span>
                             {% endif %}
                             {% if summary.missing > 0 %}
-                                <span class="status-dot status-missing" title="{{ summary.missing }} incompleto(s)"></span>
+                                <span class="status-pill status-pill--missing" title="{{ summary.missing }} incompleto(s)">{{ summary.missing }}</span>
                             {% endif %}
                             {% if summary.expired == 0 and summary.expiring_soon == 0 and summary.missing == 0 %}
-                                <span class="status-dot status-valid" title="Completo"></span>
+                                <span class="status-pill status-pill--valid" title="Completo"><i class="fas fa-check"></i></span>
                             {% endif %}
                         </div>
                     </a>
@@ -314,16 +342,16 @@
                         <div class="entity-status">
                             {% set summary = eq.permit_status_summary %}
                             {% if summary.expired > 0 %}
-                                <span class="status-dot status-expired" title="{{ summary.expired }} vencido(s)"></span>
+                                <span class="status-pill status-pill--expired" title="{{ summary.expired }} vencido(s)">{{ summary.expired }}</span>
                             {% endif %}
                             {% if summary.expiring_soon > 0 %}
-                                <span class="status-dot status-expiring" title="{{ summary.expiring_soon }} por vencer"></span>
+                                <span class="status-pill status-pill--expiring" title="{{ summary.expiring_soon }} por vencer">{{ summary.expiring_soon }}</span>
                             {% endif %}
                             {% if summary.missing > 0 %}
-                                <span class="status-dot status-missing" title="{{ summary.missing }} incompleto(s)"></span>
+                                <span class="status-pill status-pill--missing" title="{{ summary.missing }} incompleto(s)">{{ summary.missing }}</span>
                             {% endif %}
                             {% if summary.expired == 0 and summary.expiring_soon == 0 and summary.missing == 0 and (summary.valid > 0) %}
-                                <span class="status-dot status-valid" title="Completo"></span>
+                                <span class="status-pill status-pill--valid" title="Completo"><i class="fas fa-check"></i></span>
                             {% endif %}
                         </div>
                     </a>
@@ -355,16 +383,16 @@
                         <div class="entity-status">
                             {% set summary = emp.permit_status_summary %}
                             {% if summary.expired > 0 %}
-                                <span class="status-dot status-expired" title="{{ summary.expired }} vencido(s)"></span>
+                                <span class="status-pill status-pill--expired" title="{{ summary.expired }} vencido(s)">{{ summary.expired }}</span>
                             {% endif %}
                             {% if summary.expiring_soon > 0 %}
-                                <span class="status-dot status-expiring" title="{{ summary.expiring_soon }} por vencer"></span>
+                                <span class="status-pill status-pill--expiring" title="{{ summary.expiring_soon }} por vencer">{{ summary.expiring_soon }}</span>
                             {% endif %}
                             {% if summary.missing > 0 %}
-                                <span class="status-dot status-missing" title="{{ summary.missing }} incompleto(s)"></span>
+                                <span class="status-pill status-pill--missing" title="{{ summary.missing }} incompleto(s)">{{ summary.missing }}</span>
                             {% endif %}
                             {% if summary.expired == 0 and summary.expiring_soon == 0 and summary.missing == 0 %}
-                                <span class="status-dot status-valid" title="Completo"></span>
+                                <span class="status-pill status-pill--valid" title="Completo"><i class="fas fa-check"></i></span>
                             {% endif %}
                         </div>
                     </a>
@@ -385,16 +413,16 @@
                         <div class="entity-status">
                             {% set summary = eq.permit_status_summary %}
                             {% if summary.expired > 0 %}
-                                <span class="status-dot status-expired" title="{{ summary.expired }} vencido(s)"></span>
+                                <span class="status-pill status-pill--expired" title="{{ summary.expired }} vencido(s)">{{ summary.expired }}</span>
                             {% endif %}
                             {% if summary.expiring_soon > 0 %}
-                                <span class="status-dot status-expiring" title="{{ summary.expiring_soon }} por vencer"></span>
+                                <span class="status-pill status-pill--expiring" title="{{ summary.expiring_soon }} por vencer">{{ summary.expiring_soon }}</span>
                             {% endif %}
                             {% if summary.missing > 0 %}
-                                <span class="status-dot status-missing" title="{{ summary.missing }} incompleto(s)"></span>
+                                <span class="status-pill status-pill--missing" title="{{ summary.missing }} incompleto(s)">{{ summary.missing }}</span>
                             {% endif %}
                             {% if summary.expired == 0 and summary.expiring_soon == 0 and summary.missing == 0 and (summary.valid > 0) %}
-                                <span class="status-dot status-valid" title="Completo"></span>
+                                <span class="status-pill status-pill--valid" title="Completo"><i class="fas fa-check"></i></span>
                             {% endif %}
                         </div>
                     </a>
@@ -426,16 +454,16 @@
                     <div class="entity-status">
                         {% set summary = eq.permit_status_summary %}
                         {% if summary.expired > 0 %}
-                            <span class="status-dot status-expired" title="{{ summary.expired }} vencido(s)"></span>
+                            <span class="status-pill status-pill--expired" title="{{ summary.expired }} vencido(s)">{{ summary.expired }}</span>
                         {% endif %}
                         {% if summary.expiring_soon > 0 %}
-                            <span class="status-dot status-expiring" title="{{ summary.expiring_soon }} por vencer"></span>
+                            <span class="status-pill status-pill--expiring" title="{{ summary.expiring_soon }} por vencer">{{ summary.expiring_soon }}</span>
                         {% endif %}
                         {% if summary.missing > 0 %}
-                            <span class="status-dot status-missing" title="{{ summary.missing }} incompleto(s)"></span>
+                            <span class="status-pill status-pill--missing" title="{{ summary.missing }} incompleto(s)">{{ summary.missing }}</span>
                         {% endif %}
                         {% if summary.expired == 0 and summary.expiring_soon == 0 and summary.missing == 0 and (summary.valid > 0) %}
-                            <span class="status-dot status-valid" title="Completo"></span>
+                            <span class="status-pill status-pill--valid" title="Completo"><i class="fas fa-check"></i></span>
                         {% endif %}
                     </div>
                 </a>

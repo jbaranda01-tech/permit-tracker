@@ -47,6 +47,25 @@
     --color-personal: #64748b;
     --color-personal-light: #f1f5f9;
 
+    /* Accent (brand primary) + border alias — referenced by the Issues module */
+    --accent: var(--color-lb);
+    --accent-bg: var(--color-lb-light);
+    --border: var(--border-color);
+
+    /* Severity ramp (issue module) — bg/text pairs mirror the status tokens */
+    --color-sev-baja: #3b82f6;
+    --color-sev-baja-bg: #dbeafe;
+    --color-sev-baja-text: #1d4ed8;
+    --color-sev-media: #f59e0b;
+    --color-sev-media-bg: #fef3c7;
+    --color-sev-media-text: #92400e;
+    --color-sev-alta: #f97316;
+    --color-sev-alta-bg: #fed7aa;
+    --color-sev-alta-text: #c2410c;
+    --color-sev-critica: #ef4444;
+    --color-sev-critica-bg: #fecaca;
+    --color-sev-critica-text: #dc2626;
+
     /* Transition */
     --transition: 200ms ease;
 }
@@ -113,6 +132,16 @@
     --color-lb-light: #450a0a;
     --color-pli-light: #431407;
     --color-personal-light: #1e293b;
+
+    /* Severity — muted-dark bg with legible text, mirroring status tokens */
+    --color-sev-baja-bg: #172554;
+    --color-sev-baja-text: #93c5fd;
+    --color-sev-media-bg: #451a03;
+    --color-sev-media-text: #fbbf24;
+    --color-sev-alta-bg: #431407;
+    --color-sev-alta-text: #fdba74;
+    --color-sev-critica-bg: #450a0a;
+    --color-sev-critica-text: #f87171;
 }
 
 
@@ -556,6 +585,47 @@ img { max-width: 100%; }
 }
 
 
+/* ── KPI Stat Tiles ────────────────────────────────────────────────── */
+.stat-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.stat-tile {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.stat-tile__num {
+    font-family: var(--font-mono);
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text-primary);
+}
+
+.stat-tile__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-top: var(--space-xs);
+}
+
+.stat-tile--expired { border-left-color: var(--color-expired); }
+.stat-tile--expired .stat-tile__num { color: var(--color-expired); }
+.stat-tile--expiring { border-left-color: var(--color-expiring); }
+.stat-tile--expiring .stat-tile__num { color: var(--color-expiring); }
+.stat-tile--valid { border-left-color: var(--color-valid); }
+
+
 /* ── Company Panels ────────────────────────────────────────────────── */
 .company-panels {
     display: grid;
@@ -648,6 +718,27 @@ img { max-width: 100%; }
 .status-missing { background: var(--color-missing); }
 .status-valid { background: var(--color-valid); }
 
+/* Outlined count pill — visible status count on list rows (touch-friendly) */
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 7px;
+    border: 1px solid;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+.status-pill--expired { border-color: var(--color-expired); color: var(--color-expired-text); background: var(--color-expired-bg); }
+.status-pill--expiring { border-color: var(--color-expiring); color: var(--color-expiring-text); background: var(--color-expiring-bg); }
+.status-pill--missing { border-color: var(--color-missing); color: var(--color-missing-text); background: var(--color-missing-bg); }
+.status-pill--valid {
+    width: 20px; height: 20px; padding: 0; justify-content: center;
+    border-color: var(--color-valid); color: var(--color-valid-text); background: var(--color-valid-bg);
+}
+
 .empty-state {
     text-align: center;
     padding: var(--space-2xl);
@@ -696,7 +787,7 @@ img { max-width: 100%; }
 }
 
 .detail-title-row h1 {
-    font-size: 1.6rem;
+    font-size: 1.9rem;
     font-weight: 700;
     margin-bottom: var(--space-xs);
     overflow-wrap: break-word;
@@ -886,6 +977,40 @@ img { max-width: 100%; }
 .permit-field > span { min-width: 0; overflow-wrap: break-word; word-break: break-word; text-align: right; }
 
 .permit-na { color: var(--text-tertiary); font-style: italic; text-align: center; padding: var(--space-sm); }
+
+/* ── Data Highlight ────────────────────────────────────────────────────
+   Outlined, status-colored box for a card's key metric (e.g. expiration). */
+.permit-field--highlight { justify-content: flex-end; margin-bottom: var(--space-sm); }
+
+.data-highlight {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.2;
+}
+.data-highlight .dh-label {
+    font-family: var(--font-body);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-tertiary);
+}
+.data-highlight--valid { border-color: var(--color-valid); background: var(--color-valid-bg); color: var(--color-valid-text); }
+.data-highlight--valid .dh-label { color: var(--color-valid-text); opacity: 0.75; }
+.data-highlight--expiring_soon { border-color: var(--color-expiring); background: var(--color-expiring-bg); color: var(--color-expiring-text); }
+.data-highlight--expiring_soon .dh-label { color: var(--color-expiring-text); opacity: 0.75; }
+.data-highlight--expired { border-color: var(--color-expired); background: var(--color-expired-bg); color: var(--color-expired-text); }
+.data-highlight--expired .dh-label { color: var(--color-expired-text); opacity: 0.75; }
+.data-highlight--missing,
+.data-highlight--na { border-color: var(--border-strong); background: var(--bg-tertiary); color: var(--text-secondary); }
 
 .permit-notes {
     margin-top: var(--space-sm);
@@ -1460,14 +1585,10 @@ img { max-width: 100%; }
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
-.severity-baja { background: #dbeafe; color: #1d4ed8; }
-.severity-media { background: #fef3c7; color: #92400e; }
-.severity-alta { background: #fed7aa; color: #c2410c; }
-.severity-critica { background: #fecaca; color: #dc2626; }
-[data-theme="dark"] .severity-baja { background: #1e3a5f; color: #93c5fd; }
-[data-theme="dark"] .severity-media { background: #422006; color: #fbbf24; }
-[data-theme="dark"] .severity-alta { background: #431407; color: #fb923c; }
-[data-theme="dark"] .severity-critica { background: #450a0a; color: #f87171; }
+.severity-baja { background: var(--color-sev-baja-bg); color: var(--color-sev-baja-text); }
+.severity-media { background: var(--color-sev-media-bg); color: var(--color-sev-media-text); }
+.severity-alta { background: var(--color-sev-alta-bg); color: var(--color-sev-alta-text); }
+.severity-critica { background: var(--color-sev-critica-bg); color: var(--color-sev-critica-text); }
 
 /* Status badges */
 .issue-status-badge {
@@ -1727,10 +1848,10 @@ img { max-width: 100%; }
 }
 .issue-row:last-child { border-bottom: none; }
 .issue-row:hover { background: var(--bg-hover); }
-.issue-row--baja { border-left-color: #3b82f6; }
-.issue-row--media { border-left-color: #f59e0b; }
-.issue-row--alta { border-left-color: #f97316; }
-.issue-row--critica { border-left-color: #ef4444; }
+.issue-row--baja { border-left-color: var(--color-sev-baja); }
+.issue-row--media { border-left-color: var(--color-sev-media); }
+.issue-row--alta { border-left-color: var(--color-sev-alta); }
+.issue-row--critica { border-left-color: var(--color-sev-critica); }
 .issue-row-top {
     display: flex;
     align-items: center;
@@ -1769,10 +1890,10 @@ img { max-width: 100%; }
     margin-bottom: var(--space-lg);
     box-shadow: var(--shadow-sm);
 }
-.issue-hero--baja { border-left-color: #3b82f6; }
-.issue-hero--media { border-left-color: #f59e0b; }
-.issue-hero--alta { border-left-color: #f97316; }
-.issue-hero--critica { border-left-color: #ef4444; }
+.issue-hero--baja { border-left-color: var(--color-sev-baja); }
+.issue-hero--media { border-left-color: var(--color-sev-media); }
+.issue-hero--alta { border-left-color: var(--color-sev-alta); }
+.issue-hero--critica { border-left-color: var(--color-sev-critica); }
 .issue-hero-head {
     display: flex;
     align-items: center;
