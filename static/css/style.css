@@ -1361,6 +1361,8 @@ img { max-width: 100%; }
 }
 .mobile-menu-btn:active { background: var(--bg-hover); }
 .mobile-topbar-title { font-weight: 700; font-size: 1rem; color: var(--text-primary); }
+.mobile-topbar-logos { display: flex; align-items: center; gap: var(--space-sm); }
+.mobile-topbar-logo { height: 26px; width: auto; object-fit: contain; }
 .theme-toggle-mobile { margin-left: auto; }
 
 .drawer-backdrop {

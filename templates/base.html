@@ -26,7 +26,8 @@
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo">
-                <span>Portal de Documentos</span>
+                <img src="{{ url_for('static', filename='img/logo-lb.png') }}" alt="LB Caribe" class="logo-img">
+                <img src="{{ url_for('static', filename='img/logo-pli.png') }}" alt="PLI" class="logo-img">
             </div>
             <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
                 <i class="fas fa-bars"></i>
@@ -133,7 +134,10 @@
         <button class="mobile-menu-btn" onclick="openDrawer()" aria-label="Abrir menú">
             <i class="fas fa-bars"></i>
         </button>
-        <span class="mobile-topbar-title">Portal de Documentos</span>
+        <div class="mobile-topbar-logos">
+            <img src="{{ url_for('static', filename='img/logo-lb.png') }}" alt="LB Caribe" class="mobile-topbar-logo">
+            <img src="{{ url_for('static', filename='img/logo-pli.png') }}" alt="PLI" class="mobile-topbar-logo">
+        </div>
         <div class="theme-toggle theme-toggle-mobile">
             <button class="theme-btn" data-theme-value="light" onclick="setTheme('light')" title="Modo Claro">
                 <i class="fas fa-sun"></i>
