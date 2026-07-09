@@ -1596,51 +1596,8 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     font-size: 0.85rem;
 }
 
-/* Consolidated queue toolbar (status tabs + severity segmented control + truck filter) */
+/* Queue toolbar (severity tiles + status tabs + truck filter) */
 .queue-toolbar { margin-bottom: var(--space-lg); }
-.queue-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--space-md);
-    flex-wrap: wrap;
-    margin-top: var(--space-sm);
-}
-.seg-control {
-    display: flex;
-    gap: var(--space-xs);
-    flex-wrap: wrap;
-}
-.seg-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs);
-    padding: var(--space-xs) var(--space-sm);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    background: var(--bg-secondary);
-    text-decoration: none;
-    transition: all 0.2s ease;
-}
-.seg-btn:hover { color: var(--text-primary); }
-.seg-btn--active { box-shadow: 0 0 0 2px var(--accent); color: var(--text-primary); }
-.seg-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-.seg-btn--baja .seg-dot { background: var(--color-sev-baja); }
-.seg-btn--media .seg-dot { background: var(--color-sev-media); }
-.seg-btn--alta .seg-dot { background: var(--color-sev-alta); }
-.seg-btn--critica .seg-dot { background: var(--color-sev-critica); }
-.seg-count {
-    font-family: var(--font-mono);
-    font-weight: 700;
-    color: var(--text-primary);
-}
 
 /* Issue cards */
 .issue-list { display: flex; flex-direction: column; gap: var(--space-sm); }
@@ -2083,9 +2040,6 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     .report-container { padding: var(--space-md); }
     .issue-status-tabs { gap: 2px; }
     .status-tab { padding: var(--space-xs) var(--space-sm); font-size: 0.8rem; }
-    .queue-controls { flex-direction: column; align-items: stretch; }
-    .seg-control { overflow-x: auto; }
-    .seg-btn { min-height: 44px; }
     .filter-form { flex-direction: column; }
     .filter-form select { width: 100%; }
     .issue-card-footer { flex-direction: column; align-items: flex-start; gap: 4px; }

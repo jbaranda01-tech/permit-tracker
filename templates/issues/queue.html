@@ -95,6 +95,21 @@
 </div>
 
 <div class="queue-toolbar">
+    <div class="stat-tiles">
+        {% for code, label in severities %}
+        <a href="{{ url_for('issues.queue', severity=code, status=current_status or none, equipment_id=current_equipment or none) }}"
+           class="stat-tile stat-tile--{{ code }} {% if current_severity == code %}stat-tile--active{% endif %}">
+            <div class="stat-tile__num">{{ severity_counts.get(code, 0) }}</div>
+            <div class="stat-tile__label">{{ label }}</div>
+        </a>
+        {% endfor %}
+        <a href="{{ url_for('issues.queue', status=current_status or none, equipment_id=current_equipment or none) }}"
+           class="stat-tile stat-tile--valid {% if not current_severity %}stat-tile--active{% endif %}">
+            <div class="stat-tile__num">{{ severity_counts.values()|sum }}</div>
+            <div class="stat-tile__label">Todas</div>
+        </a>
+    </div>
+
     <div class="issue-status-tabs">
         <a href="{{ url_for('issues.queue', severity=current_severity or none, equipment_id=current_equipment or none) }}" class="status-tab {% if not current_status %}active{% endif %}">
             Abiertos
@@ -109,22 +124,7 @@
         {% endfor %}
     </div>
 
-    <div class="queue-controls">
-        <div class="seg-control">
-            <a href="{{ url_for('issues.queue', status=current_status or none, equipment_id=current_equipment or none) }}"
-               class="seg-btn {% if not current_severity %}seg-btn--active{% endif %}">
-                Todas
-            </a>
-            {% for code, label in severities %}
-            <a href="{{ url_for('issues.queue', severity=code, status=current_status or none, equipment_id=current_equipment or none) }}"
-               class="seg-btn seg-btn--{{ code }} {% if current_severity == code %}seg-btn--active{% endif %}">
-                <span class="seg-dot"></span>
-                {{ label }}
-                <span class="seg-count">{{ severity_counts.get(code, 0) }}</span>
-            </a>
-            {% endfor %}
-        </div>
-
+    <div class="issue-filters">
         <form method="GET" class="filter-form">
             {% if current_status %}
             <input type="hidden" name="status" value="{{ current_status }}">
