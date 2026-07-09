@@ -14,6 +14,9 @@
         <button class="import-tab" data-tab="equipment" onclick="switchTab('equipment')">
             <i class="fas fa-truck"></i> Equipos
         </button>
+        <button class="import-tab" data-tab="reportes" onclick="switchTab('reportes')">
+            <i class="fas fa-wrench"></i> Reportes
+        </button>
     </div>
 
     <!-- Employees Import -->
@@ -101,6 +104,43 @@
             </button>
         </form>
     </div>
+
+    <!-- Issue Reports Import -->
+    <div class="import-container" id="tab-reportes" style="display: none;">
+        <div class="import-info">
+            <h3>Formato Esperado — Reportes</h3>
+            <p>El archivo Excel debe tener las siguientes columnas en orden:</p>
+            <div class="column-list">
+                <span class="col-tag">Unidad</span>
+                <span class="col-tag">Categoría</span>
+                <span class="col-tag">Severidad</span>
+                <span class="col-tag">Descripción</span>
+                <span class="col-tag">Estado</span>
+                <span class="col-tag">Fecha Reporte</span>
+                <span class="col-tag">Fecha Resuelto</span>
+            </div>
+            <div class="import-notes">
+                <p><i class="fas fa-info-circle"></i> <strong>Unidad</strong> debe ser solo el número de unidad (o la placa) de un camión existente — sin el símbolo <strong>#</strong> (ej. <code>204</code>, no <code>#204</code>). Las filas sin coincidencia se omiten y se listan como error.</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Categoría</strong>: {{ categories|map(attribute=1)|join(', ') }}.</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Severidad</strong>: {{ severities|map(attribute=1)|join(', ') }} (por defecto: Media).</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Estado</strong>: {{ statuses|map(attribute=1)|join(', ') }} (por defecto: Reportado). Los estados <strong>Resuelto</strong>/<strong>Cerrado</strong> usan la Fecha Resuelto.</p>
+                <p><i class="fas fa-info-circle"></i> Se acepta el nombre en español o el código interno. <strong>Fecha Reporte</strong> usa la fecha de hoy si se deja en blanco.</p>
+            </div>
+        </div>
+
+        <form method="POST" action="{{ url_for('issues.import_issues') }}" enctype="multipart/form-data" class="import-form" id="import-form-issues">
+            <input type="hidden" name="import_token" value="{{ issue_import_token }}">
+            <div class="upload-area" id="upload-area-issues">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
+                <input type="file" name="file" id="file-input-issues" accept=".xlsx,.xls">
+                <span class="file-name" id="file-name-issues"></span>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="import-btn-issues">
+                <i class="fas fa-upload"></i> Importar Reportes
+            </button>
+        </form>
+    </div>
 </div>
 
 <style>
@@ -135,8 +175,8 @@
 function switchTab(tab) {
     document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`.import-tab[data-tab="${tab}"]`).classList.add('active');
-    document.getElementById('tab-employees').style.display = tab === 'employees' ? '' : 'none';
-    document.getElementById('tab-equipment').style.display = tab === 'equipment' ? '' : 'none';
+    document.querySelectorAll('.import-container').forEach(c => c.style.display = 'none');
+    document.getElementById(`tab-${tab}`).style.display = '';
 }
 
 function setupUpload(areaId, inputId, nameId, formId, btnId) {
@@ -171,5 +211,6 @@ function setupUpload(areaId, inputId, nameId, formId, btnId) {
 
 setupUpload('upload-area-employees', 'file-input-employees', 'file-name-employees', 'import-form-employees', 'import-btn-employees');
 setupUpload('upload-area-equipment', 'file-input-equipment', 'file-name-equipment', 'import-form-equipment', 'import-btn-equipment');
+setupUpload('upload-area-issues', 'file-input-issues', 'file-name-issues', 'import-form-issues', 'import-btn-issues');
 </script>
 {% endblock %}

@@ -63,10 +63,6 @@
                 <i class="fas fa-plus-circle"></i>
                 <span>Agregar Reporte</span>
             </a>
-            <a href="{{ url_for('issues.import_form') }}" class="nav-link {% if request.endpoint in ['issues.import_form', 'issues.import_issues'] %}active{% endif %}">
-                <i class="fas fa-file-import"></i>
-                <span>Importar Reportes</span>
-            </a>
             {% endif %}
         </div>
         {% endif %}

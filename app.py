@@ -27,6 +27,7 @@ from models import (
     CompanyPermit, EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES,
     COMPANY_PERMIT_TYPES, FileStorage, NotificationLog,
     Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
+    ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -1491,7 +1492,13 @@ def import_data():
         return redirect(url_for('import_data'))
 
     session['import_token'] = secrets.token_hex(16)
-    return render_template('import.html', import_token=session['import_token'])
+    session['issue_import_token'] = secrets.token_hex(16)
+    return render_template('import.html',
+                           import_token=session['import_token'],
+                           issue_import_token=session['issue_import_token'],
+                           categories=ISSUE_CATEGORIES,
+                           severities=ISSUE_SEVERITIES,
+                           statuses=ISSUE_STATUSES)
 
 
 @app.route('/import/equipment', methods=['POST'])
