@@ -125,7 +125,7 @@ function showAlerts(type) {
                     : a.entity === 'employee'
                     ? `/employee/${a.id}`
                     : `/equipment/${a.id}`;
-                const dateStr = new Date(a.date).toLocaleDateString('es-PR', {
+                const dateStr = new Date(a.date).toLocaleDateString('en-US', {
                     day: '2-digit', month: '2-digit', year: 'numeric'
                 });
                 return `

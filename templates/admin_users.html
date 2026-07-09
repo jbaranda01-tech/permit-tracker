@@ -74,7 +74,7 @@
                         <span class="role-badge role-issue" style="opacity:0.6">Auto (Admin)</span>
                         {% endif %}
                     </td>
-                    <td>{{ user.created_at.strftime('%d/%m/%Y') if user.created_at else '—' }}</td>
+                    <td>{{ user.created_at.strftime('%m/%d/%Y') if user.created_at else '—' }}</td>
                     <td>
                         <div class="table-actions">
                             <button class="btn btn-ghost btn-sm" onclick="toggleEditUser({{ user.id }})">

@@ -1475,6 +1475,9 @@ img { max-width: 100%; }
     /* Admin "Ver ficha / editar camión" link sits inside a tappable card header —
        give it real vertical hit area so it's separable from the toggle. */
     .truck-edit-link { padding: 6px 0; }
+
+    /* Remove-problem button needs a real touch target on phones. */
+    .problem-row-remove { width: 44px; height: 44px; }
 }
 
 
@@ -1503,6 +1506,38 @@ img { max-width: 100%; }
     padding: var(--space-md) var(--space-lg);
     font-size: 1.1rem;
 }
+
+/* Repeatable problem rows (multi-issue driver report) */
+.report-form .problem-row {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    background: var(--bg-secondary);
+}
+.problem-row-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+.problem-row-header h3 { margin: 0; }
+.problem-row-remove {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.problem-row-remove:hover { color: var(--color-expired-text); border-color: var(--color-expired-text); }
+#add-problem { width: 100%; }
 
 /* Success page */
 .report-success { text-align: center; padding: var(--space-2xl) 0; }

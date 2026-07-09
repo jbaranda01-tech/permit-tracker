@@ -17,9 +17,13 @@ if ('serviceWorker' in navigator) {
         <div class="success-icon">
             <i class="fas fa-check-circle"></i>
         </div>
-        <h1>Reporte Enviado</h1>
-        <p>Su reporte {% if issue_id %}#{{ issue_id }} {% endif %}ha sido registrado exitosamente.</p>
-        <p class="success-detail">El equipo de taller revisará su reporte pronto.</p>
+        <h1>{% if issue_ids|length > 1 %}Reportes Enviados{% else %}Reporte Enviado{% endif %}</h1>
+        {% if issue_ids|length > 1 %}
+        <p>Se registraron {{ issue_ids|length }} reportes exitosamente: {% for id in issue_ids %}#{{ id }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+        {% else %}
+        <p>Su reporte {% if issue_ids %}#{{ issue_ids[0] }} {% endif %}ha sido registrado exitosamente.</p>
+        {% endif %}
+        <p class="success-detail">El equipo de taller revisará {% if issue_ids|length > 1 %}sus reportes{% else %}su reporte{% endif %} pronto.</p>
         <div class="form-actions">
             <a href="{{ url_for('issues.report', token=token) }}" class="btn btn-primary btn-lg">
                 <i class="fas fa-plus"></i> Reportar Otro Problema

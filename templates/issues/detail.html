@@ -17,7 +17,7 @@
     <div class="issue-hero-meta">
         <span><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
         <span><i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}</span>
-        {% if issue.reported_at %}<span><i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%d/%m/%Y %H:%M') }}</span>{% endif %}
+        {% if issue.reported_at %}<span><i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%m/%d/%Y %H:%M') }}</span>{% endif %}
     </div>
 </div>
 
@@ -62,12 +62,12 @@
             </div>
             <div class="permit-field">
                 <label>Fecha de reporte</label>
-                <span>{{ issue.reported_at.strftime('%d/%m/%Y %H:%M') if issue.reported_at else '—' }}</span>
+                <span>{{ issue.reported_at.strftime('%m/%d/%Y %H:%M') if issue.reported_at else '—' }}</span>
             </div>
             {% if issue.resolved_at %}
             <div class="permit-field">
                 <label>Fecha de resolución</label>
-                <span>{{ issue.resolved_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                <span>{{ issue.resolved_at.strftime('%m/%d/%Y %H:%M') }}</span>
             </div>
             {% if issue.time_to_resolution %}
             <div class="permit-field">
@@ -143,7 +143,7 @@
                         {% elif entry.changed_by_employee %}
                         <span><i class="fas fa-user"></i> {{ entry.changed_by_employee.name }}</span>
                         {% endif %}
-                        <span><i class="fas fa-clock"></i> {{ entry.changed_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                        <span><i class="fas fa-clock"></i> {{ entry.changed_at.strftime('%m/%d/%Y %H:%M') }}</span>
                     </div>
                     {% if entry.notes %}
                     <p class="timeline-notes">{{ entry.notes }}</p>

@@ -63,7 +63,7 @@
             </div>
             <div class="profile-field">
                 <label>Fecha de Nacimiento</label>
-                <span>{{ employee.fecha_nacimiento.strftime('%d/%m/%Y') if employee.fecha_nacimiento else '—' }}</span>
+                <span>{{ employee.fecha_nacimiento.strftime('%m/%d/%Y') if employee.fecha_nacimiento else '—' }}</span>
             </div>
             <div class="profile-field">
                 <label>Teléfono</label>
@@ -93,7 +93,7 @@
             </div>
             <div class="profile-field">
                 <label>Fecha de Contratación</label>
-                <span>{{ employee.fecha_contratacion.strftime('%d/%m/%Y') if employee.fecha_contratacion else '—' }}</span>
+                <span>{{ employee.fecha_contratacion.strftime('%m/%d/%Y') if employee.fecha_contratacion else '—' }}</span>
             </div>
             <div class="profile-field">
                 <label>Endoso HAZMAT</label>
@@ -113,11 +113,11 @@
                 <label>Expiración</label>
                 {% if employee.license_expiration %}
                     {% if employee.license_expiration < today %}
-                        <span class="data-highlight data-highlight--expired"><span class="dh-label">Vencida</span>{{ employee.license_expiration.strftime('%d/%m/%Y') }}</span>
+                        <span class="data-highlight data-highlight--expired"><span class="dh-label">Vencida</span>{{ employee.license_expiration.strftime('%m/%d/%Y') }}</span>
                     {% elif employee.license_expiration <= alert_date %}
-                        <span class="data-highlight data-highlight--expiring_soon"><span class="dh-label">Por vencer</span>{{ employee.license_expiration.strftime('%d/%m/%Y') }}</span>
+                        <span class="data-highlight data-highlight--expiring_soon"><span class="dh-label">Por vencer</span>{{ employee.license_expiration.strftime('%m/%d/%Y') }}</span>
                     {% else %}
-                        <span class="data-highlight data-highlight--valid"><span class="dh-label">Vigente</span>{{ employee.license_expiration.strftime('%d/%m/%Y') }}</span>
+                        <span class="data-highlight data-highlight--valid"><span class="dh-label">Vigente</span>{{ employee.license_expiration.strftime('%m/%d/%Y') }}</span>
                     {% endif %}
                 {% else %}
                     <span class="data-highlight data-highlight--missing">—</span>
@@ -221,7 +221,7 @@
                     <div class="permit-field permit-field--highlight">
                         <span class="data-highlight data-highlight--{{ permit.status }}">
                             <span class="dh-label">Expira</span>
-                            {{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}
+                            {{ permit.expiration_date.strftime('%m/%d/%Y') if permit.expiration_date else 'Sin fecha' }}
                         </span>
                     </div>
                     {% if permit.permit_number %}

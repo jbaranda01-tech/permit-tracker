@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Reporte de Permisos — {{ today.strftime('%d/%m/%Y') }}</title>
+    <title>Reporte de Permisos — {{ today.strftime('%m/%d/%Y') }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 9pt; color: #1a1a2e; padding: 20px; }
@@ -62,11 +62,11 @@
         {% elif exp_date is none %}
             <td><span class="status-cell st-missing">—</span></td>
         {% elif exp_date < today %}
-            <td><span class="status-cell st-expired">{{ exp_date.strftime('%d/%m/%y') }}</span></td>
+            <td><span class="status-cell st-expired">{{ exp_date.strftime('%m/%d/%y') }}</span></td>
         {% elif exp_date <= alert_date %}
-            <td><span class="status-cell st-expiring">{{ exp_date.strftime('%d/%m/%y') }}</span></td>
+            <td><span class="status-cell st-expiring">{{ exp_date.strftime('%m/%d/%y') }}</span></td>
         {% else %}
-            <td><span class="status-cell st-valid">{{ exp_date.strftime('%d/%m/%y') }}</span></td>
+            <td><span class="status-cell st-valid">{{ exp_date.strftime('%m/%d/%y') }}</span></td>
         {% endif %}
     {% endmacro %}
 

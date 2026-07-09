@@ -248,7 +248,7 @@ def time_ago(value):
     delta = datetime.utcnow() - value
     seconds = delta.total_seconds()
     if seconds < 0:
-        return value.strftime('%d/%m/%Y')
+        return value.strftime('%m/%d/%Y')
     minutes = int(seconds // 60)
     hours = int(seconds // 3600)
     days = delta.days
@@ -262,7 +262,7 @@ def time_ago(value):
         return 'ayer'
     if days < 7:
         return f'hace {days}d'
-    return value.strftime('%d/%m/%Y')
+    return value.strftime('%m/%d/%Y')
 
 @app.context_processor
 def inject_globals():

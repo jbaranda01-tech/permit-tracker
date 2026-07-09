@@ -138,7 +138,8 @@ def report(token):
                            employee=employee,
                            trucks=trucks,
                            categories=ISSUE_CATEGORIES,
-                           severities=ISSUE_SEVERITIES)
+                           severities=ISSUE_SEVERITIES,
+                           problem_rows=[{}])
 
 
 @issues_bp.route('/report/<token>', methods=['POST'])
@@ -146,9 +147,27 @@ def report_submit(token):
     employee = Employee.query.filter_by(access_token=token).first_or_404()
 
     equipment_id = request.form.get('equipment_id', type=int)
-    category = request.form.get('category', '')
-    severity = request.form.get('severity', 'media')
-    description = request.form.get('description', '').strip()
+
+    # Problem fields arrive as parallel arrays (name="category[]" etc.), one entry
+    # per problem row. They stay index-aligned because getlist preserves DOM order.
+    categories = request.form.getlist('category[]')
+    severities = request.form.getlist('severity[]')
+    descriptions = request.form.getlist('description[]')
+
+    # Zip into rows, then drop fully-empty rows (a stray blank row must not block
+    # the batch). A row counts as empty when both category and description are blank.
+    raw_rows = []
+    for i in range(max(len(categories), len(severities), len(descriptions))):
+        raw_rows.append({
+            'category': (categories[i] if i < len(categories) else '').strip(),
+            'severity': (severities[i] if i < len(severities) else 'media').strip() or 'media',
+            'description': (descriptions[i] if i < len(descriptions) else '').strip(),
+        })
+    problem_rows = [r for r in raw_rows
+                    if r['category'] or r['description']]
+
+    valid_categories = [c[0] for c in ISSUE_CATEGORIES]
+    valid_severities = [s[0] for s in ISSUE_SEVERITIES]
 
     errors = []
     if not equipment_id:
@@ -156,16 +175,16 @@ def report_submit(token):
     elif not reportable_equipment_query(company=employee.company).filter_by(id=equipment_id).first():
         errors.append('Camión no válido.')
 
-    valid_categories = [c[0] for c in ISSUE_CATEGORIES]
-    if category not in valid_categories:
-        errors.append('Categoría no válida.')
+    if not problem_rows:
+        errors.append('Debe incluir al menos un problema.')
 
-    valid_severities = [s[0] for s in ISSUE_SEVERITIES]
-    if severity not in valid_severities:
-        errors.append('Severidad no válida.')
-
-    if not description:
-        errors.append('Debe incluir una descripción del problema.')
+    for idx, row in enumerate(problem_rows, start=1):
+        if row['category'] not in valid_categories:
+            errors.append(f'Problema {idx}: categoría no válida.')
+        if row['severity'] not in valid_severities:
+            errors.append(f'Problema {idx}: severidad no válida.')
+        if not row['description']:
+            errors.append(f'Problema {idx}: debe incluir una descripción.')
 
     if errors:
         trucks = reportable_equipment_query(company=employee.company).all()
@@ -175,34 +194,42 @@ def report_submit(token):
                                employee=employee,
                                trucks=trucks,
                                categories=ISSUE_CATEGORIES,
-                               severities=ISSUE_SEVERITIES), 422
+                               severities=ISSUE_SEVERITIES,
+                               problem_rows=problem_rows or [{}]), 422
 
     # reported_at is intentionally NOT sourced from the request: it defaults to
     # the model's datetime.utcnow (see models.py). The driver form has no date
     # field and must never gain one — a future date can only enter via the
     # admin/import paths, which validate against _is_future_date.
-    issue = Issue(
-        equipment_id=equipment_id,
-        reported_by_employee_id=employee.id,
-        category=category,
-        severity=severity,
-        description=description,
-    )
-    db.session.add(issue)
-    db.session.flush()
+    # Each problem row becomes its own independent Issue; commit once after the loop
+    # (mirrors the batch idiom in import_issues).
+    created_ids = []
+    for row in problem_rows:
+        issue = Issue(
+            equipment_id=equipment_id,
+            reported_by_employee_id=employee.id,
+            category=row['category'],
+            severity=row['severity'],
+            description=row['description'],
+        )
+        db.session.add(issue)
+        db.session.flush()
 
-    update_issue_status(issue, 'reportado', changed_by_employee_id=employee.id,
-                        notes='Reporte inicial del chofer')
+        update_issue_status(issue, 'reportado', changed_by_employee_id=employee.id,
+                            notes='Reporte inicial del chofer')
+        created_ids.append(issue.id)
     db.session.commit()
 
-    return redirect(url_for('issues.report_success', token=token, issue_id=issue.id))
+    return redirect(url_for('issues.report_success', token=token,
+                            issue_ids=','.join(str(i) for i in created_ids)))
 
 
 @issues_bp.route('/report/<token>/success', methods=['GET'])
 def report_success(token):
     Employee.query.filter_by(access_token=token).first_or_404()
-    issue_id = request.args.get('issue_id', type=int)
-    return render_template('issues/report_success.html', token=token, issue_id=issue_id)
+    issue_ids = [int(part) for part in request.args.get('issue_ids', '').split(',')
+                 if part.strip().isdigit()]
+    return render_template('issues/report_success.html', token=token, issue_ids=issue_ids)
 
 
 # ── SHOP QUEUE ────────────────────────────────────────────────────────

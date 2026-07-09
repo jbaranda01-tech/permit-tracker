@@ -168,7 +168,7 @@
                     <div class="permit-field permit-field--highlight">
                         <span class="data-highlight data-highlight--{{ shared_insurance.status }}">
                             <span class="dh-label">Expira</span>
-                            {{ shared_insurance.expiration_date.strftime('%d/%m/%Y') if shared_insurance.expiration_date else 'Sin fecha' }}
+                            {{ shared_insurance.expiration_date.strftime('%m/%d/%Y') if shared_insurance.expiration_date else 'Sin fecha' }}
                         </span>
                     </div>
                     {% if shared_insurance.permit_number %}
@@ -199,7 +199,7 @@
                     <div class="permit-field permit-field--highlight">
                         <span class="data-highlight data-highlight--{{ permit.status }}">
                             <span class="dh-label">Expira</span>
-                            {{ permit.expiration_date.strftime('%d/%m/%Y') if permit.expiration_date else 'Sin fecha' }}
+                            {{ permit.expiration_date.strftime('%m/%d/%Y') if permit.expiration_date else 'Sin fecha' }}
                         </span>
                     </div>
                     {% if permit.permit_number %}
@@ -296,7 +296,7 @@
                 <div class="issue-card-compact-right">
                     <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
                     <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
-                    <span class="issue-date-compact">{{ issue.reported_at.strftime('%d/%m/%Y') if issue.reported_at }}</span>
+                    <span class="issue-date-compact">{{ issue.reported_at.strftime('%m/%d/%Y') if issue.reported_at }}</span>
                 </div>
             </a>
             {% endfor %}
