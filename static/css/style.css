@@ -1596,10 +1596,10 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     font-size: 0.85rem;
 }
 
-/* Queue header (no title): actions pushed right with breathing room above the tickers */
+/* Queue header (no title): actions on the left with breathing room above the tickers */
 .queue-header {
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
     margin-bottom: var(--space-lg);
 }
 
