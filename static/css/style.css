@@ -1319,26 +1319,6 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     max-height: 60vh;
 }
 
-.alert-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-sm);
-    cursor: pointer;
-    transition: background var(--transition);
-    border-left: 3px solid;
-}
-.alert-item:hover { background: var(--bg-hover); }
-.alert-item-expired { border-left-color: var(--color-expired); background: var(--color-expired-bg); }
-.alert-item-expiring { border-left-color: var(--color-expiring); background: var(--color-expiring-bg); }
-
-.alert-item-info { flex: 1; }
-.alert-item-name { font-weight: 600; font-size: 0.9rem; }
-.alert-item-permit { font-size: 0.8rem; color: var(--text-secondary); }
-.alert-item-date { font-size: 0.8rem; font-weight: 600; font-family: var(--font-mono); }
-
 .loading { text-align: center; padding: var(--space-xl); color: var(--text-secondary); }
 
 
@@ -1486,7 +1466,6 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     .issue-card-compact:active { background: var(--bg-hover); }
     .truck-profile-header:active { background: var(--bg-hover); }
     .status-tab:active { opacity: 0.7; }
-    .alert-item:active { opacity: 0.85; }
     .mobile-menu-btn:active { background: var(--bg-hover); }
 
     /* Bulletproof iOS zoom prevention: a literal 16px on every text control,

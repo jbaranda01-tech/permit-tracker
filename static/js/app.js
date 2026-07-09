@@ -95,68 +95,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
-// ── Alerts Modal ─────────────────────────────────────────────────────
-
-function showAlerts(type) {
-    const modal = document.getElementById('alerts-modal');
-    const title = document.getElementById('alerts-title');
-    const body = document.getElementById('alerts-body');
-
-    title.textContent = type === 'expired' ? 'Permisos Vencidos' : 'Permisos Por Vencer';
-    body.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>';
-    modal.classList.add('active');
-
-    fetch('/api/alerts')
-        .then(res => res.json())
-        .then(alerts => {
-            const filtered = alerts.filter(a => {
-                if (type === 'expired') return a.type === 'expired';
-                return a.type === 'expiring';
-            });
-
-            if (filtered.length === 0) {
-                body.innerHTML = '<div class="loading">No hay alertas.</div>';
-                return;
-            }
-
-            body.innerHTML = filtered.map(a => {
-                const url = a.entity === 'company'
-                    ? '/?view=company'
-                    : a.entity === 'employee'
-                    ? `/employee/${a.id}`
-                    : `/equipment/${a.id}`;
-                const dateStr = new Date(a.date).toLocaleDateString('en-US', {
-                    day: '2-digit', month: '2-digit', year: 'numeric'
-                });
-                return `
-                    <a href="${url}" class="alert-item alert-item-${a.type}">
-                        <div class="alert-item-info">
-                            <div class="alert-item-name">${a.name}
-                                <span style="opacity:0.6;font-size:0.75rem;margin-left:4px">${a.company}</span>
-                            </div>
-                            <div class="alert-item-permit">${a.permit}</div>
-                        </div>
-                        <div class="alert-item-date">${dateStr}</div>
-                    </a>
-                `;
-            }).join('');
-        })
-        .catch(err => {
-            body.innerHTML = '<div class="loading">Error cargando alertas.</div>';
-            console.error(err);
-        });
-}
-
-function closeAlerts() {
-    document.getElementById('alerts-modal').classList.remove('active');
-}
-
-// Close modal on Escape
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeAlerts();
-});
-
-
 // ── Auto-dismiss flash messages ──────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {

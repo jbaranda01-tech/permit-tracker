@@ -53,6 +53,26 @@
     {% endif %}
 
     {% if view == 'company' %}
+    {% set cstats = namespace(expired=0, expiring=0) %}
+    {% set all_permits = lb_permits + pli_permits %}
+    {% for permit in all_permits %}
+        {% if permit.status == 'expired' %}{% set cstats.expired = cstats.expired + 1 %}{% endif %}
+        {% if permit.status == 'expiring_soon' %}{% set cstats.expiring = cstats.expiring + 1 %}{% endif %}
+    {% endfor %}
+    <div class="stat-tiles">
+        <button type="button" class="stat-tile stat-tile--expired" data-permit-filter="expired">
+            <div class="stat-tile__num">{{ cstats.expired }}</div>
+            <div class="stat-tile__label">Vencidos</div>
+        </button>
+        <button type="button" class="stat-tile stat-tile--expiring" data-permit-filter="expiring">
+            <div class="stat-tile__num">{{ cstats.expiring }}</div>
+            <div class="stat-tile__label">Por Vencer</div>
+        </button>
+        <button type="button" class="stat-tile stat-tile--valid" data-permit-filter="all">
+            <div class="stat-tile__num">{{ all_permits|length }}</div>
+            <div class="stat-tile__label">Permisos</div>
+        </button>
+    </div>
     <!-- Company Permits -->
     <div class="company-panels">
         <!-- LB Caribe Services -->
@@ -64,7 +84,9 @@
             <div class="panel-body">
                 <div class="permits-grid">
                     {% for permit in lb_permits %}
-                    <div class="permit-card permit-{{ permit.status }}">
+                    <div class="permit-card permit-{{ permit.status }}"
+                         data-expired="{{ 1 if permit.status == 'expired' else 0 }}"
+                         data-expiring="{{ 1 if permit.status == 'expiring_soon' else 0 }}">
                         <div class="permit-card-header">
                             <span class="permit-name">{{ permit.display_name }}</span>
                             <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
@@ -179,7 +201,9 @@
             <div class="panel-body">
                 <div class="permits-grid">
                     {% for permit in pli_permits %}
-                    <div class="permit-card permit-{{ permit.status }}">
+                    <div class="permit-card permit-{{ permit.status }}"
+                         data-expired="{{ 1 if permit.status == 'expired' else 0 }}"
+                         data-expiring="{{ 1 if permit.status == 'expiring_soon' else 0 }}">
                         <div class="permit-card-header">
                             <span class="permit-name">{{ permit.display_name }}</span>
                             <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
@@ -484,12 +508,13 @@ function toggleEditPermit(id) {
 </script>
 {% endif %}
 
-{% if view != 'company' %}
 <script>
 (function () {
     var tiles = document.querySelectorAll('.stat-tile[data-permit-filter]');
     if (!tiles.length) return;
-    var cards = document.querySelectorAll('.entity-card[data-expired]');
+    // .entity-card = employee/equipment views; .permit-card = company view
+    var cardSelector = '.entity-card[data-expired], .permit-card[data-expired]';
+    var cards = document.querySelectorAll(cardSelector);
     var active = null;
 
     function apply(filter) {
@@ -501,7 +526,7 @@ function toggleEditPermit(id) {
         });
         // Hide company panels that end up with no visible cards
         document.querySelectorAll('.company-panel').forEach(function (p) {
-            var panelCards = p.querySelectorAll('.entity-card');
+            var panelCards = p.querySelectorAll(cardSelector);
             if (!panelCards.length) return;
             var anyVisible = Array.prototype.some.call(panelCards, function (c) {
                 return c.style.display !== 'none';
@@ -528,5 +553,4 @@ function toggleEditPermit(id) {
     });
 })();
 </script>
-{% endif %}
 {% endblock %}

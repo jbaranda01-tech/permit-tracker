@@ -49,24 +49,6 @@
                 <span>Empresa</span>
             </a>
         </div>
-
-        <div class="nav-section">
-            <div class="nav-section-title">Alertas</div>
-            <a href="#" class="nav-link alert-link" onclick="showAlerts('expiring')" id="nav-expiring">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>Por Vencer</span>
-                {% if permisos_por_vencer > 0 %}
-                <span class="badge badge-warning">{{ permisos_por_vencer }}</span>
-                {% endif %}
-            </a>
-            <a href="#" class="nav-link alert-link" onclick="showAlerts('expired')" id="nav-expired">
-                <i class="fas fa-times-circle"></i>
-                <span>Vencidos</span>
-                {% if permisos_vencidos > 0 %}
-                <span class="badge badge-danger">{{ permisos_vencidos }}</span>
-                {% endif %}
-            </a>
-        </div>
         {% endif %}
 
         {% if current_user.has_shop_role %}
@@ -167,19 +149,6 @@
 
         {% block content %}{% endblock %}
     </main>
-
-    <!-- Alerts Modal -->
-    <div class="modal-overlay" id="alerts-modal" onclick="if(event.target===this)closeAlerts()">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 id="alerts-title">Alertas</h3>
-                <button onclick="closeAlerts()"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body" id="alerts-body">
-                <div class="loading"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
-            </div>
-        </div>
-    </div>
 
     <script src="{{ versioned_static('js/app.js') }}"></script>
     {% block service_worker %}
