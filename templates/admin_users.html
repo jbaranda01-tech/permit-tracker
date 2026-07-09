@@ -83,7 +83,7 @@
                             {% if user.id != current_user.id %}
                             <form method="POST" action="{{ url_for('admin_user_delete', id=user.id) }}" style="display:inline"
                                   onsubmit="return confirm('¿Eliminar usuario {{ user.username }}?')">
-                                <button type="submit" class="btn btn-ghost btn-sm btn-danger-text"><i class="fas fa-trash"></i></button>
+                                <button type="submit" class="btn btn-ghost btn-sm btn-danger-text"><i class="fas fa-trash"></i> Eliminar</button>
                             </form>
                             {% endif %}
                         </div>

@@ -24,7 +24,7 @@
                 </button>
                 <form method="POST" action="{{ url_for('employee_delete', id=employee.id) }}" style="display:inline"
                       onsubmit="return confirm('¿Está seguro de eliminar a {{ employee.name }}?')">
-                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i></button>
+                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Eliminar</button>
                 </form>
                 {% endif %}
             </div>
@@ -257,9 +257,6 @@
                         <i class="fas fa-edit"></i> Editar
                     </button>
                     {% if permit.file_path %}
-                    <a class="btn btn-ghost btn-sm" href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank">
-                        <i class="fas fa-file-pdf"></i> Ver formulario
-                    </a>
                     <form method="POST" action="{{ url_for('employee_permit_delete_form', emp_id=employee.id, permit_id=permit.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar el formulario adjunto?');">
                         <button type="submit" class="btn btn-ghost btn-sm">
                             <i class="fas fa-trash"></i> Eliminar

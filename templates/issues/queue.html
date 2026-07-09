@@ -42,7 +42,7 @@
 
 <div class="stat-tiles">
     {% for code, label in severities %}
-    <a href="{{ url_for('issues.queue', severity=code) }}"
+    <a href="{{ url_for('issues.queue', severity=code, status=current_status) }}"
        class="stat-tile stat-tile--{{ code }} {% if current_severity == code %}stat-tile--active{% endif %}">
         <div class="stat-tile__num">{{ severity_counts.get(code, 0) }}</div>
         <div class="stat-tile__label">{{ label }}</div>
@@ -69,12 +69,9 @@
         {% if current_status %}
         <input type="hidden" name="status" value="{{ current_status }}">
         {% endif %}
-        <select name="severity" onchange="this.form.submit()">
-            <option value="">Todas las severidades</option>
-            {% for code, label in severities %}
-            <option value="{{ code }}" {% if current_severity == code %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-        </select>
+        {% if current_severity %}
+        <input type="hidden" name="severity" value="{{ current_severity }}">
+        {% endif %}
         <select name="equipment_id" onchange="this.form.submit()">
             <option value="">Todos los camiones</option>
             {% for truck in trucks %}
@@ -222,8 +219,7 @@
             {% endfor %}
             {% if resolved_count > resolved_issues|length %}
             <div class="resolved-more-note">
-                Mostrando {{ resolved_issues|length }} de {{ resolved_count }} &middot;
-                <a href="{{ url_for('issues.queue', status='resuelto') }}">Ver todos los resueltos</a>
+                Mostrando {{ resolved_issues|length }} de {{ resolved_count }}
             </div>
             {% endif %}
         </div>
