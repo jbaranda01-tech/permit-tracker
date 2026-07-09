@@ -58,12 +58,6 @@
                 <i class="fas fa-wrench"></i>
                 <span>Reportes</span>
             </a>
-            {% if current_user.is_admin %}
-            <a href="{{ url_for('issues.new') }}" class="nav-link {% if request.endpoint in ['issues.new', 'issues.create'] %}active{% endif %}">
-                <i class="fas fa-plus-circle"></i>
-                <span>Agregar Reporte</span>
-            </a>
-            {% endif %}
         </div>
         {% endif %}
 
