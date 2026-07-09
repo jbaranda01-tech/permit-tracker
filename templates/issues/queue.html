@@ -78,9 +78,8 @@
 {% endmacro %}
 
 {% block content %}
-<div class="page-header">
-    <h1><i class="fas fa-wrench"></i> Reportes de Problemas</h1>
-    {% if current_user.is_shop_manager %}
+{% if current_user.is_shop_manager %}
+<div class="queue-header">
     <div class="page-actions">
         <a href="{{ url_for('issues.new') }}" class="btn btn-primary">
             <i class="fas fa-plus-circle"></i> Agregar Manualmente
@@ -91,8 +90,8 @@
         </a>
         {% endif %}
     </div>
-    {% endif %}
 </div>
+{% endif %}
 
 <div class="queue-toolbar">
     <div class="stat-tiles">

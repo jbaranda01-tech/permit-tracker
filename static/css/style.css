@@ -1596,6 +1596,13 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     font-size: 0.85rem;
 }
 
+/* Queue header (no title): actions pushed right with breathing room above the tickers */
+.queue-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-lg);
+}
+
 /* Queue toolbar (severity tiles + status tabs + truck filter) */
 .queue-toolbar { margin-bottom: var(--space-lg); }
 
