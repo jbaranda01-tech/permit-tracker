@@ -37,18 +37,18 @@
         {% set stats.expiring = stats.expiring + s.expiring_soon %}
     {% endfor %}
     <div class="stat-tiles">
-        <div class="stat-tile stat-tile--expired">
+        <button type="button" class="stat-tile stat-tile--expired" data-permit-filter="expired">
             <div class="stat-tile__num">{{ stats.expired }}</div>
             <div class="stat-tile__label">Vencidos</div>
-        </div>
-        <div class="stat-tile stat-tile--expiring">
+        </button>
+        <button type="button" class="stat-tile stat-tile--expiring" data-permit-filter="expiring">
             <div class="stat-tile__num">{{ stats.expiring }}</div>
             <div class="stat-tile__label">Por Vencer</div>
-        </div>
-        <div class="stat-tile stat-tile--valid">
+        </button>
+        <button type="button" class="stat-tile stat-tile--valid" data-permit-filter="all">
             <div class="stat-tile__num">{{ all_items|length }}</div>
             <div class="stat-tile__label">{{ 'Empleados' if view == 'employees' else 'Equipos' }}</div>
-        </div>
+        </button>
     </div>
     {% endif %}
 
@@ -304,7 +304,7 @@
             <div class="panel-body">
                 {% if view == 'employees' %}
                     {% for emp in lb_items %}
-                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card">
+                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card" data-expired="{{ emp.permit_status_summary.expired }}" data-expiring="{{ emp.permit_status_summary.expiring_soon }}">
                         <div class="entity-info">
                             <div class="entity-name">{{ emp.name }}</div>
                             <div class="entity-meta">{{ emp.area or '—' }}</div>
@@ -334,7 +334,7 @@
                     {% endif %}
                 {% else %}
                     {% for eq in lb_items %}
-                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
+                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card" data-expired="{{ eq.permit_status_summary.expired }}" data-expiring="{{ eq.permit_status_summary.expiring_soon }}">
                         <div class="entity-info">
                             <div class="entity-name">{{ eq.display_name }}</div>
                             <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
@@ -375,7 +375,7 @@
             <div class="panel-body">
                 {% if view == 'employees' %}
                     {% for emp in pli_items %}
-                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card">
+                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card" data-expired="{{ emp.permit_status_summary.expired }}" data-expiring="{{ emp.permit_status_summary.expiring_soon }}">
                         <div class="entity-info">
                             <div class="entity-name">{{ emp.name }}</div>
                             <div class="entity-meta">{{ emp.area or '—' }}</div>
@@ -405,7 +405,7 @@
                     {% endif %}
                 {% else %}
                     {% for eq in pli_items %}
-                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
+                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card" data-expired="{{ eq.permit_status_summary.expired }}" data-expiring="{{ eq.permit_status_summary.expiring_soon }}">
                         <div class="entity-info">
                             <div class="entity-name">{{ eq.display_name }}</div>
                             <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
@@ -446,7 +446,7 @@
             </div>
             <div class="panel-body">
                 {% for eq in personal_items %}
-                <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
+                <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card" data-expired="{{ eq.permit_status_summary.expired }}" data-expiring="{{ eq.permit_status_summary.expiring_soon }}">
                     <div class="entity-info">
                         <div class="entity-name">{{ eq.display_name }}</div>
                         <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
@@ -487,6 +487,52 @@ function toggleEditPermit(id) {
     var form = document.getElementById('edit-permit-' + id);
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
 }
+</script>
+{% endif %}
+
+{% if view != 'company' %}
+<script>
+(function () {
+    var tiles = document.querySelectorAll('.stat-tile[data-permit-filter]');
+    if (!tiles.length) return;
+    var cards = document.querySelectorAll('.entity-card[data-expired]');
+    var active = null;
+
+    function apply(filter) {
+        cards.forEach(function (c) {
+            var show = true;
+            if (filter === 'expired') show = parseInt(c.dataset.expired || '0', 10) > 0;
+            else if (filter === 'expiring') show = parseInt(c.dataset.expiring || '0', 10) > 0;
+            c.style.display = show ? '' : 'none';
+        });
+        // Hide company panels that end up with no visible cards
+        document.querySelectorAll('.company-panel').forEach(function (p) {
+            var panelCards = p.querySelectorAll('.entity-card');
+            if (!panelCards.length) return;
+            var anyVisible = Array.prototype.some.call(panelCards, function (c) {
+                return c.style.display !== 'none';
+            });
+            p.style.display = anyVisible ? '' : 'none';
+        });
+        tiles.forEach(function (t) {
+            t.classList.toggle('stat-tile--active',
+                filter !== 'all' && t.dataset.permitFilter === filter);
+        });
+    }
+
+    tiles.forEach(function (t) {
+        t.addEventListener('click', function () {
+            var f = t.dataset.permitFilter;
+            if (f === 'all' || f === active) {
+                active = null;
+                apply('all');
+            } else {
+                active = f;
+                apply(f);
+            }
+        });
+    });
+})();
 </script>
 {% endif %}
 {% endblock %}

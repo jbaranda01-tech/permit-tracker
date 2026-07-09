@@ -637,9 +637,19 @@ img { max-width: 100%; }
 .stat-tile--critica { border-left-color: var(--color-sev-critica); }
 .stat-tile--critica .stat-tile__num { color: var(--color-sev-critica); }
 
-/* anchor tiles: kill link styling, add active/hover affordance */
-a.stat-tile { text-decoration: none; transition: box-shadow .15s, transform .15s; }
-a.stat-tile:hover { box-shadow: var(--shadow-md); }
+/* interactive tiles (anchor or button): kill default styling, add hover/active affordance */
+a.stat-tile, button.stat-tile {
+    text-decoration: none;
+    cursor: pointer;
+    transition: box-shadow .15s, transform .15s;
+}
+button.stat-tile {
+    font: inherit;
+    text-align: left;
+    width: 100%;
+    display: block;
+}
+a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
 .stat-tile--active { box-shadow: 0 0 0 2px var(--accent); }
 
 
