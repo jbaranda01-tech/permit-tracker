@@ -40,6 +40,16 @@
     {% endif %}
 </div>
 
+<div class="stat-tiles">
+    {% for code, label in severities %}
+    <a href="{{ url_for('issues.queue', severity=code) }}"
+       class="stat-tile stat-tile--{{ code }} {% if current_severity == code %}stat-tile--active{% endif %}">
+        <div class="stat-tile__num">{{ severity_counts.get(code, 0) }}</div>
+        <div class="stat-tile__label">{{ label }}</div>
+    </a>
+    {% endfor %}
+</div>
+
 <div class="issue-status-tabs">
     <a href="{{ url_for('issues.queue') }}" class="status-tab {% if not current_status %}active{% endif %}">
         Abiertos

@@ -628,6 +628,20 @@ img { max-width: 100%; }
 .stat-tile--expiring .stat-tile__num { color: var(--color-expiring); }
 .stat-tile--valid { border-left-color: var(--color-valid); }
 
+.stat-tile--baja { border-left-color: var(--color-sev-baja); }
+.stat-tile--baja .stat-tile__num { color: var(--color-sev-baja); }
+.stat-tile--media { border-left-color: var(--color-sev-media); }
+.stat-tile--media .stat-tile__num { color: var(--color-sev-media); }
+.stat-tile--alta { border-left-color: var(--color-sev-alta); }
+.stat-tile--alta .stat-tile__num { color: var(--color-sev-alta); }
+.stat-tile--critica { border-left-color: var(--color-sev-critica); }
+.stat-tile--critica .stat-tile__num { color: var(--color-sev-critica); }
+
+/* anchor tiles: kill link styling, add active/hover affordance */
+a.stat-tile { text-decoration: none; transition: box-shadow .15s, transform .15s; }
+a.stat-tile:hover { box-shadow: var(--shadow-md); }
+.stat-tile--active { box-shadow: 0 0 0 2px var(--accent); }
+
 
 /* ── Company Panels ────────────────────────────────────────────────── */
 .company-panels {

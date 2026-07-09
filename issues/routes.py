@@ -288,6 +288,13 @@ def queue():
     for code, label in ISSUE_STATUSES:
         status_counts[code] = Issue.query.filter_by(current_status=code).count()
 
+    severity_counts = {}
+    for code, _label in ISSUE_SEVERITIES:
+        severity_counts[code] = (Issue.query
+                                 .filter(Issue.severity == code,
+                                         Issue.current_status.notin_(RESOLVED_STATUSES))
+                                 .count())
+
     trucks = reportable_equipment_query().all()
     recent_issues = all_issues[:20]
 
@@ -320,6 +327,7 @@ def queue():
                            categories=ISSUE_CATEGORIES,
                            trucks=trucks,
                            status_counts=status_counts,
+                           severity_counts=severity_counts,
                            current_status=status_filter,
                            current_severity=severity_filter,
                            current_equipment=equipment_filter)
