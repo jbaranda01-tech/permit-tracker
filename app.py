@@ -1788,13 +1788,13 @@ def generate_pdf():
               .filter(Issue.current_status.notin_(['resuelto', 'cerrado'])))
         if company_filter:
             iq = iq.filter(Equipment.company == company_filter)
-        # Sort in Python: company, then worst severity first, then newest.
-        severity_rank = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
+        # Sort in Python: company (matches the template's LB/PLI grouping), then
+        # by vehicle (unit # / display name), then newest first within a vehicle.
         issues = sorted(
             iq.all(),
             key=lambda i: (
                 i.equipment.company if i.equipment else '',
-                -severity_rank.get(i.severity, 0),
+                i.equipment.display_name.lower() if i.equipment else '',
                 -(i.reported_at.toordinal() if i.reported_at else 0),
             ),
         )

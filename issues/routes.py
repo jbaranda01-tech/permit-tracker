@@ -277,8 +277,9 @@ def queue():
                 'worst_severity_rank': worst_rank,
                 'auto_expand': len(issues) > 0,
             })
-        profiles.sort(key=lambda p: (-p['worst_severity_rank'], -p['issue_count'],
-                                     p['equipment'].display_name))
+        # Sort trucks by vehicle (unit # / display name), matching the truck
+        # dropdown order — a stable, vehicle-centric ordering instead of by severity.
+        profiles.sort(key=lambda p: p['equipment'].display_name.lower())
         return profiles
 
     lb_trucks = build_truck_profiles('LB')
