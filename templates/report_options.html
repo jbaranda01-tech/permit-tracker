@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Reporte PDF{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Dashboard</a>
+        <h1><i class="fas fa-file-pdf"></i> Reporte PDF</h1>
+    </div>
+
+    <form method="GET" action="{{ url_for('generate_pdf') }}" target="_blank" class="report-form">
+        <div class="form-section">
+            <h3><i class="fas fa-list-check"></i> Propósito</h3>
+            <div class="form-group">
+                <label for="type">¿Qué desea incluir en el reporte?</label>
+                <select name="type" id="type">
+                    <option value="all">Todos</option>
+                    <option value="employees">Empleados</option>
+                    <option value="equipment">Equipos</option>
+                    <option value="issues">Averías</option>
+                    <option value="company">Empresa</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3><i class="fas fa-building"></i> Empresa</h3>
+            <div class="form-group">
+                <label for="company">¿Para cuál compañía?</label>
+                <select name="company" id="company">
+                    <option value="">Todas</option>
+                    <option value="LB">LB Caribe Services</option>
+                    <option value="PLI">Professional Logistics (PLI)</option>
+                    <option value="Personal">Personal</option>
+                </select>
+            </div>
+            <p class="form-help">
+                <i class="fas fa-info-circle"></i>
+                Algunas combinaciones generan un reporte vacío: los reportes de
+                <strong>Empleados</strong> y <strong>Empresa</strong> no aplican a
+                <strong>Personal</strong> (solo Equipos usa Personal).
+            </p>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-download"></i> Descargar PDF
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

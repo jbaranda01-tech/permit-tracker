@@ -311,6 +311,39 @@
     {% endif %}
     {% endif %}
 
+    {% if company_permits %}
+    {% for company_code, company_label, company_class in [
+        ('LB', 'LB Caribe Services', 'company-lb'),
+        ('PLI', 'Professional Logistics', 'company-pli')] %}
+    {% set company_cps = company_permits | selectattr('company', 'equalto', company_code) | list %}
+    {% if company_cps %}
+    <div class="company-section">
+        <div class="company-title {{ company_class }}">{{ company_label }} — Permisos de Empresa</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Permiso</th>
+                    <th>Estado</th>
+                    <th>Autoridad</th>
+                    <th>Número</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cp in company_cps %}
+                <tr>
+                    <td><strong>{{ cp.display_name }}</strong></td>
+                    {{ status_cell(cp.expiration_date, cp.applicability) }}
+                    <td>{{ cp.issuing_authority or '—' }}</td>
+                    <td>{{ cp.permit_number or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+
     {% if issues %}
     {% for company_code, company_label, company_class in [
         ('LB', 'LB Caribe Services', 'company-lb'),

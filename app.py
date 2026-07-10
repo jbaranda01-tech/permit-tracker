@@ -1751,6 +1751,13 @@ def import_equipment():
 
 # ── PDF REPORT ─────────────────────────────────────────────────────────
 
+@app.route('/reports')
+@login_required
+def report_menu():
+    """Picker page: choose report purpose + company, then download the scoped PDF."""
+    return render_template('report_options.html')
+
+
 @app.route('/report/pdf')
 @login_required
 def generate_pdf():
@@ -1760,6 +1767,7 @@ def generate_pdf():
     employees = []
     equipment_list = []
     issues = []
+    company_permits = []
 
     if report_type in ('all', 'employees'):
         q = Employee.query.order_by(Employee.company, Employee.name)
@@ -1791,10 +1799,17 @@ def generate_pdf():
             ),
         )
 
+    if report_type in ('all', 'company'):
+        cq = CompanyPermit.query.order_by(CompanyPermit.company, CompanyPermit.permit_type)
+        if company_filter:
+            cq = cq.filter(CompanyPermit.company == company_filter)
+        company_permits = cq.all()
+
     html = render_template('report_pdf.html',
         employees=employees,
         equipment_list=equipment_list,
         issues=issues,
+        company_permits=company_permits,
         report_type=report_type,
         today=date.today(),
         alert_date=date.today() + timedelta(days=30),
@@ -1806,7 +1821,7 @@ def generate_pdf():
         from io import BytesIO
         buffer = BytesIO(pdf)
         buffer.seek(0)
-        fname = f"reporte_permisos_{date.today().strftime('%Y%m%d')}.pdf"
+        fname = f"reporte_{report_type}_{company_filter or 'todas'}_{date.today().strftime('%Y%m%d')}.pdf"
         return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name=fname)
     except Exception as e:
         # WeasyPrint needs native libs (Pango/Cairo/gobject) that may be absent

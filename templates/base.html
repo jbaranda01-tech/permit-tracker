@@ -64,7 +64,7 @@
         {% if not current_user.is_shop_only %}
         <div class="nav-section">
             <div class="nav-section-title">Herramientas</div>
-            <a href="{{ url_for('generate_pdf') }}" class="nav-link">
+            <a href="{{ url_for('report_menu') }}" class="nav-link {% if request.endpoint == 'report_menu' %}active{% endif %}">
                 <i class="fas fa-file-pdf"></i>
                 <span>Reporte PDF</span>
             </a>
