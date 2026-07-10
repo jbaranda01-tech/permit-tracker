@@ -36,6 +36,12 @@
         .st-missing { background: #f1f5f9; color: #64748b; }
         .st-na { background: #f8fafc; color: #94a3b8; font-style: italic; }
 
+        .sev-baja    { background: #dbeafe; color: #1d4ed8; }
+        .sev-media   { background: #fef3c7; color: #92400e; }
+        .sev-alta    { background: #fed7aa; color: #c2410c; }
+        .sev-critica { background: #fecaca; color: #dc2626; }
+        .desc-cell { max-width: 220px; }
+
         .section-subtitle { font-size: 10pt; font-weight: 600; margin: 12px 0 6px; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; }
         .footer { text-align: center; margin-top: 20px; font-size: 7pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
         @media print { body { padding: 10px; } .company-section { page-break-inside: avoid; } }
@@ -55,6 +61,15 @@
         <span class="legend-item"><span class="legend-dot dot-missing"></span> Incompleto</span>
         <span class="legend-item"><span class="legend-dot dot-na"></span> N/A</span>
     </div>
+
+    {% if issues %}
+    <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span> Severidad Baja</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> Media</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#f97316;"></span> Alta</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#ef4444;"></span> Crítica</span>
+    </div>
+    {% endif %}
 
     {% macro status_cell(exp_date, applicability='YES') %}
         {% if applicability == 'N/A' %}
@@ -294,6 +309,45 @@
         </table>
     </div>
     {% endif %}
+    {% endif %}
+
+    {% if issues %}
+    {% for company_code, company_label, company_class in [
+        ('LB', 'LB Caribe Services', 'company-lb'),
+        ('PLI', 'Professional Logistics', 'company-pli')] %}
+    {% set company_issues = issues | selectattr('equipment') | selectattr('equipment.company', 'equalto', company_code) | list %}
+    {% if company_issues %}
+    <div class="company-section">
+        <div class="company-title {{ company_class }}">{{ company_label }} — Reportes Abiertos (Averías)</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Unidad</th>
+                    <th>Categoría</th>
+                    <th>Severidad</th>
+                    <th>Estado</th>
+                    <th>Descripción</th>
+                    <th>Reportado</th>
+                    <th>Por</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for issue in company_issues %}
+                <tr>
+                    <td><strong>{{ issue.equipment.display_name }}</strong></td>
+                    <td>{{ issue.category_label }}</td>
+                    <td><span class="status-cell sev-{{ issue.severity }}">{{ issue.severity_label }}</span></td>
+                    <td>{{ issue.status_label }}</td>
+                    <td class="desc-cell">{{ issue.description | truncate(90) if issue.description else '—' }}</td>
+                    <td>{{ issue.reported_at.strftime('%m/%d/%Y') if issue.reported_at else '—' }}</td>
+                    <td>{{ issue.reporter.name if issue.reporter else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endfor %}
     {% endif %}
 
     <div class="footer">

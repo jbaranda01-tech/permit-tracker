@@ -1754,11 +1754,12 @@ def import_equipment():
 @app.route('/report/pdf')
 @login_required
 def generate_pdf():
-    report_type = request.args.get('type', 'all')  # all, employees, equipment
+    report_type = request.args.get('type', 'all')  # all, employees, equipment, issues
     company_filter = request.args.get('company', '')
 
     employees = []
     equipment_list = []
+    issues = []
 
     if report_type in ('all', 'employees'):
         q = Employee.query.order_by(Employee.company, Employee.name)
@@ -1772,9 +1773,28 @@ def generate_pdf():
             q = q.filter(Equipment.company == company_filter)
         equipment_list = q.all()
 
+    if report_type in ('all', 'issues'):
+        # Open issues only; grouped by company via the linked Equipment.
+        iq = (Issue.query
+              .join(Equipment, Issue.equipment_id == Equipment.id)
+              .filter(Issue.current_status.notin_(['resuelto', 'cerrado'])))
+        if company_filter:
+            iq = iq.filter(Equipment.company == company_filter)
+        # Sort in Python: company, then worst severity first, then newest.
+        severity_rank = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
+        issues = sorted(
+            iq.all(),
+            key=lambda i: (
+                i.equipment.company if i.equipment else '',
+                -severity_rank.get(i.severity, 0),
+                -(i.reported_at.toordinal() if i.reported_at else 0),
+            ),
+        )
+
     html = render_template('report_pdf.html',
         employees=employees,
         equipment_list=equipment_list,
+        issues=issues,
         report_type=report_type,
         today=date.today(),
         alert_date=date.today() + timedelta(days=30),
@@ -1788,8 +1808,12 @@ def generate_pdf():
         buffer.seek(0)
         fname = f"reporte_permisos_{date.today().strftime('%Y%m%d')}.pdf"
         return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name=fname)
-    except ImportError:
-        # Fallback: return HTML for printing
+    except Exception as e:
+        # WeasyPrint needs native libs (Pango/Cairo/gobject) that may be absent
+        # in local/dev environments, where the import raises OSError (not just
+        # ImportError). Degrade gracefully to a printable HTML report instead of
+        # 500-ing the route.
+        app.logger.warning('PDF generation unavailable, serving HTML fallback: %s', e)
         return html
 
 
