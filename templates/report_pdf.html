@@ -1,8 +1,16 @@
+{% set report_titles = {
+    'all': 'Reporte General',
+    'employees': 'Reporte de Permisos',
+    'equipment': 'Reporte de Equipos',
+    'issues': 'Reporte de Averías',
+    'company': 'Reporte de Permisos de Empresa'
+} %}
+{% set report_title = report_titles.get(report_type, 'Reporte General') %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Reporte de Permisos — {{ today.strftime('%m/%d/%Y') }}</title>
+    <title>{{ report_title }} — {{ today.strftime('%m/%d/%Y') }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 9pt; color: #1a1a2e; padding: 20px; }
@@ -49,7 +57,7 @@
 </head>
 <body>
     <div class="report-header">
-        <h1>Reporte de Permisos y Documentos</h1>
+        <h1>{{ report_title }}</h1>
         <p>LB Caribe Services, Inc. & Professional Logistics, Inc.</p>
         <p>Generado: {{ today.strftime('%d de %B de %Y') }}</p>
     </div>
