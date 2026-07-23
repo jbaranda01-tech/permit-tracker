@@ -137,6 +137,16 @@ class Employee(db.Model):
 
         return summary
 
+    @property
+    def next_expiration(self):
+        """Nearest upcoming (>= today) expiration across license + non-N/A permits; None if none."""
+        today = date.today()
+        dates = [p.expiration_date for p in self.permits
+                 if p.applicability != 'N/A' and p.expiration_date and p.expiration_date >= today]
+        if self.license_expiration and self.license_expiration >= today:
+            dates.append(self.license_expiration)
+        return min(dates) if dates else None
+
 
 EMPLOYEE_PERMIT_TYPES = [
     ('NTSP', 'NTSP'),
@@ -256,6 +266,14 @@ class Equipment(db.Model):
             else:
                 summary['valid'] += 1
         return summary
+
+    @property
+    def next_expiration(self):
+        """Nearest upcoming (>= today) expiration across non-N/A permits; None if none."""
+        today = date.today()
+        dates = [p.expiration_date for p in self.permits
+                 if p.applicability != 'N/A' and p.expiration_date and p.expiration_date >= today]
+        return min(dates) if dates else None
 
 
 EQUIPMENT_PERMIT_TYPES = [

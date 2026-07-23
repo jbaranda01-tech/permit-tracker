@@ -367,6 +367,62 @@ def logout():
 
 # ── DASHBOARD ──────────────────────────────────────────────────────────
 
+DASHBOARD_SORTS = ('name', 'urgency', 'expiration')
+ATTENTION_STATUSES = ('expired', 'expiring_soon', 'missing')
+PERMIT_STATUS_MAP = {'expired': 'expired', 'expiring': 'expiring_soon'}  # url value -> summary key
+
+
+def _permit_type_status(item, permit_type, view):
+    """Status ('expired'|'expiring_soon'|'valid'|'missing'|'na') of one permit type on an entity."""
+    if view == 'employees' and permit_type == 'LICENCIA':
+        if not item.license_expiration:
+            return 'missing'
+        today = date.today()
+        if item.license_expiration < today:
+            return 'expired'
+        if item.license_expiration <= today + timedelta(days=Config.ALERT_DAYS_BEFORE):
+            return 'expiring_soon'
+        return 'valid'
+    permit = next((p for p in item.permits if p.permit_type == permit_type), None)
+    return permit.status if permit else 'missing'
+
+
+def _filter_dashboard_items(items, permit_type, permit_status, view):
+    """permit_type alone: that type needs attention; with permit_status: that type has exactly
+    that status; permit_status alone: any permit has that status."""
+    if permit_type:
+        if permit_status:
+            wanted = PERMIT_STATUS_MAP[permit_status]
+            return [i for i in items if _permit_type_status(i, permit_type, view) == wanted]
+        return [i for i in items if _permit_type_status(i, permit_type, view) in ATTENTION_STATUSES]
+    if permit_status:
+        wanted = PERMIT_STATUS_MAP[permit_status]
+        return [i for i in items if i.permit_status_summary[wanted] > 0]
+    return items
+
+
+def _sort_dashboard_items(items, sort_by, view):
+    def entity_name(item):
+        return (item.name if view == 'employees' else item.display_name).lower()
+
+    if sort_by == 'urgency':
+        def key(item):
+            s = item.permit_status_summary
+            if s['expired'] > 0:
+                rank = 0
+            elif s['expiring_soon'] > 0:
+                rank = 1
+            elif s['missing'] > 0:
+                rank = 2
+            else:
+                rank = 3
+            return (rank, -s['expired'], -s['expiring_soon'], entity_name(item))
+        return sorted(items, key=key)
+    if sort_by == 'expiration':
+        return sorted(items, key=lambda i: (i.next_expiration or date.max, entity_name(i)))
+    return sorted(items, key=entity_name)
+
+
 @app.route('/')
 @login_required
 def dashboard():
@@ -375,6 +431,18 @@ def dashboard():
     company_filter = request.args.get('company', '')
     status_filter = request.args.get('status', '')
     sort_by = request.args.get('sort', 'name')
+    if sort_by not in DASHBOARD_SORTS:
+        sort_by = 'name'
+    permit_status = request.args.get('permit_status', '')
+    if permit_status not in PERMIT_STATUS_MAP:
+        permit_status = ''
+    if view == 'equipment':
+        permit_types = list(EQUIPMENT_PERMIT_TYPES)
+    else:
+        permit_types = [('LICENCIA', 'Licencia de Conducir')] + list(EMPLOYEE_PERMIT_TYPES)
+    permit_type = request.args.get('permit_type', '')
+    if permit_type not in {code for code, _label in permit_types}:
+        permit_type = ''
 
     if view == 'company':
         # Backfill missing company permits
@@ -415,9 +483,9 @@ def dashboard():
             query = query.filter(Equipment.status == status_filter)
 
         # Split by company
-        lb_items = query.filter(Equipment.company == 'LB').order_by(Equipment.make).all()
-        pli_items = query.filter(Equipment.company == 'PLI').order_by(Equipment.make).all()
-        personal_items = query.filter(Equipment.company == 'Personal').order_by(Equipment.make).all()
+        lb_items = query.filter(Equipment.company == 'LB').all()
+        pli_items = query.filter(Equipment.company == 'PLI').all()
+        personal_items = query.filter(Equipment.company == 'Personal').all()
     else:
         query = Employee.query
         if search:
@@ -434,17 +502,45 @@ def dashboard():
             query = query.filter(Employee.status == status_filter)
 
         # Split by company
-        lb_items = query.filter(Employee.company == 'LB').order_by(Employee.name).all()
-        pli_items = query.filter(Employee.company == 'PLI').order_by(Employee.name).all()
+        lb_items = query.filter(Employee.company == 'LB').all()
+        pli_items = query.filter(Employee.company == 'PLI').all()
+        personal_items = []
+
+    # Permit-type filter first, then tile counts (stable regardless of the
+    # active permit_status tile), then the permit_status filter + sort.
+    lb_items = _filter_dashboard_items(lb_items, permit_type, '', view)
+    pli_items = _filter_dashboard_items(pli_items, permit_type, '', view)
+    personal_items = _filter_dashboard_items(personal_items, permit_type, '', view)
+
+    all_items = lb_items + pli_items + personal_items
+    tile_counts = {'expired': 0, 'expiring': 0, 'total': len(all_items)}
+    for item in all_items:
+        summary = item.permit_status_summary
+        tile_counts['expired'] += summary['expired']
+        tile_counts['expiring'] += summary['expiring_soon']
+
+    if permit_status:
+        lb_items = _filter_dashboard_items(lb_items, permit_type, permit_status, view)
+        pli_items = _filter_dashboard_items(pli_items, permit_type, permit_status, view)
+        personal_items = _filter_dashboard_items(personal_items, permit_type, permit_status, view)
+
+    lb_items = _sort_dashboard_items(lb_items, sort_by, view)
+    pli_items = _sort_dashboard_items(pli_items, sort_by, view)
+    personal_items = _sort_dashboard_items(personal_items, sort_by, view)
 
     return render_template('dashboard.html',
         view=view,
         lb_items=lb_items,
         pli_items=pli_items,
-        personal_items=personal_items if view == 'equipment' else [],
+        personal_items=personal_items,
         search=search,
         company_filter=company_filter,
         status_filter=status_filter,
+        sort_by=sort_by,
+        permit_type=permit_type,
+        permit_status=permit_status,
+        permit_types=permit_types,
+        tile_counts=tile_counts,
     )
 
 

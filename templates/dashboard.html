@@ -8,6 +8,11 @@
         <div class="dashboard-actions">
             <form class="search-form" method="GET" action="{{ url_for('dashboard') }}">
                 <input type="hidden" name="view" value="{{ view }}">
+                {% if company_filter %}<input type="hidden" name="company" value="{{ company_filter }}">{% endif %}
+                {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+                {% if sort_by and sort_by != 'name' %}<input type="hidden" name="sort" value="{{ sort_by }}">{% endif %}
+                {% if permit_type %}<input type="hidden" name="permit_type" value="{{ permit_type }}">{% endif %}
+                {% if permit_status %}<input type="hidden" name="permit_status" value="{{ permit_status }}">{% endif %}
                 <div class="input-icon search-input">
                     <i class="fas fa-search"></i>
                     <input type="text" name="search" value="{{ search }}" placeholder="Buscar...">
@@ -29,26 +34,59 @@
     {% endif %}
 
     {% if view != 'company' %}
-    {% set stats = namespace(expired=0, expiring=0) %}
-    {% set all_items = lb_items + pli_items + personal_items %}
-    {% for item in all_items %}
-        {% set s = item.permit_status_summary %}
-        {% set stats.expired = stats.expired + s.expired %}
-        {% set stats.expiring = stats.expiring + s.expiring_soon %}
-    {% endfor %}
-    <div class="stat-tiles">
-        <button type="button" class="stat-tile stat-tile--expired" data-permit-filter="expired">
-            <div class="stat-tile__num">{{ stats.expired }}</div>
-            <div class="stat-tile__label">Vencidos</div>
-        </button>
-        <button type="button" class="stat-tile stat-tile--expiring" data-permit-filter="expiring">
-            <div class="stat-tile__num">{{ stats.expiring }}</div>
-            <div class="stat-tile__label">Por Vencer</div>
-        </button>
-        <button type="button" class="stat-tile stat-tile--valid" data-permit-filter="all">
-            <div class="stat-tile__num">{{ all_items|length }}</div>
-            <div class="stat-tile__label">{{ 'Empleados' if view == 'employees' else 'Equipos' }}</div>
-        </button>
+    <div class="queue-toolbar">
+        <div class="stat-tiles">
+            <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
+                                status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
+                                permit_type=permit_type or none,
+                                permit_status=none if permit_status == 'expired' else 'expired') }}"
+               class="stat-tile stat-tile--expired{% if permit_status == 'expired' %} stat-tile--active{% endif %}">
+                <div class="stat-tile__num">{{ tile_counts.expired }}</div>
+                <div class="stat-tile__label">Vencidos</div>
+            </a>
+            <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
+                                status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
+                                permit_type=permit_type or none,
+                                permit_status=none if permit_status == 'expiring' else 'expiring') }}"
+               class="stat-tile stat-tile--expiring{% if permit_status == 'expiring' %} stat-tile--active{% endif %}">
+                <div class="stat-tile__num">{{ tile_counts.expiring }}</div>
+                <div class="stat-tile__label">Por Vencer</div>
+            </a>
+            <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
+                                status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
+                                permit_type=permit_type or none) }}"
+               class="stat-tile stat-tile--valid">
+                <div class="stat-tile__num">{{ tile_counts.total }}</div>
+                <div class="stat-tile__label">{{ 'Empleados' if view == 'employees' else 'Equipos' }}</div>
+            </a>
+        </div>
+        <div class="issue-filters">
+            <form method="GET" class="filter-form" action="{{ url_for('dashboard') }}">
+                <input type="hidden" name="view" value="{{ view }}">
+                {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
+                {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+                {% if permit_status %}<input type="hidden" name="permit_status" value="{{ permit_status }}">{% endif %}
+                <select name="company" onchange="this.form.submit()" aria-label="Empresa">
+                    <option value="">Todas las empresas</option>
+                    <option value="LB" {% if company_filter == 'LB' %}selected{% endif %}>LB Caribe Services</option>
+                    <option value="PLI" {% if company_filter == 'PLI' %}selected{% endif %}>Professional Logistics</option>
+                    {% if view == 'equipment' %}
+                    <option value="Personal" {% if company_filter == 'Personal' %}selected{% endif %}>Personal</option>
+                    {% endif %}
+                </select>
+                <select name="permit_type" onchange="this.form.submit()" aria-label="Tipo de permiso">
+                    <option value="">Todos los permisos</option>
+                    {% for code, label in permit_types %}
+                    <option value="{{ code }}" {% if permit_type == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="sort" onchange="this.form.submit()" aria-label="Ordenar por">
+                    <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Ordenar: {{ 'Nombre' if view == 'employees' else 'Número de unidad' }}</option>
+                    <option value="urgency" {% if sort_by == 'urgency' %}selected{% endif %}>Ordenar: Urgencia</option>
+                    <option value="expiration" {% if sort_by == 'expiration' %}selected{% endif %}>Ordenar: Próximo a vencer</option>
+                </select>
+            </form>
+        </div>
     </div>
     {% endif %}
 
@@ -313,6 +351,7 @@
     {% else %}
     <!-- Company Panels -->
     <div class="company-panels{% if view == 'equipment' %} three-columns{% endif %}">
+        {% if not company_filter or company_filter == 'LB' %}
         <!-- LB Caribe Services -->
         <div class="company-panel">
             <div class="panel-header panel-lb">
@@ -322,7 +361,7 @@
             <div class="panel-body">
                 {% if view == 'employees' %}
                     {% for emp in lb_items %}
-                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card" data-expired="{{ emp.permit_status_summary.expired }}" data-expiring="{{ emp.permit_status_summary.expiring_soon }}">
+                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ emp.name }}</div>
                             <div class="entity-meta">{{ emp.area or '—' }}</div>
@@ -347,12 +386,12 @@
                     {% if not lb_items %}
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
-                        <p>No hay empleados</p>
+                        <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay empleados{% endif %}</p>
                     </div>
                     {% endif %}
                 {% else %}
                     {% for eq in lb_items %}
-                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card" data-expired="{{ eq.permit_status_summary.expired }}" data-expiring="{{ eq.permit_status_summary.expiring_soon }}">
+                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ eq.display_name }}</div>
                             <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
@@ -377,13 +416,15 @@
                     {% if not lb_items %}
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
-                        <p>No hay equipos</p>
+                        <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
                     </div>
                     {% endif %}
                 {% endif %}
             </div>
         </div>
+        {% endif %}
 
+        {% if not company_filter or company_filter == 'PLI' %}
         <!-- Professional Logistics -->
         <div class="company-panel">
             <div class="panel-header panel-pli">
@@ -393,7 +434,7 @@
             <div class="panel-body">
                 {% if view == 'employees' %}
                     {% for emp in pli_items %}
-                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card" data-expired="{{ emp.permit_status_summary.expired }}" data-expiring="{{ emp.permit_status_summary.expiring_soon }}">
+                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ emp.name }}</div>
                             <div class="entity-meta">{{ emp.area or '—' }}</div>
@@ -418,12 +459,12 @@
                     {% if not pli_items %}
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
-                        <p>No hay empleados</p>
+                        <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay empleados{% endif %}</p>
                     </div>
                     {% endif %}
                 {% else %}
                     {% for eq in pli_items %}
-                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card" data-expired="{{ eq.permit_status_summary.expired }}" data-expiring="{{ eq.permit_status_summary.expiring_soon }}">
+                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ eq.display_name }}</div>
                             <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
@@ -448,14 +489,15 @@
                     {% if not pli_items %}
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
-                        <p>No hay equipos</p>
+                        <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
                     </div>
                     {% endif %}
                 {% endif %}
             </div>
         </div>
+        {% endif %}
 
-        {% if view == 'equipment' %}
+        {% if view == 'equipment' and (not company_filter or company_filter == 'Personal') %}
         <!-- Personal -->
         <div class="company-panel">
             <div class="panel-header panel-personal">
@@ -464,7 +506,7 @@
             </div>
             <div class="panel-body">
                 {% for eq in personal_items %}
-                <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card" data-expired="{{ eq.permit_status_summary.expired }}" data-expiring="{{ eq.permit_status_summary.expiring_soon }}">
+                <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
                     <div class="entity-info">
                         <div class="entity-name">{{ eq.display_name }}</div>
                         <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
@@ -489,7 +531,7 @@
                 {% if not personal_items %}
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <p>No hay equipos</p>
+                    <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
                 </div>
                 {% endif %}
             </div>
@@ -508,12 +550,12 @@ function toggleEditPermit(id) {
 </script>
 {% endif %}
 
+{% if view == 'company' %}
 <script>
 (function () {
     var tiles = document.querySelectorAll('.stat-tile[data-permit-filter]');
     if (!tiles.length) return;
-    // .entity-card = employee/equipment views; .permit-card = company view
-    var cardSelector = '.entity-card[data-expired], .permit-card[data-expired]';
+    var cardSelector = '.permit-card[data-expired]';
     var cards = document.querySelectorAll(cardSelector);
     var active = null;
 
@@ -553,4 +595,5 @@ function toggleEditPermit(id) {
     });
 })();
 </script>
+{% endif %}
 {% endblock %}
