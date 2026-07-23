@@ -367,7 +367,7 @@ def logout():
 
 # ── DASHBOARD ──────────────────────────────────────────────────────────
 
-DASHBOARD_SORTS = ('name', 'urgency', 'expiration')
+DASHBOARD_SORTS = ('name', 'category', 'urgency', 'expiration')
 ATTENTION_STATUSES = ('expired', 'expiring_soon', 'missing')
 PERMIT_STATUS_MAP = {'expired': 'expired', 'expiring': 'expiring_soon'}  # url value -> summary key
 
@@ -405,6 +405,11 @@ def _sort_dashboard_items(items, sort_by, view):
     def entity_name(item):
         return (item.name if view == 'employees' else item.display_name).lower()
 
+    if sort_by == 'category':
+        def key(item):
+            value = ((item.area if view == 'employees' else item.model) or '').strip().lower()
+            return (value == '', value, entity_name(item))
+        return sorted(items, key=key)
     if sort_by == 'urgency':
         def key(item):
             s = item.permit_status_summary

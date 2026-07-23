@@ -82,6 +82,7 @@
                 </select>
                 <select name="sort" onchange="this.form.submit()" aria-label="Ordenar por">
                     <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Ordenar: {{ 'Nombre' if view == 'employees' else 'Número de unidad' }}</option>
+                    <option value="category" {% if sort_by == 'category' %}selected{% endif %}>Ordenar: {{ 'Área' if view == 'employees' else 'Modelo' }}</option>
                     <option value="urgency" {% if sort_by == 'urgency' %}selected{% endif %}>Ordenar: Urgencia</option>
                     <option value="expiration" {% if sort_by == 'expiration' %}selected{% endif %}>Ordenar: Próximo a vencer</option>
                 </select>
@@ -394,7 +395,7 @@
                     <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ eq.display_name }}</div>
-                            <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
+                            <div class="entity-meta">{{ eq.plate_number or '—' }}{% if eq.model %} · {{ eq.model }}{% endif %}</div>
                         </div>
                         <div class="entity-status">
                             {% set summary = eq.permit_status_summary %}
@@ -467,7 +468,7 @@
                     <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ eq.display_name }}</div>
-                            <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
+                            <div class="entity-meta">{{ eq.plate_number or '—' }}{% if eq.model %} · {{ eq.model }}{% endif %}</div>
                         </div>
                         <div class="entity-status">
                             {% set summary = eq.permit_status_summary %}
@@ -509,7 +510,7 @@
                 <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
                     <div class="entity-info">
                         <div class="entity-name">{{ eq.display_name }}</div>
-                        <div class="entity-meta">{{ eq.plate_number or '—' }}</div>
+                        <div class="entity-meta">{{ eq.plate_number or '—' }}{% if eq.model %} · {{ eq.model }}{% endif %}</div>
                     </div>
                     <div class="entity-status">
                         {% set summary = eq.permit_status_summary %}
