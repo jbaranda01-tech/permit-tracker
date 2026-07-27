@@ -13,6 +13,7 @@
                 {% if sort_by and sort_by != 'name' %}<input type="hidden" name="sort" value="{{ sort_by }}">{% endif %}
                 {% if permit_type %}<input type="hidden" name="permit_type" value="{{ permit_type }}">{% endif %}
                 {% if permit_status %}<input type="hidden" name="permit_status" value="{{ permit_status }}">{% endif %}
+                {% if exp_month %}<input type="hidden" name="exp_month" value="{{ exp_month }}">{% endif %}
                 <div class="input-icon search-input">
                     <i class="fas fa-search"></i>
                     <input type="text" name="search" value="{{ search }}" placeholder="Buscar...">
@@ -38,7 +39,7 @@
         <div class="stat-tiles">
             <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
                                 status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
-                                permit_type=permit_type or none,
+                                permit_type=permit_type or none, exp_month=exp_month or none,
                                 permit_status=none if permit_status == 'expired' else 'expired') }}"
                class="stat-tile stat-tile--expired{% if permit_status == 'expired' %} stat-tile--active{% endif %}">
                 <div class="stat-tile__num">{{ tile_counts.expired }}</div>
@@ -46,7 +47,7 @@
             </a>
             <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
                                 status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
-                                permit_type=permit_type or none,
+                                permit_type=permit_type or none, exp_month=exp_month or none,
                                 permit_status=none if permit_status == 'expiring' else 'expiring') }}"
                class="stat-tile stat-tile--expiring{% if permit_status == 'expiring' %} stat-tile--active{% endif %}">
                 <div class="stat-tile__num">{{ tile_counts.expiring }}</div>
@@ -54,7 +55,7 @@
             </a>
             <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
                                 status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
-                                permit_type=permit_type or none) }}"
+                                permit_type=permit_type or none, exp_month=exp_month or none) }}"
                class="stat-tile stat-tile--valid">
                 <div class="stat-tile__num">{{ tile_counts.total }}</div>
                 <div class="stat-tile__label">{{ 'Empleados' if view == 'employees' else 'Equipos' }}</div>
@@ -78,6 +79,12 @@
                     <option value="">Todos los permisos</option>
                     {% for code, label in permit_types %}
                     <option value="{{ code }}" {% if permit_type == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="exp_month" onchange="this.form.submit()" aria-label="Mes de vencimiento">
+                    <option value="">Todos los meses</option>
+                    {% for value, label in exp_months %}
+                    <option value="{{ value }}" {% if exp_month == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
                 <select name="sort" onchange="this.form.submit()" aria-label="Ordenar por">
@@ -387,7 +394,7 @@
                     {% if not lb_items %}
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
-                        <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay empleados{% endif %}</p>
+                        <p>{% if search or permit_type or permit_status or exp_month %}No hay resultados con estos filtros{% else %}No hay empleados{% endif %}</p>
                     </div>
                     {% endif %}
                 {% else %}
@@ -417,7 +424,7 @@
                     {% if not lb_items %}
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
-                        <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
+                        <p>{% if search or permit_type or permit_status or exp_month %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
                     </div>
                     {% endif %}
                 {% endif %}
@@ -460,7 +467,7 @@
                     {% if not pli_items %}
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
-                        <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay empleados{% endif %}</p>
+                        <p>{% if search or permit_type or permit_status or exp_month %}No hay resultados con estos filtros{% else %}No hay empleados{% endif %}</p>
                     </div>
                     {% endif %}
                 {% else %}
@@ -490,7 +497,7 @@
                     {% if not pli_items %}
                     <div class="empty-state">
                         <i class="fas fa-inbox"></i>
-                        <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
+                        <p>{% if search or permit_type or permit_status or exp_month %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
                     </div>
                     {% endif %}
                 {% endif %}
@@ -532,7 +539,7 @@
                 {% if not personal_items %}
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <p>{% if search or permit_type or permit_status %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
+                    <p>{% if search or permit_type or permit_status or exp_month %}No hay resultados con estos filtros{% else %}No hay equipos{% endif %}</p>
                 </div>
                 {% endif %}
             </div>

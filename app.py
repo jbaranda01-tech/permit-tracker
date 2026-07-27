@@ -370,6 +370,34 @@ def logout():
 DASHBOARD_SORTS = ('name', 'category', 'urgency', 'expiration')
 ATTENTION_STATUSES = ('expired', 'expiring_soon', 'missing')
 PERMIT_STATUS_MAP = {'expired': 'expired', 'expiring': 'expiring_soon'}  # url value -> summary key
+SPANISH_MONTHS = ('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre')
+
+
+def _exp_month_options():
+    """('YYYY-MM', 'Agosto 2026') pairs: 3 past months, current, next 12."""
+    today = date.today()
+    start = today.year * 12 + (today.month - 1) - 3
+    options = []
+    for n in range(start, start + 16):
+        year, month0 = divmod(n, 12)
+        options.append((f'{year:04d}-{month0 + 1:02d}', f'{SPANISH_MONTHS[month0]} {year}'))
+    return options
+
+
+def _expires_in_month(item, exp_month, permit_type, view):
+    """True if a counted expiration (the given type's, else any) falls in exp_month ('YYYY-MM')."""
+    def in_month(d):
+        return d is not None and f'{d.year:04d}-{d.month:02d}' == exp_month
+
+    if permit_type:
+        if view == 'employees' and permit_type == 'LICENCIA':
+            return in_month(item.license_expiration)
+        permit = next((p for p in item.permits if p.permit_type == permit_type), None)
+        return permit is not None and permit.applicability != 'N/A' and in_month(permit.expiration_date)
+    if view == 'employees' and in_month(item.license_expiration):
+        return True
+    return any(p.applicability != 'N/A' and in_month(p.expiration_date) for p in item.permits)
 
 
 def _permit_type_status(item, permit_type, view):
@@ -448,6 +476,10 @@ def dashboard():
     permit_type = request.args.get('permit_type', '')
     if permit_type not in {code for code, _label in permit_types}:
         permit_type = ''
+    exp_month_options = _exp_month_options()
+    exp_month = request.args.get('exp_month', '')
+    if exp_month not in {value for value, _label in exp_month_options}:
+        exp_month = ''
 
     if view == 'company':
         # Backfill missing company permits
@@ -511,11 +543,17 @@ def dashboard():
         pli_items = query.filter(Employee.company == 'PLI').all()
         personal_items = []
 
-    # Permit-type filter first, then tile counts (stable regardless of the
-    # active permit_status tile), then the permit_status filter + sort.
-    lb_items = _filter_dashboard_items(lb_items, permit_type, '', view)
-    pli_items = _filter_dashboard_items(pli_items, permit_type, '', view)
-    personal_items = _filter_dashboard_items(personal_items, permit_type, '', view)
+    # Scope filters first (exp_month replaces the type "needs attention" rule when
+    # set), then tile counts (stable regardless of the active permit_status tile),
+    # then the permit_status filter + sort.
+    if exp_month:
+        lb_items = [i for i in lb_items if _expires_in_month(i, exp_month, permit_type, view)]
+        pli_items = [i for i in pli_items if _expires_in_month(i, exp_month, permit_type, view)]
+        personal_items = [i for i in personal_items if _expires_in_month(i, exp_month, permit_type, view)]
+    else:
+        lb_items = _filter_dashboard_items(lb_items, permit_type, '', view)
+        pli_items = _filter_dashboard_items(pli_items, permit_type, '', view)
+        personal_items = _filter_dashboard_items(personal_items, permit_type, '', view)
 
     all_items = lb_items + pli_items + personal_items
     tile_counts = {'expired': 0, 'expiring': 0, 'total': len(all_items)}
@@ -545,6 +583,8 @@ def dashboard():
         permit_type=permit_type,
         permit_status=permit_status,
         permit_types=permit_types,
+        exp_month=exp_month,
+        exp_months=exp_month_options,
         tile_counts=tile_counts,
     )
 
