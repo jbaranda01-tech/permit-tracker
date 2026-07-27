@@ -37,10 +37,13 @@
                 <div class="form-group">
                     <label for="status">Status</label>
                     {% set sel_status = equipment.status if equipment else fd.get('status', 'activo') %}
-                    <select id="status" name="status">
+                    <select id="status" name="status" {% if equipment and equipment.is_archived %}disabled{% endif %}>
                         <option value="activo" {% if sel_status == 'activo' %}selected{% endif %}>Activo</option>
                         <option value="inactivo" {% if sel_status == 'inactivo' %}selected{% endif %}>Inactivo</option>
                     </select>
+                    {% if equipment and equipment.is_archived %}
+                    <small class="text-muted-sm">Registro archivado — el estado se restablece al restaurar.</small>
+                    {% endif %}
                 </div>
             </div>
             <div class="form-row">

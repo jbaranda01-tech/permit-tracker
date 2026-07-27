@@ -50,6 +50,13 @@ class User(UserMixin, db.Model):
 
 # ── EMPLOYEES ──────────────────────────────────────────────────────────
 
+EMPLOYEE_ARCHIVE_REASONS = [
+    ('baja', 'Baja'),
+    ('renuncia', 'Renuncia'),
+    ('otro', 'Otro'),
+]
+
+
 class Employee(db.Model):
     __tablename__ = 'employees'
     __table_args__ = (
@@ -60,6 +67,11 @@ class Employee(db.Model):
     company = db.Column(db.String(10), nullable=False)  # LB or PLI
     area = db.Column(db.String(100))  # chofer, administrador, vendedor, etc.
     status = db.Column(db.String(20), default='activo')
+
+    # Archive (soft-remove): archived_at set ⇒ hidden from all active surfaces
+    archived_at = db.Column(db.DateTime, nullable=True)
+    archive_reason = db.Column(db.String(30), nullable=True)  # code from EMPLOYEE_ARCHIVE_REASONS
+    archive_note = db.Column(db.String(300), nullable=True)
 
     # Profile fields
     fecha_nacimiento = db.Column(db.Date)
@@ -88,6 +100,17 @@ class Employee(db.Model):
     @property
     def company_full(self):
         return 'LB Caribe Services' if self.company == 'LB' else 'Professional Logistics'
+
+    @property
+    def is_archived(self):
+        return self.archived_at is not None
+
+    @property
+    def archive_reason_label(self):
+        for code, label in EMPLOYEE_ARCHIVE_REASONS:
+            if code == self.archive_reason:
+                return label
+        return self.archive_reason or 'Otro'
 
     @property
     def completion_status(self):
@@ -216,6 +239,13 @@ class EmployeePermit(db.Model):
 
 # ── EQUIPMENT ──────────────────────────────────────────────────────────
 
+EQUIPMENT_ARCHIVE_REASONS = [
+    ('vendido', 'Vendido'),
+    ('chatarra', 'Chatarra'),
+    ('otro', 'Otro'),
+]
+
+
 class Equipment(db.Model):
     __tablename__ = 'equipment'
     id = db.Column(db.Integer, primary_key=True)
@@ -232,6 +262,12 @@ class Equipment(db.Model):
     cost = db.Column(db.Numeric(10, 2))
     notes = db.Column(db.Text)
     status = db.Column(db.String(20), default='activo')
+
+    # Archive (soft-remove): archived_at set ⇒ hidden from all active surfaces
+    archived_at = db.Column(db.DateTime, nullable=True)
+    archive_reason = db.Column(db.String(30), nullable=True)  # code from EQUIPMENT_ARCHIVE_REASONS
+    archive_note = db.Column(db.String(300), nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -248,6 +284,17 @@ class Equipment(db.Model):
         if self.unit_number:
             return self.unit_number
         return f'Equipo #{self.id}'
+
+    @property
+    def is_archived(self):
+        return self.archived_at is not None
+
+    @property
+    def archive_reason_label(self):
+        for code, label in EQUIPMENT_ARCHIVE_REASONS:
+            if code == self.archive_reason:
+                return label
+        return self.archive_reason or 'Otro'
 
     @property
     def permit_status_summary(self):

@@ -38,10 +38,13 @@
                 </div>
                 <div class="form-group">
                     <label for="status">Status</label>
-                    <select id="status" name="status">
+                    <select id="status" name="status" {% if employee and employee.is_archived %}disabled{% endif %}>
                         <option value="activo" {% if not employee or employee.status == 'activo' %}selected{% endif %}>Activo</option>
                         <option value="inactivo" {% if employee and employee.status == 'inactivo' %}selected{% endif %}>Inactivo</option>
                     </select>
+                    {% if employee and employee.is_archived %}
+                    <small class="text-muted-sm">Registro archivado — el estado se restablece al restaurar.</small>
+                    {% endif %}
                 </div>
             </div>
         </div>

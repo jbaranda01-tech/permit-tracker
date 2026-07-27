@@ -10,7 +10,11 @@
                 <div class="detail-meta">
                     <span class="company-tag tag-{{ employee.company|lower }}">{{ employee.company_full }}</span>
                     <span class="area-tag">{{ employee.area or '—' }}</span>
+                    {% if employee.is_archived %}
+                    <span class="status-tag status-archivado">Archivado</span>
+                    {% else %}
                     <span class="status-tag status-{{ employee.status }}">{{ employee.status }}</span>
+                    {% endif %}
                 </div>
             </div>
             {% if current_user.is_manager %}
@@ -18,6 +22,16 @@
                 <a href="{{ url_for('employee_edit', id=employee.id) }}" class="btn btn-secondary">
                     <i class="fas fa-edit"></i> Editar Perfil
                 </a>
+                {% if not employee.is_archived %}
+                <button type="button" class="btn btn-secondary" onclick="toggleArchivePanel()">
+                    <i class="fas fa-box-archive"></i> Archivar
+                </button>
+                {% else %}
+                <form method="POST" action="{{ url_for('employee_restore', id=employee.id) }}" style="display:inline"
+                      onsubmit="return confirm('¿Restaurar a {{ employee.name }}? Volverá a aparecer en el dashboard y los reportes.')">
+                    <button type="submit" class="btn btn-secondary"><i class="fas fa-rotate-left"></i> Restaurar</button>
+                </form>
+                {% endif %}
                 {% if current_user.is_admin %}
                 <button class="btn btn-secondary" onclick="toggleDriverLink()">
                     <i class="fas fa-link"></i> <span class="btn-text">Link de Reporte</span>
@@ -30,6 +44,41 @@
             </div>
             {% endif %}
         </div>
+
+        {% if employee.is_archived %}
+        <div class="archived-banner">
+            <i class="fas fa-box-archive"></i>
+            <div>
+                <strong>Empleado archivado</strong> — {{ employee.archive_reason_label }} · {{ employee.archived_at.strftime('%m/%d/%Y') }}
+                {% if employee.archive_note %}<div class="archived-note">{{ employee.archive_note }}</div>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if current_user.is_manager and not employee.is_archived %}
+        <div id="archive-panel" class="archive-panel" style="display:none">
+            <form method="POST" action="{{ url_for('employee_archive', id=employee.id) }}"
+                  onsubmit="return confirm('¿Archivar a {{ employee.name }}? Se ocultará del dashboard, reportes y notificaciones.')">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="archive_reason">Motivo</label>
+                        <select id="archive_reason" name="archive_reason">
+                            <option value="baja">Baja</option>
+                            <option value="renuncia">Renuncia</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="archive_note">Nota (opcional)</label>
+                        <input type="text" id="archive_note" name="archive_note" maxlength="300" placeholder="Detalles adicionales...">
+                    </div>
+                    <div class="form-group archive-panel-submit">
+                        <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-box-archive"></i> Archivar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        {% endif %}
 
         {% if current_user.is_admin %}
         <div id="driver-link-section" class="driver-link-section" style="display:none">
@@ -341,6 +390,10 @@ function toggleCustomName(select) {
 function toggleDriverLink() {
     const section = document.getElementById('driver-link-section');
     section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
+function toggleArchivePanel() {
+    const panel = document.getElementById('archive-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 function copyLink() {
     const input = document.getElementById('link-input');

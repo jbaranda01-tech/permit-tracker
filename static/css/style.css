@@ -857,6 +857,34 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
 }
 .status-activo { background: var(--color-valid-bg); color: var(--color-valid-text); }
 .status-inactivo { background: var(--color-missing-bg); color: var(--color-missing-text); }
+.status-archivado { background: var(--color-missing-bg); color: var(--color-missing-text); }
+
+/* Archive: banner on archived detail pages + collapsible reason form */
+.archived-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-missing-bg);
+    color: var(--color-missing-text);
+    border-left: 3px solid var(--color-missing-text);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+}
+.archived-banner i { margin-top: 2px; }
+.archived-note { margin-top: 2px; font-style: italic; opacity: 0.85; }
+
+.archive-panel {
+    margin-top: var(--space-md);
+    padding: var(--space-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+.archive-panel-submit { align-self: flex-end; }
+
+.entity-card--archived .entity-name { opacity: 0.8; }
 
 
 /* ── Profile Grid ──────────────────────────────────────────────────── */

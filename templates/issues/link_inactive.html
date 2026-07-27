@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Enlace Inactivo{% endblock %}
+{% block pwa_meta %}{% endblock %}
+{% block service_worker %}
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(r) { r.unregister(); });
+    });
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="report-container">
+    <div class="report-success">
+        <div class="success-icon">
+            <i class="fas fa-link-slash"></i>
+        </div>
+        <h1>Enlace Inactivo</h1>
+        <p>Este enlace de reporte ya no está activo.</p>
+        <p class="success-detail">Si cree que esto es un error, contacte a su supervisor.</p>
+    </div>
+</div>
+{% endblock %}

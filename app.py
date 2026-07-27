@@ -28,6 +28,7 @@ from models import (
     COMPANY_PERMIT_TYPES, FileStorage, NotificationLog,
     Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
+    EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -90,6 +91,7 @@ def _gather_expiring_items(employee_id=None):
 
     query = Employee.query.filter(
         Employee.status == 'activo',
+        Employee.archived_at.is_(None),
         Employee.email.isnot(None),
         Employee.email != '',
     )
@@ -503,7 +505,7 @@ def dashboard():
         )
 
     if view == 'equipment':
-        query = Equipment.query
+        query = Equipment.query.filter(Equipment.archived_at.is_(None))
         if search:
             query = query.filter(
                 db.or_(
@@ -524,7 +526,7 @@ def dashboard():
         pli_items = query.filter(Equipment.company == 'PLI').all()
         personal_items = query.filter(Equipment.company == 'Personal').all()
     else:
-        query = Employee.query
+        query = Employee.query.filter(Employee.archived_at.is_(None))
         if search:
             query = query.filter(
                 db.or_(
@@ -589,6 +591,29 @@ def dashboard():
     )
 
 
+@app.route('/archive')
+@login_required
+def archive_view():
+    search = request.args.get('search', '').strip()
+    emp_q = Employee.query.filter(Employee.archived_at.isnot(None))
+    eq_q = Equipment.query.filter(Equipment.archived_at.isnot(None))
+    if search:
+        emp_q = emp_q.filter(Employee.name.ilike(f'%{search}%'))
+        eq_q = eq_q.filter(db.or_(
+            Equipment.unit_number.ilike(f'%{search}%'),
+            Equipment.plate_number.ilike(f'%{search}%'),
+            Equipment.vin_serial.ilike(f'%{search}%'),
+            Equipment.make.ilike(f'%{search}%'),
+            Equipment.model.ilike(f'%{search}%'),
+        ))
+    archived_employees = emp_q.order_by(Employee.archived_at.desc()).all()
+    archived_equipment = eq_q.order_by(Equipment.archived_at.desc()).all()
+    return render_template('archive.html',
+                           archived_employees=archived_employees,
+                           archived_equipment=archived_equipment,
+                           search=search)
+
+
 # ── EMPLOYEE ROUTES ────────────────────────────────────────────────────
 
 @app.route('/employee/<int:id>')
@@ -596,28 +621,30 @@ def dashboard():
 def employee_detail(id):
     emp = Employee.query.get_or_404(id)
 
-    # Backfill missing permit slots for existing employees
-    existing_types = {}
-    for p in emp.permits.all():
-        existing_types[p.permit_type] = p
-    changed = False
-    for code, name in EMPLOYEE_PERMIT_TYPES:
-        if code == 'OTHER':
-            continue
-        if code not in existing_types:
-            db.session.add(EmployeePermit(
-                employee_id=emp.id,
-                permit_type=code,
-                applicability='YES' if code == 'PRIMEROS_AUXILIOS' else 'N/A'
-            ))
-            changed = True
-        elif code == 'PRIMEROS_AUXILIOS':
-            permit = existing_types[code]
-            if permit.applicability == 'N/A' and permit.expiration_date is None:
-                permit.applicability = 'YES'
+    # Backfill missing permit slots for existing employees (skip archived —
+    # frozen records shouldn't gain permit rows on a GET)
+    if not emp.is_archived:
+        existing_types = {}
+        for p in emp.permits.all():
+            existing_types[p.permit_type] = p
+        changed = False
+        for code, name in EMPLOYEE_PERMIT_TYPES:
+            if code == 'OTHER':
+                continue
+            if code not in existing_types:
+                db.session.add(EmployeePermit(
+                    employee_id=emp.id,
+                    permit_type=code,
+                    applicability='YES' if code == 'PRIMEROS_AUXILIOS' else 'N/A'
+                ))
                 changed = True
-    if changed:
-        db.session.commit()
+            elif code == 'PRIMEROS_AUXILIOS':
+                permit = existing_types[code]
+                if permit.applicability == 'N/A' and permit.expiration_date is None:
+                    permit.applicability = 'YES'
+                    changed = True
+        if changed:
+            db.session.commit()
 
     all_permits = emp.permits.order_by(EmployeePermit.permit_type).all()
     active_permits = [p for p in all_permits if p.applicability != 'N/A']
@@ -688,7 +715,8 @@ def employee_edit(id):
         emp.name = request.form['name']
         emp.company = request.form['company']
         emp.area = request.form.get('area', '')
-        emp.status = request.form.get('status', 'activo')
+        if not emp.is_archived:
+            emp.status = request.form.get('status', 'activo')
         emp.license_number = request.form.get('license_number', '')
         emp.puesto = request.form.get('puesto', '')
         emp.telefono = request.form.get('telefono', '')
@@ -733,6 +761,41 @@ def employee_delete(id):
     db.session.commit()
     flash(f'Empleado {name} eliminado.', 'warning')
     return redirect(url_for('dashboard'))
+
+
+@app.route('/employee/<int:id>/archive', methods=['POST'])
+@manager_required
+def employee_archive(id):
+    emp = Employee.query.get_or_404(id)
+    if emp.is_archived:
+        flash('Este empleado ya está archivado.', 'warning')
+        return redirect(url_for('employee_detail', id=emp.id))
+    reason = request.form.get('archive_reason', 'otro')
+    if reason not in {code for code, _ in EMPLOYEE_ARCHIVE_REASONS}:
+        reason = 'otro'
+    emp.archive_reason = reason
+    emp.archive_note = (request.form.get('archive_note') or '').strip()[:300] or None
+    emp.archived_at = datetime.utcnow()
+    emp.status = 'inactivo'
+    db.session.commit()
+    flash(f'Empleado {emp.name} archivado.', 'warning')
+    return redirect(url_for('employee_detail', id=emp.id))
+
+
+@app.route('/employee/<int:id>/restore', methods=['POST'])
+@manager_required
+def employee_restore(id):
+    emp = Employee.query.get_or_404(id)
+    if not emp.is_archived:
+        flash('Este empleado no está archivado.', 'warning')
+        return redirect(url_for('employee_detail', id=emp.id))
+    emp.archived_at = None
+    emp.archive_reason = None
+    emp.archive_note = None
+    emp.status = 'activo'
+    db.session.commit()
+    flash(f'Empleado {emp.name} restaurado.', 'success')
+    return redirect(url_for('employee_detail', id=emp.id))
 
 
 # ── EMPLOYEE PERMIT ROUTES ─────────────────────────────────────────────
@@ -945,9 +1008,11 @@ def equipment_new():
             year=form_year,
         )
         if match:
+            archived_hint = (' (equipo archivado — restáurelo o elimínelo antes de '
+                             'reutilizar sus datos)') if match.is_archived else ''
             flash(
                 f'Ya existe un equipo con esa unidad/placa/VIN: {match.display_name} '
-                f'({match.company_full}). Verifique antes de crear un duplicado.',
+                f'({match.company_full}){archived_hint}. Verifique antes de crear un duplicado.',
                 'danger',
             )
             return render_template('equipment_form.html', equipment=None,
@@ -1021,7 +1086,8 @@ def equipment_edit(id):
         equip.vin_serial = request.form.get('vin_serial', '')
         equip.insurance_company = request.form.get('insurance_company', '')
         equip.notes = request.form.get('notes', '')
-        equip.status = request.form.get('status', 'activo')
+        if not equip.is_archived:
+            equip.status = request.form.get('status', 'activo')
 
         yr = request.form.get('year', '')
         if yr:
@@ -1057,6 +1123,41 @@ def equipment_delete(id):
     db.session.commit()
     flash(f'Equipo {name} eliminado.', 'warning')
     return redirect(url_for('dashboard', view='equipment'))
+
+
+@app.route('/equipment/<int:id>/archive', methods=['POST'])
+@manager_required
+def equipment_archive(id):
+    equip = Equipment.query.get_or_404(id)
+    if equip.is_archived:
+        flash('Este equipo ya está archivado.', 'warning')
+        return redirect(url_for('equipment_detail', id=equip.id))
+    reason = request.form.get('archive_reason', 'otro')
+    if reason not in {code for code, _ in EQUIPMENT_ARCHIVE_REASONS}:
+        reason = 'otro'
+    equip.archive_reason = reason
+    equip.archive_note = (request.form.get('archive_note') or '').strip()[:300] or None
+    equip.archived_at = datetime.utcnow()
+    equip.status = 'inactivo'
+    db.session.commit()
+    flash(f'Equipo {equip.display_name} archivado.', 'warning')
+    return redirect(url_for('equipment_detail', id=equip.id))
+
+
+@app.route('/equipment/<int:id>/restore', methods=['POST'])
+@manager_required
+def equipment_restore(id):
+    equip = Equipment.query.get_or_404(id)
+    if not equip.is_archived:
+        flash('Este equipo no está archivado.', 'warning')
+        return redirect(url_for('equipment_detail', id=equip.id))
+    equip.archived_at = None
+    equip.archive_reason = None
+    equip.archive_note = None
+    equip.status = 'activo'
+    db.session.commit()
+    flash(f'Equipo {equip.display_name} restaurado.', 'success')
+    return redirect(url_for('equipment_detail', id=equip.id))
 
 
 @app.route('/equipment/<int:eq_id>/permit/<int:permit_id>/edit', methods=['POST'])
@@ -1306,7 +1407,8 @@ def run_dedup():
         for dup in employees[1:]:
             for col in ['area', 'status', 'fecha_nacimiento', 'license_number',
                         'license_expiration', 'license_file', 'puesto', 'telefono',
-                        'email', 'fecha_contratacion', 'contacto_emergencia', 'shirt_size']:
+                        'email', 'fecha_contratacion', 'contacto_emergencia', 'shirt_size',
+                        'archived_at', 'archive_reason', 'archive_note']:
                 if getattr(keeper, col) is None and getattr(dup, col) is not None:
                     setattr(keeper, col, getattr(dup, col))
             if keeper.endoso_hazmat == 'N/A' and dup.endoso_hazmat != 'N/A':
@@ -1438,6 +1540,7 @@ def import_data():
             imported = 0
             skipped = 0
             updated = 0
+            archivados = 0
             rows = list(ws.iter_rows(values_only=True))
             if not rows:
                 flash('El archivo está vacío.', 'warning')
@@ -1469,6 +1572,11 @@ def import_data():
 
                 # Check if employee already exists
                 existing = Employee.query.filter_by(name=name).first()
+                if existing and existing.is_archived:
+                    # Archived employees are frozen — a stale spreadsheet must
+                    # not keep maintaining their permits.
+                    archivados += 1
+                    continue
                 if existing:
                     # Update permits for existing employee
                     permit_map = {
@@ -1624,7 +1732,8 @@ def import_data():
                 os.remove(filepath)
                 return redirect(url_for('import_data'))
             os.remove(filepath)
-            flash(f'Importación completa: {imported} nuevos, {updated} actualizados, {skipped} omitidos.', 'success')
+            archived_clause = f', {archivados} omitidos por archivado' if archivados else ''
+            flash(f'Importación completa: {imported} nuevos, {updated} actualizados, {skipped} omitidos{archived_clause}.', 'success')
 
         except Exception as e:
             db.session.rollback()
@@ -1714,6 +1823,7 @@ def import_equipment():
 
         imported = 0
         skipped = 0
+        archivados = 0
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             flash('El archivo está vacío.', 'warning')
@@ -1816,6 +1926,13 @@ def import_equipment():
             existing = find_duplicate_equipment(vin_serial, plate_number, unit_number, company,
                                                 titular=titulo, model=model, year=year)
 
+            if existing and existing.is_archived:
+                # Archived equipment is frozen — skip the row instead of
+                # refreshing its permits (or minting a duplicate that would
+                # trip the partial unique indexes).
+                archivados += 1
+                continue
+
             if existing:
                 if titulo:            existing.titular = titulo
                 if insurance_company: existing.insurance_company = insurance_company
@@ -1881,7 +1998,8 @@ def import_equipment():
             return redirect(url_for('import_data'))
 
         os.remove(filepath)
-        flash(f'Importación completa: {imported} equipos importados, {skipped} actualizados.', 'success')
+        archived_clause = f', {archivados} omitidos por archivado' if archivados else ''
+        flash(f'Importación completa: {imported} equipos importados, {skipped} actualizados{archived_clause}.', 'success')
 
     except Exception as e:
         db.session.rollback()
@@ -1911,22 +2029,29 @@ def generate_pdf():
     company_permits = []
 
     if report_type in ('all', 'employees'):
-        q = Employee.query.order_by(Employee.company, Employee.name)
+        q = (Employee.query
+             .filter(Employee.archived_at.is_(None))
+             .order_by(Employee.company, Employee.name))
         if company_filter:
             q = q.filter(Employee.company == company_filter)
         employees = q.all()
 
     if report_type in ('all', 'equipment'):
-        q = Equipment.query.order_by(Equipment.company, Equipment.make)
+        q = (Equipment.query
+             .filter(Equipment.archived_at.is_(None))
+             .order_by(Equipment.company, Equipment.make))
         if company_filter:
             q = q.filter(Equipment.company == company_filter)
         equipment_list = q.all()
 
     if report_type in ('all', 'issues'):
         # Open issues only; grouped by company via the linked Equipment.
+        # Issues on archived (sold/scrapped) vehicles are dead work items —
+        # excluded here, still visible in-app on the equipment detail page.
         iq = (Issue.query
               .join(Equipment, Issue.equipment_id == Equipment.id)
-              .filter(Issue.current_status.notin_(['resuelto', 'cerrado'])))
+              .filter(Issue.current_status.notin_(['resuelto', 'cerrado']),
+                      Equipment.archived_at.is_(None)))
         if company_filter:
             iq = iq.filter(Equipment.company == company_filter)
         # Sort in Python: company (matches the template's LB/PLI grouping), then
@@ -2085,7 +2210,8 @@ def dedup_data(dry_run):
             # Merge non-null fields from duplicate into keeper
             for col in ['area', 'status', 'fecha_nacimiento', 'license_number',
                         'license_expiration', 'license_file', 'puesto', 'telefono',
-                        'email', 'fecha_contratacion', 'contacto_emergencia', 'shirt_size']:
+                        'email', 'fecha_contratacion', 'contacto_emergencia', 'shirt_size',
+                        'archived_at', 'archive_reason', 'archive_note']:
                 if getattr(keeper, col) is None and getattr(dup, col) is not None:
                     setattr(keeper, col, getattr(dup, col))
             if keeper.endoso_hazmat == 'N/A' and dup.endoso_hazmat != 'N/A':
@@ -2219,7 +2345,8 @@ def dedup_data(dry_run):
             # Merge non-empty scalar fields into keeper where keeper's is empty.
             for col in ['titular', 'unit_number', 'plate_number', 'make', 'model',
                         'year', 'vin_serial', 'insurance_company', 'cost', 'notes',
-                        'equipment_type', 'status']:
+                        'equipment_type', 'status',
+                        'archived_at', 'archive_reason', 'archive_note']:
                 keeper_val = getattr(keeper, col)
                 dup_val = getattr(dup, col)
                 keeper_empty = keeper_val is None or keeper_val == ''

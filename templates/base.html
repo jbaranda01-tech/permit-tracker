@@ -48,6 +48,10 @@
                 <i class="fas fa-building"></i>
                 <span>Empresa</span>
             </a>
+            <a href="{{ url_for('archive_view') }}" class="nav-link {% if request.endpoint == 'archive_view' %}active{% endif %}">
+                <i class="fas fa-box-archive"></i>
+                <span>Archivo</span>
+            </a>
         </div>
         {% endif %}
 

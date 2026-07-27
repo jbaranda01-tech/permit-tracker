@@ -37,6 +37,8 @@ def _normalize_unit(raw):
 def _unreportable_reason(eq):
     """If equipment exists but won't appear in the driver report form, explain why.
     Returns a Spanish reason string, or None if the equipment is reportable."""
+    if eq.archived_at is not None:
+        return 'equipo archivado'
     if eq.company not in ('LB', 'PLI'):
         return f'empresa "{eq.company}"'
     if eq.equipment_type != 'vehicle':
@@ -51,6 +53,7 @@ def _unreportable_reason(eq):
 def reportable_equipment_query(company=None):
     query = Equipment.query.filter(
         Equipment.status == 'activo',
+        Equipment.archived_at.is_(None),
         Equipment.equipment_type == 'vehicle',
         Equipment.company.in_(['LB', 'PLI']),
     )
@@ -133,6 +136,8 @@ def synthesize_status_history(issue, final_status, reported_at, resolved_at=None
 @issues_bp.route('/report/<token>', methods=['GET'])
 def report(token):
     employee = Employee.query.filter_by(access_token=token).first_or_404()
+    if employee.is_archived:
+        return render_template('issues/link_inactive.html'), 410
     trucks = reportable_equipment_query(company=employee.company).all()
     return render_template('issues/report.html',
                            employee=employee,
@@ -145,6 +150,8 @@ def report(token):
 @issues_bp.route('/report/<token>', methods=['POST'])
 def report_submit(token):
     employee = Employee.query.filter_by(access_token=token).first_or_404()
+    if employee.is_archived:
+        return render_template('issues/link_inactive.html'), 410
 
     equipment_id = request.form.get('equipment_id', type=int)
 
@@ -226,7 +233,9 @@ def report_submit(token):
 
 @issues_bp.route('/report/<token>/success', methods=['GET'])
 def report_success(token):
-    Employee.query.filter_by(access_token=token).first_or_404()
+    employee = Employee.query.filter_by(access_token=token).first_or_404()
+    if employee.is_archived:
+        return render_template('issues/link_inactive.html'), 410
     issue_ids = [int(part) for part in request.args.get('issue_ids', '').split(',')
                  if part.strip().isdigit()]
     return render_template('issues/report_success.html', token=token, issue_ids=issue_ids)
@@ -237,9 +246,15 @@ def report_success(token):
 @issues_bp.route('/', methods=['GET'])
 @shop_required
 def queue():
+    # Issues on archived (sold/scrapped) equipment are hidden from the queue;
+    # unlinked issues (equipment_id NULL) stay visible.
+    not_archived = db.or_(Issue.equipment_id.is_(None),
+                          Equipment.archived_at.is_(None))
+
     query = (Issue.query
              .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
-             .options(joinedload(Issue.reporter)))
+             .options(joinedload(Issue.reporter))
+             .filter(not_archived))
 
     status_filter = request.args.get('status', '')
     if status_filter:
@@ -287,13 +302,18 @@ def queue():
 
     status_counts = {}
     for code, label in ISSUE_STATUSES:
-        status_counts[code] = Issue.query.filter_by(current_status=code).count()
+        status_counts[code] = (Issue.query
+                               .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
+                               .filter(Issue.current_status == code, not_archived)
+                               .count())
 
     severity_counts = {}
     for code, _label in ISSUE_SEVERITIES:
         severity_counts[code] = (Issue.query
+                                 .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
                                  .filter(Issue.severity == code,
-                                         Issue.current_status.notin_(RESOLVED_STATUSES))
+                                         Issue.current_status.notin_(RESOLVED_STATUSES),
+                                         not_archived)
                                  .count())
 
     trucks = reportable_equipment_query().all()
@@ -303,8 +323,9 @@ def queue():
     resolved_count = 0
     if not status_filter:
         resolved_query = (Issue.query
+                          .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
                           .options(joinedload(Issue.reporter))
-                          .filter(Issue.current_status.in_(RESOLVED_STATUSES)))
+                          .filter(Issue.current_status.in_(RESOLVED_STATUSES), not_archived))
         if severity_filter:
             resolved_query = resolved_query.filter(Issue.severity == severity_filter)
         if equipment_filter:

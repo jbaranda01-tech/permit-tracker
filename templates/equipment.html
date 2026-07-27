@@ -10,7 +10,11 @@
                 <div class="detail-meta">
                     <span class="company-tag tag-{{ equipment.company|lower }}">{{ equipment.company_full }}</span>
                     <span class="area-tag">{{ 'Generador' if equipment.equipment_type == 'generator' else 'Vehículo' }}</span>
+                    {% if equipment.is_archived %}
+                    <span class="status-tag status-archivado">Archivado</span>
+                    {% else %}
                     <span class="status-tag status-{{ equipment.status }}">{{ equipment.status }}</span>
+                    {% endif %}
                 </div>
             </div>
             {% if current_user.is_manager %}
@@ -18,6 +22,16 @@
                 <a href="{{ url_for('equipment_edit', id=equipment.id) }}" class="btn btn-secondary">
                     <i class="fas fa-edit"></i> Editar
                 </a>
+                {% if not equipment.is_archived %}
+                <button type="button" class="btn btn-secondary" onclick="toggleArchivePanel()">
+                    <i class="fas fa-box-archive"></i> Archivar
+                </button>
+                {% else %}
+                <form method="POST" action="{{ url_for('equipment_restore', id=equipment.id) }}" style="display:inline"
+                      onsubmit="return confirm('¿Restaurar este equipo? Volverá a aparecer en el dashboard y los reportes.')">
+                    <button type="submit" class="btn btn-secondary"><i class="fas fa-rotate-left"></i> Restaurar</button>
+                </form>
+                {% endif %}
                 {% if current_user.is_admin %}
                 <form method="POST" action="{{ url_for('equipment_delete', id=equipment.id) }}" style="display:inline"
                       onsubmit="return confirm('¿Está seguro de eliminar este equipo?')">
@@ -27,6 +41,41 @@
             </div>
             {% endif %}
         </div>
+
+        {% if equipment.is_archived %}
+        <div class="archived-banner">
+            <i class="fas fa-box-archive"></i>
+            <div>
+                <strong>Equipo archivado</strong> — {{ equipment.archive_reason_label }} · {{ equipment.archived_at.strftime('%m/%d/%Y') }}
+                {% if equipment.archive_note %}<div class="archived-note">{{ equipment.archive_note }}</div>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if current_user.is_manager and not equipment.is_archived %}
+        <div id="archive-panel" class="archive-panel" style="display:none">
+            <form method="POST" action="{{ url_for('equipment_archive', id=equipment.id) }}"
+                  onsubmit="return confirm('¿Archivar este equipo? Se ocultará del dashboard, reportes y del formulario de choferes.')">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="archive_reason">Motivo</label>
+                        <select id="archive_reason" name="archive_reason">
+                            <option value="vendido">Vendido</option>
+                            <option value="chatarra">Chatarra</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="archive_note">Nota (opcional)</label>
+                        <input type="text" id="archive_note" name="archive_note" maxlength="300" placeholder="Detalles adicionales...">
+                    </div>
+                    <div class="form-group archive-panel-submit">
+                        <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-box-archive"></i> Archivar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Equipment Info -->
@@ -321,6 +370,10 @@ function toggleEditPermit(id) {
 function toggleCustomName(select) {
     const group = document.getElementById('custom-name-group');
     group.style.display = select.value === 'OTHER' ? 'block' : 'none';
+}
+function toggleArchivePanel() {
+    const panel = document.getElementById('archive-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 </script>
 {% endblock %}
