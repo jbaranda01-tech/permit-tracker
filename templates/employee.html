@@ -180,6 +180,23 @@
                 </a>
             </div>
             {% endif %}
+            {% if current_user.is_manager %}
+            <div class="permit-card-footer">
+                {% if employee.license_file %}
+                <form method="POST" action="{{ url_for('employee_license_delete_form', id=employee.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar el documento de la licencia?');">
+                    <button type="submit" class="btn btn-ghost btn-sm">
+                        <i class="fas fa-trash"></i> Eliminar
+                    </button>
+                </form>
+                {% endif %}
+                <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('upload-license-{{ employee.id }}').click()">
+                    <i class="fas fa-upload"></i> {% if employee.license_file %}Reemplazar documento{% else %}Subir documento{% endif %}
+                </button>
+                <form id="upload-license-wrap-{{ employee.id }}" method="POST" action="{{ url_for('employee_license_upload_form', id=employee.id) }}" enctype="multipart/form-data" style="display:none">
+                    <input type="file" id="upload-license-{{ employee.id }}" name="form_file" accept=".pdf,.png,.jpg,.jpeg" onchange="document.getElementById('upload-license-wrap-{{ employee.id }}').submit()">
+                </form>
+            </div>
+            {% endif %}
         </div>
     </div>
 

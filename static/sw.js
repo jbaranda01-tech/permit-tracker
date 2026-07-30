@@ -1,7 +1,9 @@
-var CACHE_NAME = 'pt-v3';
+var CACHE_NAME = 'pt-v4';
 var SHELL_URLS = [
   '/static/css/style.css',
   '/static/js/app.js',
+  '/static/fonts/geist-latin.woff2',
+  '/static/fonts/geist-mono-latin.woff2',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
 ];
 

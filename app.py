@@ -29,6 +29,8 @@ from models import (
     Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
+    EQUIPMENT_CLASSES, classify_equipment,
+    INSURANCE_TYPE_BY_CLASS, INSURANCE_CARD_TITLES,
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -431,7 +433,7 @@ def _filter_dashboard_items(items, permit_type, permit_status, view):
     return items
 
 
-def _sort_dashboard_items(items, sort_by, view):
+def _sort_dashboard_items(items, sort_by, view, permit_type=''):
     def entity_name(item):
         return (item.name if view == 'employees' else item.display_name).lower()
 
@@ -454,6 +456,17 @@ def _sort_dashboard_items(items, sort_by, view):
             return (rank, -s['expired'], -s['expiring_soon'], entity_name(item))
         return sorted(items, key=key)
     if sort_by == 'expiration':
+        if permit_type:
+            # Sort by the selected type's own expiration date: already-expired
+            # first (ascending), soonest upcoming next, N/A/missing/absent last.
+            def key(item):
+                if view == 'employees' and permit_type == 'LICENCIA':
+                    d = item.license_expiration
+                else:
+                    p = next((p for p in item.permits if p.permit_type == permit_type), None)
+                    d = p.expiration_date if p and p.applicability != 'N/A' else None
+                return (d or date.max, entity_name(item))
+            return sorted(items, key=key)
         return sorted(items, key=lambda i: (i.next_expiration or date.max, entity_name(i)))
     return sorted(items, key=entity_name)
 
@@ -482,6 +495,9 @@ def dashboard():
     exp_month = request.args.get('exp_month', '')
     if exp_month not in {value for value, _label in exp_month_options}:
         exp_month = ''
+    equipment_class = request.args.get('equipment_class', '')
+    if view != 'equipment' or equipment_class not in {code for code, _ in EQUIPMENT_CLASSES}:
+        equipment_class = ''
 
     if view == 'company':
         # Backfill missing company permits
@@ -520,6 +536,8 @@ def dashboard():
             query = query.filter(Equipment.company == company_filter)
         if status_filter:
             query = query.filter(Equipment.status == status_filter)
+        if equipment_class:
+            query = query.filter(Equipment.equipment_class == equipment_class)
 
         # Split by company
         lb_items = query.filter(Equipment.company == 'LB').all()
@@ -569,9 +587,9 @@ def dashboard():
         pli_items = _filter_dashboard_items(pli_items, permit_type, permit_status, view)
         personal_items = _filter_dashboard_items(personal_items, permit_type, permit_status, view)
 
-    lb_items = _sort_dashboard_items(lb_items, sort_by, view)
-    pli_items = _sort_dashboard_items(pli_items, sort_by, view)
-    personal_items = _sort_dashboard_items(personal_items, sort_by, view)
+    lb_items = _sort_dashboard_items(lb_items, sort_by, view, permit_type)
+    pli_items = _sort_dashboard_items(pli_items, sort_by, view, permit_type)
+    personal_items = _sort_dashboard_items(personal_items, sort_by, view, permit_type)
 
     return render_template('dashboard.html',
         view=view,
@@ -587,6 +605,8 @@ def dashboard():
         permit_types=permit_types,
         exp_month=exp_month,
         exp_months=exp_month_options,
+        equipment_class=equipment_class,
+        equipment_classes=EQUIPMENT_CLASSES,
         tile_counts=tile_counts,
     )
 
@@ -684,6 +704,8 @@ def employee_new():
         if 'license_file' in request.files:
             file = request.files['license_file']
             if file and file.filename and allowed_file(file.filename):
+                if emp.license_file:
+                    delete_stored_file(emp.license_file)
                 filename = save_uploaded_file(file)
                 emp.license_file = filename
 
@@ -738,6 +760,8 @@ def employee_edit(id):
         if 'license_file' in request.files:
             file = request.files['license_file']
             if file and file.filename and allowed_file(file.filename):
+                if emp.license_file:
+                    delete_stored_file(emp.license_file)
                 filename = save_uploaded_file(file)
                 emp.license_file = filename
 
@@ -831,6 +855,8 @@ def employee_permit_edit(emp_id, permit_id):
     if 'permit_file' in request.files:
         file = request.files['permit_file']
         if file and file.filename and allowed_file(file.filename):
+            if permit.file_path:
+                delete_stored_file(permit.file_path)
             filename = save_uploaded_file(file)
             permit.file_path = filename
 
@@ -894,6 +920,43 @@ def employee_permit_delete_form(emp_id, permit_id):
     return redirect(url_for('employee_detail', id=emp_id))
 
 
+# ── LICENSE DOCUMENT ROUTES ────────────────────────────────────────────
+
+@app.route('/employee/<int:id>/license/upload-form', methods=['POST'])
+@manager_required
+def employee_license_upload_form(id):
+    emp = Employee.query.get_or_404(id)
+
+    file = request.files.get('form_file')
+    if not file or not file.filename:
+        flash('No se seleccionó ningún archivo.', 'error')
+        return redirect(url_for('employee_detail', id=emp.id))
+    if not allowed_file(file.filename):
+        flash('Tipo de archivo no permitido.', 'error')
+        return redirect(url_for('employee_detail', id=emp.id))
+
+    if emp.license_file:
+        delete_stored_file(emp.license_file)
+
+    emp.license_file = save_uploaded_file(file)
+    db.session.commit()
+    flash('Documento de licencia adjuntado.', 'success')
+    return redirect(url_for('employee_detail', id=emp.id))
+
+
+@app.route('/employee/<int:id>/license/delete-form', methods=['POST'])
+@manager_required
+def employee_license_delete_form(id):
+    emp = Employee.query.get_or_404(id)
+
+    if emp.license_file:
+        delete_stored_file(emp.license_file)
+        emp.license_file = None
+        db.session.commit()
+        flash('Documento de licencia eliminado.', 'success')
+    return redirect(url_for('employee_detail', id=emp.id))
+
+
 @app.route('/employee/<int:emp_id>/permit/new', methods=['POST'])
 @manager_required
 def employee_permit_new(emp_id):
@@ -927,12 +990,17 @@ def equipment_detail(id):
     active_permits = [p for p in all_permits if p.applicability != 'N/A']
     hidden_permits = [p for p in all_permits if p.applicability == 'N/A']
 
-    # Insurance is shared at the company level for LB/PLI — show it read-only and
-    # drop the redundant per-vehicle SEGURO permit from the lists.
+    # Insurance is shared at the company level for LB/PLI (one policy per
+    # equipment class) — show it read-only and drop the redundant per-vehicle
+    # SEGURO permit from the lists.
     shared_insurance = None
+    shared_insurance_title = None
     if equip.company in ('LB', 'PLI'):
+        cls = equip.equipment_class or classify_equipment(equip.model, equip.equipment_type)
         shared_insurance = CompanyPermit.query.filter_by(
-            company=equip.company, permit_type='SEGURO').first()
+            company=equip.company,
+            permit_type=INSURANCE_TYPE_BY_CLASS.get(cls, 'SEGURO_TRUCK')).first()
+        shared_insurance_title = INSURANCE_CARD_TITLES.get(cls, 'Seguro (compartido)')
         active_permits = [p for p in active_permits if p.permit_type != 'SEGURO']
         hidden_permits = [p for p in hidden_permits if p.permit_type != 'SEGURO']
 
@@ -942,6 +1010,7 @@ def equipment_detail(id):
     return render_template('equipment.html', equipment=equip,
                            permits=active_permits, hidden_permits=hidden_permits,
                            shared_insurance=shared_insurance,
+                           shared_insurance_title=shared_insurance_title,
                            permit_types=EQUIPMENT_PERMIT_TYPES,
                            issues=issues)
 
@@ -988,6 +1057,14 @@ def find_duplicate_equipment(vin_serial, plate_number, unit_number, company,
     return None
 
 
+def _resolve_equipment_class(form):
+    """Validated class from the form select, falling back to the model-based classifier."""
+    cls = form.get('equipment_class', '')
+    if cls not in {code for code, _ in EQUIPMENT_CLASSES}:
+        cls = classify_equipment(form.get('model', ''))
+    return cls
+
+
 @app.route('/equipment/new', methods=['GET', 'POST'])
 @manager_required
 def equipment_new():
@@ -1016,10 +1093,11 @@ def equipment_new():
                 'danger',
             )
             return render_template('equipment_form.html', equipment=None,
-                                   form_data=request.form, duplicate=match), 422
+                                   form_data=request.form, duplicate=match,
+                                   equipment_classes=EQUIPMENT_CLASSES), 422
         equip = Equipment(
             company=request.form['company'],
-            equipment_type=request.form.get('equipment_type', 'vehicle'),
+            equipment_class=_resolve_equipment_class(request.form),
             titular=request.form.get('titular', ''),
             unit_number=request.form.get('unit_number', ''),
             plate_number=request.form.get('plate_number', ''),
@@ -1068,7 +1146,8 @@ def equipment_new():
         flash(f'Equipo {equip.display_name} creado.', 'success')
         return redirect(url_for('equipment_detail', id=equip.id))
 
-    return render_template('equipment_form.html', equipment=None)
+    return render_template('equipment_form.html', equipment=None,
+                           equipment_classes=EQUIPMENT_CLASSES)
 
 
 @app.route('/equipment/<int:id>/edit', methods=['GET', 'POST'])
@@ -1077,7 +1156,7 @@ def equipment_edit(id):
     equip = Equipment.query.get_or_404(id)
     if request.method == 'POST':
         equip.company = request.form['company']
-        equip.equipment_type = request.form.get('equipment_type', 'vehicle')
+        equip.equipment_class = _resolve_equipment_class(request.form)
         equip.titular = request.form.get('titular', '')
         equip.unit_number = request.form.get('unit_number', '')
         equip.plate_number = request.form.get('plate_number', '')
@@ -1109,7 +1188,8 @@ def equipment_edit(id):
         flash(f'Equipo {equip.display_name} actualizado.', 'success')
         return redirect(url_for('equipment_detail', id=equip.id))
 
-    return render_template('equipment_form.html', equipment=equip)
+    return render_template('equipment_form.html', equipment=equip,
+                           equipment_classes=EQUIPMENT_CLASSES)
 
 
 @app.route('/equipment/<int:id>/delete', methods=['POST'])
@@ -1191,6 +1271,8 @@ def equipment_permit_edit(eq_id, permit_id):
     if 'permit_file' in request.files:
         file = request.files['permit_file']
         if file and file.filename and allowed_file(file.filename):
+            if permit.file_path:
+                delete_stored_file(permit.file_path)
             filename = save_uploaded_file(file)
             permit.file_path = filename
 
@@ -1939,6 +2021,7 @@ def import_equipment():
                 if cost is not None:  existing.cost = cost
                 if year is not None:  existing.year = year
                 if model:             existing.model = model
+                existing.equipment_class = classify_equipment(existing.model, existing.equipment_type)
 
                 existing_permits = {p.permit_type: p for p in existing.permits}
                 for ptype, (cell_applicability, pdate) in permit_info.items():
@@ -1965,6 +2048,7 @@ def import_equipment():
                 titular=titulo,
                 unit_number=unit_number,
                 model=model,
+                equipment_class=classify_equipment(model),
                 year=year,
                 vin_serial=vin_serial,
                 plate_number=plate_number,
@@ -2017,12 +2101,9 @@ def report_menu():
     return render_template('report_options.html')
 
 
-@app.route('/report/pdf')
-@login_required
-def generate_pdf():
-    report_type = request.args.get('type', 'all')  # all, employees, equipment, issues
-    company_filter = request.args.get('company', '')
-
+def _gather_report_data(report_type, company_filter):
+    """Shared querysets for the PDF and Excel reports (archived excluded,
+    open issues only)."""
     employees = []
     equipment_list = []
     issues = []
@@ -2071,6 +2152,18 @@ def generate_pdf():
             cq = cq.filter(CompanyPermit.company == company_filter)
         company_permits = cq.all()
 
+    return employees, equipment_list, issues, company_permits
+
+
+@app.route('/report/pdf')
+@login_required
+def generate_pdf():
+    report_type = request.args.get('type', 'all')  # all, employees, equipment, issues, company
+    company_filter = request.args.get('company', '')
+
+    employees, equipment_list, issues, company_permits = _gather_report_data(
+        report_type, company_filter)
+
     html = render_template('report_pdf.html',
         employees=employees,
         equipment_list=equipment_list,
@@ -2096,6 +2189,194 @@ def generate_pdf():
         # 500-ing the route.
         app.logger.warning('PDF generation unavailable, serving HTML fallback: %s', e)
         return html
+
+
+# Excel status colors mirror the light-theme status tokens in style.css.
+_XLSX_STATUS_COLORS = {
+    'valid': ('DCFCE7', '166534'),
+    'expiring_soon': ('FEF3C7', '92400E'),
+    'expired': ('FEE2E2', '991B1B'),
+    'missing': ('F1F5F9', '64748B'),
+}
+_XLSX_SEVERITY_COLORS = {
+    'baja': ('DBEAFE', '1D4ED8'),
+    'media': ('FEF3C7', '92400E'),
+    'alta': ('FED7AA', 'C2410C'),
+    'critica': ('FECACA', 'DC2626'),
+}
+
+
+@app.route('/export/excel')
+@login_required
+def export_excel():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    report_type = request.args.get('type', 'all')
+    company_filter = request.args.get('company', '')
+
+    employees, equipment_list, issues, company_permits = _gather_report_data(
+        report_type, company_filter)
+
+    today = date.today()
+    alert_date = today + timedelta(days=30)
+
+    header_font = Font(bold=True, size=10)
+    header_fill = PatternFill(fill_type='solid', start_color='E2E8F0')
+
+    def style_status(cell, status):
+        colors = _XLSX_STATUS_COLORS.get(status)
+        if colors:
+            cell.fill = PatternFill(fill_type='solid', start_color=colors[0])
+            cell.font = Font(color=colors[1])
+
+    def date_status(d):
+        if d is None:
+            return 'missing'
+        if d < today:
+            return 'expired'
+        if d <= alert_date:
+            return 'expiring_soon'
+        return 'valid'
+
+    def write_permit_cell(ws, row, col, permit):
+        cell = ws.cell(row=row, column=col)
+        if permit is None:
+            cell.value = '—'
+            style_status(cell, 'missing')
+        elif permit.applicability == 'N/A':
+            cell.value = 'N/A'
+        elif permit.expiration_date is None:
+            cell.value = '—'
+            style_status(cell, 'missing')
+        else:
+            cell.value = permit.expiration_date
+            cell.number_format = 'MM/DD/YYYY'
+            style_status(cell, permit.status)
+        return cell
+
+    def write_date_cell(ws, row, col, d):
+        cell = ws.cell(row=row, column=col)
+        if d is None:
+            cell.value = '—'
+            style_status(cell, 'missing')
+        else:
+            cell.value = d
+            cell.number_format = 'MM/DD/YYYY'
+            style_status(cell, date_status(d))
+        return cell
+
+    def new_sheet(wb, title, headers, widths):
+        ws = wb.create_sheet(title)
+        for col, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+        for col, width in enumerate(widths, start=1):
+            ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = width
+        ws.freeze_panes = 'A2'
+        return ws
+
+    wb = Workbook()
+    wb.remove(wb.active)  # drop the default sheet; we create named ones
+
+    if employees:
+        emp_headers = ['Empresa', 'Nombre', 'Área', 'Puesto', 'Licencia'] + \
+                      [label for _code, label in EMPLOYEE_PERMIT_TYPES if _code != 'OTHER']
+        ws = new_sheet(wb, 'Empleados', emp_headers,
+                       [10, 28, 16, 16, 12] + [14] * (len(emp_headers) - 5))
+        for r, emp in enumerate(employees, start=2):
+            ws.cell(row=r, column=1, value=emp.company)
+            ws.cell(row=r, column=2, value=emp.name)
+            ws.cell(row=r, column=3, value=emp.area or '')
+            ws.cell(row=r, column=4, value=emp.puesto or '')
+            write_date_cell(ws, r, 5, emp.license_expiration)
+            permits_by_type = {p.permit_type: p for p in emp.permits}
+            col = 6
+            for code, _label in EMPLOYEE_PERMIT_TYPES:
+                if code == 'OTHER':
+                    continue
+                write_permit_cell(ws, r, col, permits_by_type.get(code))
+                col += 1
+
+    if equipment_list:
+        # Shared class policies for LB/PLI insurance cells
+        shared_policies = {
+            (cp.company, cp.permit_type): cp
+            for cp in CompanyPermit.query.filter(
+                CompanyPermit.permit_type.in_(list(INSURANCE_TYPE_BY_CLASS.values()))).all()
+        }
+        eq_headers = ['Empresa', 'Unidad', 'Titular', 'Clase', 'Marca', 'Modelo', 'Año',
+                      'VIN', 'Tablilla', 'Marbete', 'Seguro', 'Voucher', 'Inspección', 'NTSP']
+        ws = new_sheet(wb, 'Equipos', eq_headers,
+                       [10, 12, 22, 12, 14, 18, 8, 20, 12, 14, 14, 14, 14, 14])
+        for r, eq in enumerate(equipment_list, start=2):
+            ws.cell(row=r, column=1, value=eq.company)
+            ws.cell(row=r, column=2, value=eq.display_name)
+            ws.cell(row=r, column=3, value=eq.titular or '')
+            ws.cell(row=r, column=4, value=eq.equipment_class_label)
+            ws.cell(row=r, column=5, value=eq.make or '')
+            ws.cell(row=r, column=6, value=eq.model or '')
+            ws.cell(row=r, column=7, value=eq.year)
+            ws.cell(row=r, column=8, value=eq.vin_serial or '')
+            ws.cell(row=r, column=9, value=eq.plate_number or '')
+            permits_by_type = {p.permit_type: p for p in eq.permits}
+            write_permit_cell(ws, r, 10, permits_by_type.get('MARBETE'))
+            if eq.company in ('LB', 'PLI'):
+                cls = eq.equipment_class or classify_equipment(eq.model, eq.equipment_type)
+                policy = shared_policies.get(
+                    (eq.company, INSURANCE_TYPE_BY_CLASS.get(cls, 'SEGURO_TRUCK')))
+                write_permit_cell(ws, r, 11, policy)
+            else:
+                write_permit_cell(ws, r, 11, permits_by_type.get('SEGURO'))
+            write_permit_cell(ws, r, 12, permits_by_type.get('VOUCHER'))
+            write_permit_cell(ws, r, 13, permits_by_type.get('INSPECCION'))
+            write_permit_cell(ws, r, 14, permits_by_type.get('NTSP'))
+
+    if issues:
+        ws = new_sheet(wb, 'Averías',
+                       ['Empresa', 'Unidad', 'Categoría', 'Severidad', 'Estado',
+                        'Descripción', 'Reportado por', 'Fecha Reporte'],
+                       [10, 12, 16, 12, 14, 50, 22, 14])
+        for r, issue in enumerate(issues, start=2):
+            eq = issue.equipment
+            ws.cell(row=r, column=1, value=eq.company if eq else '')
+            ws.cell(row=r, column=2, value=eq.display_name if eq else '')
+            ws.cell(row=r, column=3, value=issue.category_label)
+            sev = ws.cell(row=r, column=4, value=issue.severity_label)
+            colors = _XLSX_SEVERITY_COLORS.get(issue.severity)
+            if colors:
+                sev.fill = PatternFill(fill_type='solid', start_color=colors[0])
+                sev.font = Font(color=colors[1])
+            ws.cell(row=r, column=5, value=issue.status_label)
+            ws.cell(row=r, column=6, value=issue.description or '')
+            ws.cell(row=r, column=7, value=issue.reporter.name if issue.reporter else '')
+            if issue.reported_at:
+                d = ws.cell(row=r, column=8, value=issue.reported_at.date())
+                d.number_format = 'MM/DD/YYYY'
+
+    if company_permits:
+        ws = new_sheet(wb, 'Empresa',
+                       ['Empresa', 'Permiso', 'Vence', 'Número', 'Autoridad'],
+                       [10, 28, 14, 20, 24])
+        for r, cp in enumerate(company_permits, start=2):
+            ws.cell(row=r, column=1, value=cp.company)
+            ws.cell(row=r, column=2, value=cp.display_name)
+            write_permit_cell(ws, r, 3, cp)
+            ws.cell(row=r, column=4, value=cp.permit_number or '')
+            ws.cell(row=r, column=5, value=cp.issuing_authority or '')
+
+    if not wb.sheetnames:
+        wb.create_sheet('Reporte')  # avoid an invalid zero-sheet workbook
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    fname = f"reporte_{report_type}_{company_filter or 'todas'}_{today.strftime('%Y%m%d')}.xlsx"
+    return send_file(
+        buffer,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True, download_name=fname)
 
 
 # ── USER MANAGEMENT ────────────────────────────────────────────────────
@@ -2458,6 +2739,73 @@ def dedup_data(dry_run):
     print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {equip_deleted} duplicate equipment, {eq_permit_deleted} duplicate equipment permits, {issue_deleted} duplicate issues removed.')
 
 
+@app.cli.command('reclassify-equipment')
+@click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
+def reclassify_equipment(dry_run):
+    """Re-run the equipment classifier over all non-archived equipment."""
+    prefix = '[DRY RUN] ' if dry_run else ''
+    changed = 0
+    for eq in Equipment.query.filter(Equipment.archived_at.is_(None)).all():
+        new_class = classify_equipment(eq.model, eq.equipment_type)
+        if eq.equipment_class != new_class:
+            print(f'  {prefix}{eq.display_name} ({eq.company}) — "{eq.model or ""}" → {new_class}'
+                  f' (antes: {eq.equipment_class or "sin clase"})')
+            eq.equipment_class = new_class
+            changed += 1
+    if not dry_run and changed:
+        db.session.commit()
+    print(f'{prefix}{changed} equipo(s) reclasificado(s).')
+
+
+@app.cli.command('migrate-class-insurance')
+@click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
+def migrate_class_insurance(dry_run):
+    """Split the single shared SEGURO CompanyPermit into per-class policies.
+
+    The existing SEGURO row becomes SEGURO_TRUCK (the currently-insured fleet);
+    empty CHASSIS/TANK/GENERATOR slots are created. Idempotent."""
+    prefix = '[DRY RUN] ' if dry_run else ''
+
+    for company in ('LB', 'PLI'):
+        old = CompanyPermit.query.filter_by(company=company, permit_type='SEGURO').first()
+        truck = CompanyPermit.query.filter_by(company=company, permit_type='SEGURO_TRUCK').first()
+
+        if old and not truck:
+            print(f'  {prefix}{company}: SEGURO → SEGURO_TRUCK (id={old.id}, '
+                  f'exp={old.expiration_date}, file={"yes" if old.file_path else "no"})')
+            if not dry_run:
+                old.permit_type = 'SEGURO_TRUCK'
+        elif old and truck:
+            # The Empresa view was visited post-deploy and auto-created a blank
+            # SEGURO_TRUCK — merge the old row into it (blank fields only).
+            print(f'  {prefix}{company}: merging SEGURO id={old.id} into SEGURO_TRUCK id={truck.id}')
+            if not dry_run:
+                for field in ('expiration_date', 'permit_number', 'issuing_authority',
+                              'file_path', 'renewal_cost', 'notes'):
+                    if not getattr(truck, field):
+                        setattr(truck, field, getattr(old, field))
+                truck.applicability = old.applicability or truck.applicability
+                # file_path was transferred — do NOT delete_stored_file here
+                db.session.delete(old)
+        elif truck:
+            print(f'  {prefix}{company}: ya migrado (SEGURO_TRUCK existe)')
+        else:
+            print(f'  {prefix}{company}: sin póliza SEGURO previa — se crearán registros vacíos')
+
+        for code in ('SEGURO_TRUCK', 'SEGURO_CHASSIS', 'SEGURO_TANK', 'SEGURO_GENERATOR'):
+            exists = CompanyPermit.query.filter_by(company=company, permit_type=code).first()
+            if not exists and not (code == 'SEGURO_TRUCK' and old):
+                print(f'  {prefix}{company}: creando registro {code}')
+                if not dry_run:
+                    db.session.add(CompanyPermit(company=company, permit_type=code,
+                                                 applicability='YES'))
+
+    if not dry_run:
+        db.session.commit()
+
+    print(f'{prefix}Migración de seguros por clase completa.')
+
+
 @app.cli.command('migrate-shared-insurance')
 @click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
 def migrate_shared_insurance(dry_run):
@@ -2587,6 +2935,14 @@ with app.app_context():
         # Rename CPR → PRIMEROS_AUXILIOS in existing records
         db.session.execute(db.text("UPDATE employee_permits SET permit_type = 'PRIMEROS_AUXILIOS' WHERE permit_type = 'CPR'"))
         db.session.commit()
+
+        # Backfill equipment_class for rows that predate the column (idempotent)
+        unclassified = Equipment.query.filter(Equipment.equipment_class.is_(None)).all()
+        for eq in unclassified:
+            eq.equipment_class = classify_equipment(eq.model, eq.equipment_type)
+        if unclassified:
+            db.session.commit()
+            print(f"[INFO] Classified {len(unclassified)} equipment rows")
 
         if not User.query.filter_by(role='admin').first():
             admin = User(username='admin', email='admin@lbcaribe.com', role='admin')

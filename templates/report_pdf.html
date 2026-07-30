@@ -224,7 +224,7 @@
                 {% for eq in lb_eq %}
                 <tr>
                     <td><strong>{{ eq.display_name }}</strong></td>
-                    <td>{{ 'Generador' if eq.equipment_type == 'generator' else 'Vehículo' }}</td>
+                    <td>{{ eq.equipment_class_label }}</td>
                     <td>{{ eq.plate_number or '—' }}</td>
                     <td>{{ eq.vin_serial or '—' }}</td>
                     {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}
@@ -262,7 +262,7 @@
                 {% for eq in pli_eq %}
                 <tr>
                     <td><strong>{{ eq.display_name }}</strong></td>
-                    <td>{{ 'Generador' if eq.equipment_type == 'generator' else 'Vehículo' }}</td>
+                    <td>{{ eq.equipment_class_label }}</td>
                     <td>{{ eq.plate_number or '—' }}</td>
                     <td>{{ eq.vin_serial or '—' }}</td>
                     {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}
@@ -300,7 +300,7 @@
                 {% for eq in personal_eq %}
                 <tr>
                     <td><strong>{{ eq.display_name }}</strong></td>
-                    <td>{{ 'Generador' if eq.equipment_type == 'generator' else 'Vehículo' }}</td>
+                    <td>{{ eq.equipment_class_label }}</td>
                     <td>{{ eq.plate_number or '—' }}</td>
                     <td>{{ eq.vin_serial or '—' }}</td>
                     {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}

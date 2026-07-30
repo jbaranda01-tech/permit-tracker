@@ -27,11 +27,12 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="equipment_type">Tipo *</label>
-                    {% set sel_type = equipment.equipment_type if equipment else fd.get('equipment_type', 'vehicle') %}
-                    <select id="equipment_type" name="equipment_type" required>
-                        <option value="vehicle" {% if sel_type == 'vehicle' %}selected{% endif %}>Vehículo</option>
-                        <option value="generator" {% if sel_type == 'generator' %}selected{% endif %}>Generador</option>
+                    <label for="equipment_class">Clase *</label>
+                    {% set sel_class = equipment.equipment_class if equipment else fd.get('equipment_class', 'truck') %}
+                    <select id="equipment_class" name="equipment_class" required>
+                        {% for code, label in equipment_classes %}
+                        <option value="{{ code }}" {% if sel_class == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="form-group">

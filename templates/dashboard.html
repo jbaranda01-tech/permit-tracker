@@ -14,6 +14,7 @@
                 {% if permit_type %}<input type="hidden" name="permit_type" value="{{ permit_type }}">{% endif %}
                 {% if permit_status %}<input type="hidden" name="permit_status" value="{{ permit_status }}">{% endif %}
                 {% if exp_month %}<input type="hidden" name="exp_month" value="{{ exp_month }}">{% endif %}
+                {% if equipment_class %}<input type="hidden" name="equipment_class" value="{{ equipment_class }}">{% endif %}
                 <div class="input-icon search-input">
                     <i class="fas fa-search"></i>
                     <input type="text" name="search" value="{{ search }}" placeholder="Buscar...">
@@ -40,6 +41,7 @@
             <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
                                 status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
                                 permit_type=permit_type or none, exp_month=exp_month or none,
+                                equipment_class=equipment_class or none,
                                 permit_status=none if permit_status == 'expired' else 'expired') }}"
                class="stat-tile stat-tile--expired{% if permit_status == 'expired' %} stat-tile--active{% endif %}">
                 <div class="stat-tile__num">{{ tile_counts.expired }}</div>
@@ -48,6 +50,7 @@
             <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
                                 status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
                                 permit_type=permit_type or none, exp_month=exp_month or none,
+                                equipment_class=equipment_class or none,
                                 permit_status=none if permit_status == 'expiring' else 'expiring') }}"
                class="stat-tile stat-tile--expiring{% if permit_status == 'expiring' %} stat-tile--active{% endif %}">
                 <div class="stat-tile__num">{{ tile_counts.expiring }}</div>
@@ -55,7 +58,8 @@
             </a>
             <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
                                 status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
-                                permit_type=permit_type or none, exp_month=exp_month or none) }}"
+                                permit_type=permit_type or none, exp_month=exp_month or none,
+                                equipment_class=equipment_class or none) }}"
                class="stat-tile stat-tile--valid">
                 <div class="stat-tile__num">{{ tile_counts.total }}</div>
                 <div class="stat-tile__label">{{ 'Empleados' if view == 'employees' else 'Equipos' }}</div>
@@ -75,6 +79,14 @@
                     <option value="Personal" {% if company_filter == 'Personal' %}selected{% endif %}>Personal</option>
                     {% endif %}
                 </select>
+                {% if view == 'equipment' %}
+                <select name="equipment_class" onchange="this.form.submit()" aria-label="Clase de equipo">
+                    <option value="">Todas las clases</option>
+                    {% for code, label in equipment_classes %}
+                    <option value="{{ code }}" {% if equipment_class == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
                 <select name="permit_type" onchange="this.form.submit()" aria-label="Tipo de permiso">
                     <option value="">Todos los permisos</option>
                     {% for code, label in permit_types %}

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#b91c1c" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0b0f19" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#c81e1e" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)">
     {% block pwa_meta %}
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,8 +16,6 @@
     <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/icon-152.png') }}">
     <script>(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)})()</script>
     <title>{% block title %}PermitTracker{% endblock %} — LB Caribe</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ versioned_static('css/style.css') }}">
 </head>
@@ -69,8 +67,8 @@
         <div class="nav-section">
             <div class="nav-section-title">Herramientas</div>
             <a href="{{ url_for('report_menu') }}" class="nav-link {% if request.endpoint == 'report_menu' %}active{% endif %}">
-                <i class="fas fa-file-pdf"></i>
-                <span>Reporte PDF</span>
+                <i class="fas fa-file-export"></i>
+                <span>Reportes</span>
             </a>
             {% if current_user.is_admin %}
             <a href="{{ url_for('import_data') }}" class="nav-link {% if request.endpoint == 'import_data' %}active{% endif %}">

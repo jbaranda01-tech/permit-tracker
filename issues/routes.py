@@ -16,6 +16,7 @@ from models import (
     db, Employee, Equipment, EquipmentPermit, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     EXCLUDED_EQUIPMENT_MODELS, EQUIPMENT_PERMIT_TYPES,
+    classify_equipment,
 )
 
 SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
@@ -41,10 +42,11 @@ def _unreportable_reason(eq):
         return 'equipo archivado'
     if eq.company not in ('LB', 'PLI'):
         return f'empresa "{eq.company}"'
-    if eq.equipment_type != 'vehicle':
-        return f'tipo "{eq.equipment_type}"'
+    if eq.equipment_class and eq.equipment_class != 'truck':
+        return f'clase "{eq.equipment_class_label}"'
     if eq.status != 'activo':
         return f'estado "{eq.status}"'
+    # NULL-class fallback (rows that predate the classifier backfill)
     if eq.model and eq.model.strip().lower() in EXCLUDED_EQUIPMENT_MODELS:
         return f'modelo "{eq.model}" excluido'
     return None
@@ -54,9 +56,11 @@ def reportable_equipment_query(company=None):
     query = Equipment.query.filter(
         Equipment.status == 'activo',
         Equipment.archived_at.is_(None),
-        Equipment.equipment_type == 'vehicle',
+        db.or_(Equipment.equipment_class == 'truck',
+               Equipment.equipment_class.is_(None)),
         Equipment.company.in_(['LB', 'PLI']),
     )
+    # NULL-class fallback: excluded-model loop only bites rows the backfill missed
     for model_name in EXCLUDED_EQUIPMENT_MODELS:
         query = query.filter(db.or_(
             Equipment.model == None,
@@ -607,9 +611,10 @@ def vehicle_create():
         errors.append('Debe seleccionar una empresa (LB o PLI).')
     if not unit_number:
         errors.append('Debe incluir el número de unidad.')
-    if model and model.lower() in EXCLUDED_EQUIPMENT_MODELS:
-        errors.append(f'El modelo "{model}" está excluido de los reportes; '
-                      'el camión no aparecería en la lista.')
+    if model and (model.lower() in EXCLUDED_EQUIPMENT_MODELS
+                  or classify_equipment(model) != 'truck'):
+        errors.append(f'El modelo "{model}" no corresponde a un camión; '
+                      'el equipo no aparecería en la lista de reportes.')
 
     from app import find_duplicate_equipment
     match = find_duplicate_equipment(None, plate_number, unit_number, company)
@@ -633,6 +638,7 @@ def vehicle_create():
     equip = Equipment(
         company=company,
         equipment_type='vehicle',
+        equipment_class=classify_equipment(model),
         status='activo',
         unit_number=unit_number,
         plate_number=plate_number,

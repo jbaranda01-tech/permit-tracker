@@ -9,7 +9,7 @@
                 <h1>{{ equipment.display_name }}</h1>
                 <div class="detail-meta">
                     <span class="company-tag tag-{{ equipment.company|lower }}">{{ equipment.company_full }}</span>
-                    <span class="area-tag">{{ 'Generador' if equipment.equipment_type == 'generator' else 'Vehículo' }}</span>
+                    <span class="area-tag">{{ equipment.equipment_class_label }}</span>
                     {% if equipment.is_archived %}
                     <span class="status-tag status-archivado">Archivado</span>
                     {% else %}
@@ -210,7 +210,7 @@
             {% if shared_insurance %}
             <div class="permit-card permit-{{ shared_insurance.status }}">
                 <div class="permit-card-header">
-                    <span class="permit-name">Seguro (compartido)</span>
+                    <span class="permit-name">{{ shared_insurance_title or 'Seguro (compartido)' }}</span>
                     <span class="permit-badge permit-badge-{{ shared_insurance.status }}">{{ shared_insurance.status_label }}</span>
                 </div>
                 <div class="permit-card-body">

@@ -4,7 +4,7 @@ function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
     syncThemeButtons(theme);
-    var color = theme === 'dark' ? '#0b0f19' : '#b91c1c';
+    var color = theme === 'dark' ? '#0a0a0b' : '#c81e1e';
     document.querySelectorAll('meta[name="theme-color"]').forEach(function(m) { m.content = color; });
 }
 

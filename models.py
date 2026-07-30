@@ -245,12 +245,33 @@ EQUIPMENT_ARCHIVE_REASONS = [
     ('otro', 'Otro'),
 ]
 
+EQUIPMENT_CLASSES = [
+    ('truck', 'Camión'),
+    ('chassis', 'Chasis'),
+    ('tank', 'Tanque'),
+    ('generator', 'Generador'),
+]
+
+
+def classify_equipment(model, equipment_type=None):
+    """Infer the equipment class from the free-text model. Unmatched ⇒ truck
+    (matches the historical reportable-vehicle semantics)."""
+    m = (model or '').strip().lower()
+    if 'chasis' in m or 'carreton' in m or 'carretón' in m:
+        return 'chassis'
+    if 'tanque' in m:
+        return 'tank'
+    if 'generador' in m or equipment_type == 'generator':
+        return 'generator'
+    return 'truck'
+
 
 class Equipment(db.Model):
     __tablename__ = 'equipment'
     id = db.Column(db.Integer, primary_key=True)
     company = db.Column(db.String(10), nullable=False)  # LB, PLI, or Personal
-    equipment_type = db.Column(db.String(20), default='vehicle')  # vehicle, generator
+    equipment_type = db.Column(db.String(20), default='vehicle')  # deprecated in UI; kept for data
+    equipment_class = db.Column(db.String(20))  # truck | chassis | tank | generator
     titular = db.Column(db.String(200))
     unit_number = db.Column(db.String(50))
     plate_number = db.Column(db.String(50))
@@ -295,6 +316,13 @@ class Equipment(db.Model):
             if code == self.archive_reason:
                 return label
         return self.archive_reason or 'Otro'
+
+    @property
+    def equipment_class_label(self):
+        for code, label in EQUIPMENT_CLASSES:
+            if code == self.equipment_class:
+                return label
+        return 'Camión'
 
     @property
     def permit_status_summary(self):
@@ -389,12 +417,31 @@ class EquipmentPermit(db.Model):
 # ── COMPANY PERMITS ───────────────────────────────────────────────────
 
 COMPANY_PERMIT_TYPES = [
-    ('SEGURO', 'Seguro / Insurance', ['LB', 'PLI']),
+    ('SEGURO_TRUCK', 'Seguro — Camiones', ['LB', 'PLI']),
+    ('SEGURO_CHASSIS', 'Seguro — Chasis', ['LB', 'PLI']),
+    ('SEGURO_TANK', 'Seguro — Tanques', ['LB', 'PLI']),
+    ('SEGURO_GENERATOR', 'Seguro — Generadores', ['LB', 'PLI']),
     ('HAZMAT_CERT', 'Certificado HazMat', ['LB', 'PLI']),
     ('NMFTA_CERT', 'Certificado NMFTA', ['PLI']),
     ('USDOT_BIENNIAL', 'USDOT Biennial Report', ['LB', 'PLI']),
     ('NTSP_FRANCHISE', 'Franquicia NTSP', ['LB', 'PLI']),
 ]
+
+# Shared insurance is split per equipment class (one policy covers all LB/PLI
+# equipment of that class). Per-vehicle EQUIPMENT_PERMIT_TYPES keeps 'SEGURO'.
+INSURANCE_TYPE_BY_CLASS = {
+    'truck': 'SEGURO_TRUCK',
+    'chassis': 'SEGURO_CHASSIS',
+    'tank': 'SEGURO_TANK',
+    'generator': 'SEGURO_GENERATOR',
+}
+
+INSURANCE_CARD_TITLES = {
+    'truck': 'Seguro de camiones (compartido)',
+    'chassis': 'Seguro de chasis (compartido)',
+    'tank': 'Seguro de tanques (compartido)',
+    'generator': 'Seguro de generadores (compartido)',
+}
 
 
 class CompanyPermit(db.Model):
