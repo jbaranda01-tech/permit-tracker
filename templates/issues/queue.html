@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Reportes de Problemas{% endblock %}
 
-{% macro issue_row(issue, show_truck=false) %}
+{% macro issue_row(issue, show_truck=false, show_resolved=false) %}
 <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-row issue-row--{{ issue.severity }}">
     <div class="issue-row-top">
         <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
@@ -15,7 +15,11 @@
     <div class="issue-row-meta">
         <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
         {% if issue.reporter %}<span><i class="fas fa-user"></i> {{ issue.reporter.name }}</span>{% endif %}
-        {% if issue.reported_at %}<span><i class="fas fa-clock"></i> {{ issue.reported_at|time_ago }}</span>{% endif %}
+        {% if show_resolved and issue.resolved_at %}
+        <span><i class="fas fa-check"></i> Resuelto {{ issue.resolved_at|time_ago }}</span>
+        {% elif issue.reported_at %}
+        <span><i class="fas fa-clock"></i> {{ issue.reported_at|time_ago }}</span>
+        {% endif %}
     </div>
 </a>
 {% endmacro %}
@@ -164,14 +168,14 @@
     {{ truck_panel('Professional Logistics', 'logo-pli.png', 'panel-pli', pli_trucks, pli_issue_count, severities, current_user.is_admin, filters_active) }}
 </div>
 
-{% if recent_issues %}
+{% if unlinked_issues %}
 <div class="recent-issues-section">
     <div class="profile-card">
         <div class="card-header">
-            <i class="fas fa-clock"></i> Reportes Recientes
+            <i class="fas fa-unlink"></i> Reportes sin unidad asignada
         </div>
         <div class="card-body" style="padding: 0;">
-            {% for issue in recent_issues %}
+            {% for issue in unlinked_issues %}
             {{ issue_row(issue, show_truck=true) }}
             {% endfor %}
         </div>
@@ -188,11 +192,12 @@
         </div>
         <div class="card-body" id="resolved-issues-body" style="padding: 0; display: none;">
             {% for issue in resolved_issues %}
-            {{ issue_row(issue, show_truck=true) }}
+            {{ issue_row(issue, show_truck=true, show_resolved=true) }}
             {% endfor %}
             {% if resolved_count > resolved_issues|length %}
             <div class="resolved-more-note">
-                Mostrando {{ resolved_issues|length }} de {{ resolved_count }}
+                Mostrando {{ resolved_issues|length }} de {{ resolved_count }} &middot;
+                <a href="{{ url_for('issues.queue', status='resuelto', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}">Ver todos</a>
             </div>
             {% endif %}
         </div>

@@ -371,7 +371,9 @@ def queue():
                                  .count())
 
     trucks = reportable_equipment_query().all()
-    recent_issues = all_issues[:20]
+    # Issues with no linked equipment appear in no truck panel — surface them
+    # in their own section so they stay reachable.
+    unlinked_issues = [i for i in all_issues if not i.equipment_id]
 
     resolved_issues = []
     resolved_count = 0
@@ -391,7 +393,7 @@ def queue():
                            pli_trucks=pli_trucks,
                            lb_issue_count=sum(t['issue_count'] for t in lb_trucks),
                            pli_issue_count=sum(t['issue_count'] for t in pli_trucks),
-                           recent_issues=recent_issues,
+                           unlinked_issues=unlinked_issues,
                            resolved_issues=resolved_issues,
                            resolved_count=resolved_count,
                            statuses=ISSUE_STATUSES,

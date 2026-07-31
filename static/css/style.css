@@ -2321,7 +2321,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     color: var(--text-tertiary);
     border-top: 1px solid var(--border-color);
 }
-.resolved-more-note a { color: #3b82f6; font-weight: 600; }
+.resolved-more-note a { color: var(--accent); font-weight: 600; }
 
 @media (max-width: 768px) {
     .report-container { padding: var(--space-md); }
