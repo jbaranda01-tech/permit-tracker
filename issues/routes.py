@@ -255,26 +255,42 @@ def queue():
     not_archived = db.or_(Issue.equipment_id.is_(None),
                           Equipment.archived_at.is_(None))
 
-    query = (Issue.query
-             .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
-             .options(joinedload(Issue.reporter))
-             .filter(not_archived))
-
+    # Unknown filter values silently reset to defaults (dashboard pattern)
     status_filter = request.args.get('status', '')
-    if status_filter:
-        query = query.filter(Issue.current_status == status_filter)
-    else:
-        query = query.filter(Issue.current_status.notin_(RESOLVED_STATUSES))
-
+    if status_filter not in {code for code, _ in ISSUE_STATUSES}:
+        status_filter = ''
     severity_filter = request.args.get('severity', '')
-    if severity_filter:
-        query = query.filter(Issue.severity == severity_filter)
-
+    if severity_filter not in {code for code, _ in ISSUE_SEVERITIES}:
+        severity_filter = ''
+    category_filter = request.args.get('category', '')
+    if category_filter not in {code for code, _ in ISSUE_CATEGORIES}:
+        category_filter = ''
     equipment_filter = request.args.get('equipment_id', type=int)
-    if equipment_filter:
-        query = query.filter(Issue.equipment_id == equipment_filter)
 
-    all_issues = query.order_by(Issue.reported_at.desc()).all()
+    def scoped_query(exclude=None):
+        """Every active filter applied except the axis named by `exclude`, so
+        each control's count equals what clicking it would show."""
+        q = (Issue.query
+             .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
+             .filter(not_archived))
+        if exclude != 'status':
+            if status_filter:
+                q = q.filter(Issue.current_status == status_filter)
+            else:
+                q = q.filter(Issue.current_status.notin_(RESOLVED_STATUSES))
+        if exclude != 'severity' and severity_filter:
+            q = q.filter(Issue.severity == severity_filter)
+        if equipment_filter:
+            q = q.filter(Issue.equipment_id == equipment_filter)
+        if category_filter:
+            q = q.filter(Issue.category == category_filter)
+        return q
+
+    all_issues = (scoped_query()
+                  .options(joinedload(Issue.reporter),
+                           joinedload(Issue.equipment))
+                  .order_by(Issue.reported_at.desc())
+                  .all())
 
     issues_by_equipment = defaultdict(list)
     for issue in all_issues:
@@ -305,19 +321,15 @@ def queue():
     pli_trucks = build_truck_profiles('PLI')
 
     status_counts = {}
-    for code, label in ISSUE_STATUSES:
-        status_counts[code] = (Issue.query
-                               .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
-                               .filter(Issue.current_status == code, not_archived)
+    for code, _label in ISSUE_STATUSES:
+        status_counts[code] = (scoped_query(exclude='status')
+                               .filter(Issue.current_status == code)
                                .count())
 
     severity_counts = {}
     for code, _label in ISSUE_SEVERITIES:
-        severity_counts[code] = (Issue.query
-                                 .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
-                                 .filter(Issue.severity == code,
-                                         Issue.current_status.notin_(RESOLVED_STATUSES),
-                                         not_archived)
+        severity_counts[code] = (scoped_query(exclude='severity')
+                                 .filter(Issue.severity == code)
                                  .count())
 
     trucks = reportable_equipment_query().all()
@@ -326,16 +338,12 @@ def queue():
     resolved_issues = []
     resolved_count = 0
     if not status_filter:
-        resolved_query = (Issue.query
-                          .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
-                          .options(joinedload(Issue.reporter))
-                          .filter(Issue.current_status.in_(RESOLVED_STATUSES), not_archived))
-        if severity_filter:
-            resolved_query = resolved_query.filter(Issue.severity == severity_filter)
-        if equipment_filter:
-            resolved_query = resolved_query.filter(Issue.equipment_id == equipment_filter)
+        resolved_query = (scoped_query(exclude='status')
+                          .filter(Issue.current_status.in_(RESOLVED_STATUSES)))
         resolved_count = resolved_query.count()
         resolved_issues = (resolved_query
+                           .options(joinedload(Issue.reporter),
+                                    joinedload(Issue.equipment))
                            .order_by(Issue.resolved_at.desc().nullslast(),
                                      Issue.reported_at.desc())
                            .limit(20).all())
@@ -356,7 +364,8 @@ def queue():
                            severity_counts=severity_counts,
                            current_status=status_filter,
                            current_severity=severity_filter,
-                           current_equipment=equipment_filter)
+                           current_equipment=equipment_filter,
+                           current_category=category_filter)
 
 
 # ── ISSUE DETAIL ──────────────────────────────────────────────────────
