@@ -42,25 +42,10 @@ function toggleSidebar() {
         }
         return;
     }
-    const sidebar = document.getElementById('sidebar');
-    const main = document.querySelector('.main-content');
-    sidebar.classList.toggle('collapsed');
-
-    if (sidebar.classList.contains('collapsed')) {
-        sidebar.style.width = '64px';
-        if (main) main.style.marginLeft = '64px';
-        sidebar.querySelectorAll('span, .nav-section-title, .user-info').forEach(el => {
-            el.style.display = 'none';
-        });
-        const logoIcon = sidebar.querySelector('.logo i');
-        if (logoIcon) logoIcon.style.display = '';
-    } else {
-        sidebar.style.width = '';
-        if (main) main.style.marginLeft = '';
-        sidebar.querySelectorAll('span, .nav-section-title, .user-info').forEach(el => {
-            el.style.display = '';
-        });
-    }
+    // Desktop: CSS-driven collapse on <html>, persisted; base.html's inline
+    // head script re-applies it pre-paint on the next load.
+    const collapsed = document.documentElement.classList.toggle('sidebar-collapsed');
+    localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
 }
 
 
@@ -133,3 +118,65 @@ document.addEventListener('DOMContentLoaded', () => {
         tracking = false;
     }, {passive: true});
 })();
+
+
+// ── Sortable data tables (client-side; th[data-sort] + .sort-arrow) ──
+
+function initSortableTables() {
+    document.querySelectorAll('table.data-table').forEach(function (table) {
+        var ths = table.querySelectorAll('th[data-sort]');
+        if (!ths.length) return;
+        var state = { key: null, dir: 1 };
+        ths.forEach(function (th) {
+            th.addEventListener('click', function () {
+                state.dir = state.key === th.dataset.sort ? -state.dir : 1;
+                state.key = th.dataset.sort;
+                ths.forEach(function (h) {
+                    h.classList.remove('sort-asc', 'sort-desc');
+                    var arr = h.querySelector('.sort-arrow');
+                    if (!arr) return;
+                    if (h === th) {
+                        h.classList.add(state.dir === 1 ? 'sort-asc' : 'sort-desc');
+                        arr.textContent = state.dir === 1 ? '↑' : '↓';
+                    } else {
+                        arr.textContent = '↕';
+                    }
+                });
+                sortTableRows(table, th.cellIndex, th.dataset.sortType || 'text', state.dir);
+            });
+        });
+    });
+}
+
+function sortTableRows(table, colIndex, type, dir) {
+    var tbody = table.tBodies[0];
+    if (!tbody) return;
+    // Group each data row with its trailing inline-edit row (colspan cell)
+    // so the pair travels together and an open edit form stays with its row.
+    var groups = [];
+    Array.prototype.forEach.call(tbody.rows, function (row) {
+        if (row.querySelector('.inline-edit-cell') && groups.length) {
+            groups[groups.length - 1].push(row);
+        } else {
+            groups.push([row]);
+        }
+    });
+    function val(g) {
+        var cell = g[0].cells[colIndex];
+        var text = cell ? cell.textContent.trim() : '';
+        if (type === 'date') {
+            var m = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+            return m ? new Date(+m[3], +m[1] - 1, +m[2]).getTime() : -Infinity;
+        }
+        return text.toLowerCase();
+    }
+    groups.sort(function (a, b) {
+        var va = val(a), vb = val(b);
+        return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
+    });
+    groups.forEach(function (g) {
+        g.forEach(function (r) { tbody.appendChild(r); });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initSortableTables);

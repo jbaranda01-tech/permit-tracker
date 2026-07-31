@@ -5,7 +5,9 @@
 <div class="detail-page">
     <div class="detail-header">
         <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Dashboard</a>
-        <h1><i class="fas fa-file-export"></i> Reportes</h1>
+        <div class="page-titlebar">
+            <div class="page-title">Herramientas<strong>Reportes</strong></div>
+        </div>
     </div>
 
     <form method="GET" action="{{ url_for('generate_pdf') }}" target="_blank" class="report-form">

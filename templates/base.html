@@ -14,7 +14,7 @@
     {% endblock %}
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/icon-180.png') }}">
     <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='img/icon-152.png') }}">
-    <script>(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t)})()</script>
+    <script>(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('sidebar-collapsed')==='1')document.documentElement.classList.add('sidebar-collapsed')})()</script>
     <title>{% block title %}PermitTracker{% endblock %} — LB Caribe</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ versioned_static('css/style.css') }}">

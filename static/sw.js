@@ -1,4 +1,4 @@
-var CACHE_NAME = 'pt-v4';
+var CACHE_NAME = 'pt-v5';
 var SHELL_URLS = [
   '/static/css/style.css',
   '/static/js/app.js',

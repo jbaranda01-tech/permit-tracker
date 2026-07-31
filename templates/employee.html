@@ -6,6 +6,7 @@
         <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Empleados</a>
         <div class="detail-title-row">
             <div>
+                <span class="page-kicker">Empleado</span>
                 <h1>{{ employee.name }}</h1>
                 <div class="detail-meta">
                     <span class="company-tag tag-{{ employee.company|lower }}">{{ employee.company_full }}</span>

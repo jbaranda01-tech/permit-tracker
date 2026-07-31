@@ -4,7 +4,9 @@
 <div class="detail-page">
     <div class="detail-header">
         <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Dashboard</a>
-        <h1><i class="fas fa-user-cog"></i> Gestión de Usuarios</h1>
+        <div class="page-titlebar">
+            <div class="page-title">Administración<strong>Gestión de Usuarios</strong></div>
+        </div>
     </div>
 
     <!-- New User Form -->
@@ -50,11 +52,11 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Usuario</th>
-                    <th>Email</th>
-                    <th>Rol</th>
-                    <th>Roles Taller</th>
-                    <th>Creado</th>
+                    <th data-sort="username">Usuario <span class="sort-arrow">↕</span></th>
+                    <th data-sort="email">Email <span class="sort-arrow">↕</span></th>
+                    <th data-sort="role">Rol <span class="sort-arrow">↕</span></th>
+                    <th data-sort="issue_roles">Roles Taller <span class="sort-arrow">↕</span></th>
+                    <th data-sort="created" data-sort-type="date">Creado <span class="sort-arrow">↕</span></th>
                     <th>Acciones</th>
                 </tr>
             </thead>

@@ -6,6 +6,7 @@
         <a href="{{ url_for('dashboard', view='equipment') }}" class="back-link"><i class="fas fa-arrow-left"></i> Equipos</a>
         <div class="detail-title-row">
             <div>
+                <span class="page-kicker">Equipo</span>
                 <h1>{{ equipment.display_name }}</h1>
                 <div class="detail-meta">
                     <span class="company-tag tag-{{ equipment.company|lower }}">{{ equipment.company_full }}</span>

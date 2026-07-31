@@ -2,42 +2,12 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="dashboard">
-    <!-- Top Bar -->
-    {% if view != 'company' %}
-    <div class="dashboard-header">
-        <div class="dashboard-actions">
-            <form class="search-form" method="GET" action="{{ url_for('dashboard') }}">
-                <input type="hidden" name="view" value="{{ view }}">
-                {% if company_filter %}<input type="hidden" name="company" value="{{ company_filter }}">{% endif %}
-                {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
-                {% if sort_by and sort_by != 'name' %}<input type="hidden" name="sort" value="{{ sort_by }}">{% endif %}
-                {% if permit_type %}<input type="hidden" name="permit_type" value="{{ permit_type }}">{% endif %}
-                {% if permit_status %}<input type="hidden" name="permit_status" value="{{ permit_status }}">{% endif %}
-                {% if exp_month %}<input type="hidden" name="exp_month" value="{{ exp_month }}">{% endif %}
-                {% if equipment_class %}<input type="hidden" name="equipment_class" value="{{ equipment_class }}">{% endif %}
-                <div class="input-icon search-input">
-                    <i class="fas fa-search"></i>
-                    <input type="text" name="search" value="{{ search }}" placeholder="Buscar...">
-                </div>
-            </form>
-            {% if current_user.is_manager %}
-            {% if view == 'employees' %}
-            <a href="{{ url_for('employee_new') }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> <span class="btn-text">Nuevo Empleado</span>
-            </a>
-            {% else %}
-            <a href="{{ url_for('equipment_new') }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> <span class="btn-text">Nuevo Equipo</span>
-            </a>
-            {% endif %}
-            {% endif %}
-        </div>
+    <div class="page-titlebar">
+        <div class="page-title">Permisos<strong>{{ 'Empleados' if view == 'employees' else ('Equipos' if view == 'equipment' else 'Empresa') }}</strong></div>
     </div>
-    {% endif %}
 
     {% if view != 'company' %}
-    <div class="queue-toolbar">
-        <div class="stat-tiles">
+    <div class="stat-tiles">
             <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
                                 status=status_filter or none, sort=sort_by if sort_by != 'name' else none,
                                 permit_type=permit_type or none, exp_month=exp_month or none,
@@ -64,8 +34,21 @@
                 <div class="stat-tile__num">{{ tile_counts.total }}</div>
                 <div class="stat-tile__label">{{ 'Empleados' if view == 'employees' else 'Equipos' }}</div>
             </a>
-        </div>
-        <div class="issue-filters">
+    </div>
+
+    <div class="toolbar">
+        <form class="search-wrap" method="GET" action="{{ url_for('dashboard') }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            {% if company_filter %}<input type="hidden" name="company" value="{{ company_filter }}">{% endif %}
+            {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+            {% if sort_by and sort_by != 'name' %}<input type="hidden" name="sort" value="{{ sort_by }}">{% endif %}
+            {% if permit_type %}<input type="hidden" name="permit_type" value="{{ permit_type }}">{% endif %}
+            {% if permit_status %}<input type="hidden" name="permit_status" value="{{ permit_status }}">{% endif %}
+            {% if exp_month %}<input type="hidden" name="exp_month" value="{{ exp_month }}">{% endif %}
+            {% if equipment_class %}<input type="hidden" name="equipment_class" value="{{ equipment_class }}">{% endif %}
+            <i class="fas fa-search"></i>
+            <input type="text" name="search" value="{{ search }}" placeholder="Buscar...">
+        </form>
             <form method="GET" class="filter-form" action="{{ url_for('dashboard') }}">
                 <input type="hidden" name="view" value="{{ view }}">
                 {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
@@ -106,7 +89,18 @@
                     <option value="expiration" {% if sort_by == 'expiration' %}selected{% endif %}>Ordenar: Próximo a vencer</option>
                 </select>
             </form>
-        </div>
+        <div class="spacer"></div>
+        {% if current_user.is_manager %}
+        {% if view == 'employees' %}
+        <a href="{{ url_for('employee_new') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> <span class="btn-text">Nuevo Empleado</span>
+        </a>
+        {% else %}
+        <a href="{{ url_for('equipment_new') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> <span class="btn-text">Nuevo Equipo</span>
+        </a>
+        {% endif %}
+        {% endif %}
     </div>
     {% endif %}
 
