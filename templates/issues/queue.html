@@ -34,7 +34,9 @@
         {% for truck in trucks %}
         {% set expanded = truck.worst_severity == 'critica' %}
         <div class="truck-profile">
-            <div class="truck-profile-header" onclick="toggleTruckIssues({{ truck.equipment.id }})">
+            <div class="truck-profile-header" role="button" tabindex="0"
+                 aria-expanded="{{ 'true' if expanded else 'false' }}" aria-controls="issues-{{ truck.equipment.id }}"
+                 onclick="toggleTruckIssues({{ truck.equipment.id }})">
                 <div class="truck-info">
                     <div class="truck-name">
                         <i class="fas fa-truck"></i>
@@ -186,7 +188,8 @@
 {% if resolved_count > 0 %}
 <div class="recent-issues-section">
     <div class="profile-card">
-        <div class="card-header collapsible-card-header" onclick="toggleResolvedSection()">
+        <div class="card-header collapsible-card-header" role="button" tabindex="0"
+             aria-expanded="false" aria-controls="resolved-issues-body" onclick="toggleResolvedSection()">
             <span><i class="fas fa-check-circle"></i> Resueltos <span class="badge">{{ resolved_count }}</span></span>
             <i class="fas fa-chevron-down truck-chevron" id="chevron-resolved"></i>
         </div>
@@ -206,32 +209,36 @@
 {% endif %}
 
 <script>
+function setCollapsed(body, chevron, header, open) {
+    body.style.display = open ? '' : 'none';
+    chevron.classList.toggle('fa-chevron-up', open);
+    chevron.classList.toggle('fa-chevron-down', !open);
+    if (header) header.setAttribute('aria-expanded', open);
+}
+
 function toggleResolvedSection() {
     var body = document.getElementById('resolved-issues-body');
     var chevron = document.getElementById('chevron-resolved');
-    if (body.style.display === 'none') {
-        body.style.display = '';
-        chevron.classList.remove('fa-chevron-down');
-        chevron.classList.add('fa-chevron-up');
-    } else {
-        body.style.display = 'none';
-        chevron.classList.remove('fa-chevron-up');
-        chevron.classList.add('fa-chevron-down');
-    }
+    var header = document.querySelector('[aria-controls="resolved-issues-body"]');
+    setCollapsed(body, chevron, header, body.style.display === 'none');
 }
 
 function toggleTruckIssues(equipmentId) {
-    var issues = document.getElementById('issues-' + equipmentId);
+    var body = document.getElementById('issues-' + equipmentId);
     var chevron = document.getElementById('chevron-' + equipmentId);
-    if (issues.style.display === 'none') {
-        issues.style.display = '';
-        chevron.classList.remove('fa-chevron-down');
-        chevron.classList.add('fa-chevron-up');
-    } else {
-        issues.style.display = 'none';
-        chevron.classList.remove('fa-chevron-up');
-        chevron.classList.add('fa-chevron-down');
-    }
+    var header = document.querySelector('[aria-controls="issues-' + equipmentId + '"]');
+    setCollapsed(body, chevron, header, body.style.display === 'none');
 }
+
+// Keyboard support for the collapsible headers (role="button" divs)
+document.querySelectorAll('.truck-profile-header[role="button"], .collapsible-card-header[role="button"]')
+    .forEach(function (el) {
+        el.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                el.click();
+            }
+        });
+    });
 </script>
 {% endblock %}
