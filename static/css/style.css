@@ -760,6 +760,20 @@ html.sidebar-collapsed .theme-toggle-sidebar { flex-direction: column; }
    its selects become direct flex items (hidden inputs render nothing) */
 .toolbar .filter-form { display: contents; }
 
+.clear-filters-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 36px;
+    padding: 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--accent);
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    white-space: nowrap;
+}
+.clear-filters-link:hover { background: var(--bg-hover); }
+
 
 /* ── KPI Stat Tiles ────────────────────────────────────────────────── */
 .stat-tiles {

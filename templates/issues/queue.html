@@ -20,7 +20,7 @@
 </a>
 {% endmacro %}
 
-{% macro truck_panel(company_name, logo_file, panel_class, trucks, issue_count, severities, is_admin) %}
+{% macro truck_panel(company_name, logo_file, panel_class, trucks, issue_count, severities, is_admin, filters_active=false) %}
 <div class="company-panel">
     <div class="panel-header {{ panel_class }}">
         <h2><img src="{{ url_for('static', filename='img/' ~ logo_file) }}" alt="{{ company_name }}" class="company-logo"> {{ company_name }}</h2>
@@ -70,7 +70,7 @@
         {% else %}
         <div class="empty-state">
             <i class="fas fa-truck"></i>
-            <p>No hay unidades</p>
+            <p>{% if filters_active %}No hay resultados con estos filtros{% else %}No hay unidades{% endif %}</p>
         </div>
         {% endfor %}
     </div>
@@ -97,13 +97,13 @@
 <div class="queue-toolbar">
     <div class="stat-tiles">
         {% for code, label in severities %}
-        <a href="{{ url_for('issues.queue', severity=code, status=current_status or none, equipment_id=current_equipment or none) }}"
+        <a href="{{ url_for('issues.queue', severity=code, status=current_status or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}"
            class="stat-tile stat-tile--{{ code }} {% if current_severity == code %}stat-tile--active{% endif %}">
             <div class="stat-tile__num">{{ severity_counts.get(code, 0) }}</div>
             <div class="stat-tile__label">{{ label }}</div>
         </a>
         {% endfor %}
-        <a href="{{ url_for('issues.queue', status=current_status or none, equipment_id=current_equipment or none) }}"
+        <a href="{{ url_for('issues.queue', status=current_status or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}"
            class="stat-tile stat-tile--valid {% if not current_severity %}stat-tile--active{% endif %}">
             <div class="stat-tile__num">{{ severity_counts.values()|sum }}</div>
             <div class="stat-tile__label">Todas</div>
@@ -111,13 +111,13 @@
     </div>
 
     <div class="issue-status-tabs">
-        <a href="{{ url_for('issues.queue', severity=current_severity or none, equipment_id=current_equipment or none) }}" class="status-tab {% if not current_status %}active{% endif %}">
+        <a href="{{ url_for('issues.queue', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}" class="status-tab {% if not current_status %}active{% endif %}">
             Abiertos
             {% set open_count = (status_counts.get('reportado', 0) + status_counts.get('en_revision', 0) + status_counts.get('en_reparacion', 0)) %}
             {% if open_count > 0 %}<span class="badge">{{ open_count }}</span>{% endif %}
         </a>
         {% for code, label in statuses %}
-        <a href="{{ url_for('issues.queue', status=code, severity=current_severity or none, equipment_id=current_equipment or none) }}" class="status-tab {% if current_status == code %}active{% endif %}">
+        <a href="{{ url_for('issues.queue', status=code, severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}" class="status-tab {% if current_status == code %}active{% endif %}">
             {{ label }}
             {% if status_counts.get(code, 0) > 0 %}<span class="badge">{{ status_counts[code] }}</span>{% endif %}
         </a>
@@ -125,27 +125,43 @@
     </div>
 
     <div class="toolbar">
-        <form method="GET" class="filter-form">
-            {% if current_status %}
-            <input type="hidden" name="status" value="{{ current_status }}">
-            {% endif %}
-            {% if current_severity %}
-            <input type="hidden" name="severity" value="{{ current_severity }}">
-            {% endif %}
+        <form class="search-wrap" method="GET" action="{{ url_for('issues.queue') }}">
+            {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
+            {% if current_severity %}<input type="hidden" name="severity" value="{{ current_severity }}">{% endif %}
+            {% if current_equipment %}<input type="hidden" name="equipment_id" value="{{ current_equipment }}">{% endif %}
+            {% if current_category %}<input type="hidden" name="category" value="{{ current_category }}">{% endif %}
+            <i class="fas fa-search"></i>
+            <input type="text" name="search" value="{{ search }}" placeholder="Buscar...">
+        </form>
+        <form method="GET" class="filter-form" action="{{ url_for('issues.queue') }}">
+            {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
+            {% if current_severity %}<input type="hidden" name="severity" value="{{ current_severity }}">{% endif %}
+            {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
             <select name="equipment_id" onchange="this.form.submit()" aria-label="Camión">
                 <option value="">Todos los camiones</option>
                 {% for truck in trucks %}
                 <option value="{{ truck.id }}" {% if current_equipment == truck.id %}selected{% endif %}>{{ truck.display_name }} ({{ truck.company }})</option>
                 {% endfor %}
             </select>
+            <select name="category" onchange="this.form.submit()" aria-label="Categoría">
+                <option value="">Todas las categorías</option>
+                {% for code, label in categories %}
+                <option value="{{ code }}" {% if current_category == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
         </form>
+        {% if filters_active %}
+        <a href="{{ url_for('issues.queue') }}" class="clear-filters-link">
+            <i class="fas fa-times"></i> Limpiar filtros
+        </a>
+        {% endif %}
         <div class="spacer"></div>
     </div>
 </div>
 
 <div class="company-panels">
-    {{ truck_panel('LB Caribe Services', 'logo-lb.png', 'panel-lb', lb_trucks, lb_issue_count, severities, current_user.is_admin) }}
-    {{ truck_panel('Professional Logistics', 'logo-pli.png', 'panel-pli', pli_trucks, pli_issue_count, severities, current_user.is_admin) }}
+    {{ truck_panel('LB Caribe Services', 'logo-lb.png', 'panel-lb', lb_trucks, lb_issue_count, severities, current_user.is_admin, filters_active) }}
+    {{ truck_panel('Professional Logistics', 'logo-pli.png', 'panel-pli', pli_trucks, pli_issue_count, severities, current_user.is_admin, filters_active) }}
 </div>
 
 {% if recent_issues %}

@@ -247,6 +247,32 @@ def report_success(token):
 
 # ── SHOP QUEUE ────────────────────────────────────────────────────────
 
+def _fold(s):
+    """Lowercase + strip accents, for accent-insensitive matching."""
+    return unicodedata.normalize('NFKD', s.lower()).encode('ascii', 'ignore').decode()
+
+
+def _search_clause(search):
+    """OR-filter for the queue's free-text search: description, reporter name,
+    and truck identifiers via SQL ilike; category labels matched
+    accent-insensitively in Python so 'electrico' finds 'Eléctrico'."""
+    like = f'%{search}%'
+    folded = _fold(search)
+    cat_codes = [code for code, label in ISSUE_CATEGORIES
+                 if folded in _fold(label) or folded in code]
+    clauses = [
+        Issue.description.ilike(like),
+        Employee.name.ilike(like),
+        Equipment.unit_number.ilike(like),
+        Equipment.plate_number.ilike(like),
+        Equipment.make.ilike(like),
+        Equipment.model.ilike(like),
+    ]
+    if cat_codes:
+        clauses.append(Issue.category.in_(cat_codes))
+    return db.or_(*clauses)
+
+
 @issues_bp.route('/', methods=['GET'])
 @shop_required
 def queue():
@@ -266,6 +292,7 @@ def queue():
     if category_filter not in {code for code, _ in ISSUE_CATEGORIES}:
         category_filter = ''
     equipment_filter = request.args.get('equipment_id', type=int)
+    search = request.args.get('search', '').strip()
 
     def scoped_query(exclude=None):
         """Every active filter applied except the axis named by `exclude`, so
@@ -273,6 +300,10 @@ def queue():
         q = (Issue.query
              .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
              .filter(not_archived))
+        if search:
+            q = (q.join(Employee, Issue.reported_by_employee_id == Employee.id,
+                        isouter=True)
+                 .filter(_search_clause(search)))
         if exclude != 'status':
             if status_filter:
                 q = q.filter(Issue.current_status == status_filter)
@@ -297,11 +328,18 @@ def queue():
         if issue.equipment_id:
             issues_by_equipment[issue.equipment_id].append(issue)
 
+    filters_active = bool(search or status_filter or severity_filter
+                          or equipment_filter or category_filter)
+
     def build_truck_profiles(company):
         all_trucks = reportable_equipment_query(company=company).all()
         profiles = []
         for eq in all_trucks:
             issues = issues_by_equipment.get(eq.id, [])
+            # Filtered views hide trucks with no matching issues; the bare
+            # default view still lists the whole fleet.
+            if filters_active and not issues:
+                continue
             worst_rank = max((SEVERITY_RANK.get(i.severity, 0) for i in issues), default=0)
             worst_sev = next((s for s, r in SEVERITY_RANK.items() if r == worst_rank), None)
             profiles.append({
@@ -365,7 +403,9 @@ def queue():
                            current_status=status_filter,
                            current_severity=severity_filter,
                            current_equipment=equipment_filter,
-                           current_category=category_filter)
+                           current_category=category_filter,
+                           search=search,
+                           filters_active=filters_active)
 
 
 # ── ISSUE DETAIL ──────────────────────────────────────────────────────
