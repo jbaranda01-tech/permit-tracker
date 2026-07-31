@@ -743,6 +743,11 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     grid-template-columns: 1fr 1fr 1fr;
 }
 
+/* A lone panel (company filter active) spans the full grid width */
+.company-panels > .company-panel:only-child {
+    grid-column: 1 / -1;
+}
+
 .company-panel {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
