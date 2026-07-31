@@ -1784,6 +1784,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     /* Keep small buttons a comfortable tap target */
     .btn-sm { min-height: 40px; }
 
+    /* Inline queue-row status select: compact on desktop, real target on touch */
+    .issue-row-status-form select { min-height: 40px; }
+
     /* Admin "Ver ficha / editar camión" link sits inside a tappable card header —
        give it real vertical hit area so it's separable from the toggle. */
     .truck-edit-link { padding: 6px 0; }
@@ -2206,8 +2209,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 }
 .issue-truck-tag i { color: var(--text-tertiary); margin-right: 2px; }
 
-/* Enriched issue rows (queue) — issue-first, severity-accented */
+/* Enriched issue rows (queue) — issue-first, severity-accented.
+   Stretched-link pattern: the row is a div; .issue-row-link::after overlays it
+   so the whole card navigates to the detail page, while the inline status form
+   rides above the overlay (z-index) and stays independently interactive. */
 .issue-row {
+    position: relative;
     display: block;
     padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--border);
@@ -2218,6 +2225,38 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 }
 .issue-row:last-child { border-bottom: none; }
 .issue-row:hover { background: var(--bg-hover); }
+.issue-row-link {
+    text-decoration: none;
+    color: inherit;
+}
+.issue-row-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+}
+.issue-row-link:focus-visible { outline: none; }
+.issue-row-link:focus-visible::after { box-shadow: inset 0 0 0 2px var(--accent); }
+.issue-row-status-form {
+    position: relative;
+    z-index: 2;
+    margin-left: auto;
+}
+.issue-row-status-form select {
+    height: 26px;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    cursor: pointer;
+}
+.issue-row-status-form select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
 .issue-row--baja { border-left-color: var(--color-sev-baja); }
 .issue-row--media { border-left-color: var(--color-sev-media); }
 .issue-row--alta { border-left-color: var(--color-sev-alta); }

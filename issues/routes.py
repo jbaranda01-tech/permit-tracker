@@ -431,21 +431,27 @@ def update_status(issue_id):
     new_status = request.form.get('new_status', '')
     notes = request.form.get('notes', '').strip() or None
 
+    # Optional return target (the queue's inline per-row form sends its own
+    # filtered URL). Relative paths only — no open redirects.
+    next_url = request.form.get('next', '')
+    if not (next_url.startswith('/') and not next_url.startswith('//')):
+        next_url = url_for('issues.detail', issue_id=issue.id)
+
     valid_statuses = [s[0] for s in ISSUE_STATUSES]
     if new_status not in valid_statuses:
         flash('Estado no válido.', 'danger')
-        return redirect(url_for('issues.detail', issue_id=issue.id))
+        return redirect(next_url)
 
     if new_status == issue.current_status:
         flash('El estado no ha cambiado.', 'warning')
-        return redirect(url_for('issues.detail', issue_id=issue.id))
+        return redirect(next_url)
 
     update_issue_status(issue, new_status, changed_by_user_id=current_user.id, notes=notes)
     db.session.commit()
 
     status_label = dict(ISSUE_STATUSES).get(new_status, new_status)
     flash(f'Estado actualizado a "{status_label}".', 'success')
-    return redirect(url_for('issues.detail', issue_id=issue.id))
+    return redirect(next_url)
 
 
 # ── ADMIN: GENERATE DRIVER LINK ──────────────────────────────────────
