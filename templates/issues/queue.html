@@ -116,13 +116,13 @@
 <div class="queue-toolbar">
     <div class="stat-tiles">
         {% for code, label in severities %}
-        <a href="{{ url_for('issues.queue', severity=code, status=current_status or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}"
+        <a href="{{ url_for('issues.queue', severity=code, status=current_status or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none, sort=current_sort if current_sort != 'unit' else none) }}"
            class="stat-tile stat-tile--{{ code }} {% if current_severity == code %}stat-tile--active{% endif %}">
             <div class="stat-tile__num">{{ severity_counts.get(code, 0) }}</div>
             <div class="stat-tile__label">{{ label }}</div>
         </a>
         {% endfor %}
-        <a href="{{ url_for('issues.queue', status=current_status or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}"
+        <a href="{{ url_for('issues.queue', status=current_status or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none, sort=current_sort if current_sort != 'unit' else none) }}"
            class="stat-tile stat-tile--valid {% if not current_severity %}stat-tile--active{% endif %}">
             <div class="stat-tile__num">{{ severity_counts.values()|sum }}</div>
             <div class="stat-tile__label">Todas</div>
@@ -130,13 +130,13 @@
     </div>
 
     <div class="issue-status-tabs">
-        <a href="{{ url_for('issues.queue', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}" class="status-tab {% if not current_status %}active{% endif %}">
+        <a href="{{ url_for('issues.queue', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none, sort=current_sort if current_sort != 'unit' else none) }}" class="status-tab {% if not current_status %}active{% endif %}">
             Abiertos
             {% set open_count = (status_counts.get('reportado', 0) + status_counts.get('en_revision', 0) + status_counts.get('en_reparacion', 0)) %}
             {% if open_count > 0 %}<span class="badge">{{ open_count }}</span>{% endif %}
         </a>
         {% for code, label in statuses %}
-        <a href="{{ url_for('issues.queue', status=code, severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}" class="status-tab {% if current_status == code %}active{% endif %}">
+        <a href="{{ url_for('issues.queue', status=code, severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none, sort=current_sort if current_sort != 'unit' else none) }}" class="status-tab {% if current_status == code %}active{% endif %}">
             {{ label }}
             {% if status_counts.get(code, 0) > 0 %}<span class="badge">{{ status_counts[code] }}</span>{% endif %}
         </a>
@@ -149,6 +149,7 @@
             {% if current_severity %}<input type="hidden" name="severity" value="{{ current_severity }}">{% endif %}
             {% if current_equipment %}<input type="hidden" name="equipment_id" value="{{ current_equipment }}">{% endif %}
             {% if current_category %}<input type="hidden" name="category" value="{{ current_category }}">{% endif %}
+            {% if current_sort != 'unit' %}<input type="hidden" name="sort" value="{{ current_sort }}">{% endif %}
             <i class="fas fa-search"></i>
             <input type="text" name="search" value="{{ search }}" placeholder="Buscar...">
         </form>
@@ -167,6 +168,12 @@
                 {% for code, label in categories %}
                 <option value="{{ code }}" {% if current_category == code %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
+            </select>
+            <select name="sort" onchange="this.form.submit()" aria-label="Ordenar por">
+                <option value="unit" {% if current_sort == 'unit' %}selected{% endif %}>Ordenar: Unidad</option>
+                <option value="recent" {% if current_sort == 'recent' %}selected{% endif %}>Ordenar: Más recientes</option>
+                <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Ordenar: Más antiguos</option>
+                <option value="severity" {% if current_sort == 'severity' %}selected{% endif %}>Ordenar: Severidad</option>
             </select>
         </form>
         {% if filters_active %}
@@ -219,7 +226,7 @@
             {% if resolved_count > resolved_issues|length %}
             <div class="resolved-more-note">
                 Mostrando {{ resolved_issues|length }} de {{ resolved_count }} &middot;
-                <a href="{{ url_for('issues.queue', status='resuelto', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none) }}">Ver todos</a>
+                <a href="{{ url_for('issues.queue', status='resuelto', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none, sort=current_sort if current_sort != 'unit' else none) }}">Ver todos</a>
             </div>
             {% endif %}
         </div>

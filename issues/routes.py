@@ -21,6 +21,7 @@ from models import (
 
 SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
 RESOLVED_STATUSES = ['resuelto', 'cerrado']
+QUEUE_SORTS = ('unit', 'recent', 'oldest', 'severity')
 
 
 def _normalize_unit(raw):
@@ -293,6 +294,9 @@ def queue():
         category_filter = ''
     equipment_filter = request.args.get('equipment_id', type=int)
     search = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort', 'unit')
+    if sort_by not in QUEUE_SORTS:
+        sort_by = 'unit'
 
     def scoped_query(exclude=None):
         """Every active filter applied except the axis named by `exclude`, so
@@ -317,11 +321,16 @@ def queue():
             q = q.filter(Issue.category == category_filter)
         return q
 
+    issue_order = (Issue.reported_at.asc() if sort_by == 'oldest'
+                   else Issue.reported_at.desc())
     all_issues = (scoped_query()
                   .options(joinedload(Issue.reporter),
                            joinedload(Issue.equipment))
-                  .order_by(Issue.reported_at.desc())
+                  .order_by(issue_order)
                   .all())
+    if sort_by == 'severity':
+        # Stable sort keeps the newest-first SQL order as the tiebreak
+        all_issues.sort(key=lambda i: -SEVERITY_RANK.get(i.severity, 0))
 
     issues_by_equipment = defaultdict(list)
     for issue in all_issues:
@@ -350,9 +359,30 @@ def queue():
                 'worst_severity_rank': worst_rank,
                 'auto_expand': len(issues) > 0,
             })
-        # Sort trucks by vehicle (unit # / display name), matching the truck
-        # dropdown order — a stable, vehicle-centric ordering instead of by severity.
-        profiles.sort(key=lambda p: p['equipment'].display_name.lower())
+        # Default ('unit') sorts trucks by vehicle (unit # / display name),
+        # matching the truck dropdown order. The other sorts reorder cards by
+        # their issues (empty trucks last, alphabetical among themselves).
+        def name_key(p):
+            return p['equipment'].display_name.lower()
+
+        if sort_by == 'severity':
+            profiles.sort(key=lambda p: (-p['worst_severity_rank'], name_key(p)))
+        elif sort_by == 'recent':
+            # datetime.max - <newest> = ascending-comparable "age", so the
+            # alphabetical tiebreak isn't reversed by reverse=True
+            profiles.sort(key=lambda p: (
+                0 if p['issues'] else 1,
+                datetime.max - max((i.reported_at or datetime.min for i in p['issues']),
+                                   default=datetime.min),
+                name_key(p)))
+        elif sort_by == 'oldest':
+            profiles.sort(key=lambda p: (
+                0 if p['issues'] else 1,
+                min((i.reported_at or datetime.max for i in p['issues']),
+                    default=datetime.max),
+                name_key(p)))
+        else:
+            profiles.sort(key=name_key)
         return profiles
 
     lb_trucks = build_truck_profiles('LB')
@@ -381,11 +411,22 @@ def queue():
         resolved_query = (scoped_query(exclude='status')
                           .filter(Issue.current_status.in_(RESOLVED_STATUSES)))
         resolved_count = resolved_query.count()
+        # SQL-side (not Python) because of the .limit(20) — sorting after the
+        # limit would only reorder the 20 newest
+        if sort_by == 'oldest':
+            resolved_order = (Issue.resolved_at.asc().nullslast(),
+                              Issue.reported_at.asc())
+        elif sort_by == 'severity':
+            sev_rank = db.case(SEVERITY_RANK, value=Issue.severity, else_=0)
+            resolved_order = (sev_rank.desc(),
+                              Issue.resolved_at.desc().nullslast())
+        else:  # 'unit' and 'recent': resolved most recently first
+            resolved_order = (Issue.resolved_at.desc().nullslast(),
+                              Issue.reported_at.desc())
         resolved_issues = (resolved_query
                            .options(joinedload(Issue.reporter),
                                     joinedload(Issue.equipment))
-                           .order_by(Issue.resolved_at.desc().nullslast(),
-                                     Issue.reported_at.desc())
+                           .order_by(*resolved_order)
                            .limit(20).all())
 
     return render_template('issues/queue.html',
@@ -406,6 +447,7 @@ def queue():
                            current_severity=severity_filter,
                            current_equipment=equipment_filter,
                            current_category=category_filter,
+                           current_sort=sort_by,
                            search=search,
                            filters_active=filters_active)
 

@@ -378,15 +378,29 @@ SPANISH_MONTHS = ('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre')
 
 
-def _exp_month_options():
-    """('YYYY-MM', 'Agosto 2026') pairs: 3 past months, current, next 12."""
-    today = date.today()
-    start = today.year * 12 + (today.month - 1) - 3
-    options = []
-    for n in range(start, start + 16):
-        year, month0 = divmod(n, 12)
-        options.append((f'{year:04d}-{month0 + 1:02d}', f'{SPANISH_MONTHS[month0]} {year}'))
-    return options
+def _exp_month_options(view):
+    """('YYYY-MM', 'Agosto 2026') pairs for every month with a counted expiration.
+
+    Sources mirror _expires_in_month: per-entity permits (non-archived owner,
+    non-N/A) plus the driver's license on the employees view.
+    """
+    if view == 'equipment':
+        queries = [db.session.query(EquipmentPermit.expiration_date)
+                   .join(Equipment)
+                   .filter(Equipment.archived_at.is_(None),
+                           EquipmentPermit.applicability != 'N/A',
+                           EquipmentPermit.expiration_date.isnot(None))]
+    else:
+        queries = [db.session.query(EmployeePermit.expiration_date)
+                   .join(Employee)
+                   .filter(Employee.archived_at.is_(None),
+                           EmployeePermit.applicability != 'N/A',
+                           EmployeePermit.expiration_date.isnot(None)),
+                   db.session.query(Employee.license_expiration)
+                   .filter(Employee.archived_at.is_(None),
+                           Employee.license_expiration.isnot(None))]
+    months = {(d.year, d.month) for q in queries for (d,) in q.distinct()}
+    return [(f'{y:04d}-{m:02d}', f'{SPANISH_MONTHS[m - 1]} {y}') for y, m in sorted(months)]
 
 
 def _expires_in_month(item, exp_month, permit_type, view):
@@ -491,10 +505,6 @@ def dashboard():
     permit_type = request.args.get('permit_type', '')
     if permit_type not in {code for code, _label in permit_types}:
         permit_type = ''
-    exp_month_options = _exp_month_options()
-    exp_month = request.args.get('exp_month', '')
-    if exp_month not in {value for value, _label in exp_month_options}:
-        exp_month = ''
     equipment_class = request.args.get('equipment_class', '')
     if view != 'equipment' or equipment_class not in {code for code, _ in EQUIPMENT_CLASSES}:
         equipment_class = ''
@@ -519,6 +529,11 @@ def dashboard():
             lb_permits=lb_permits,
             pli_permits=pli_permits,
         )
+
+    exp_month_options = _exp_month_options(view)
+    exp_month = request.args.get('exp_month', '')
+    if exp_month not in {value for value, _label in exp_month_options}:
+        exp_month = ''
 
     if view == 'equipment':
         query = Equipment.query.filter(Equipment.archived_at.is_(None))
