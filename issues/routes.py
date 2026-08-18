@@ -72,6 +72,13 @@ def reportable_equipment_query(company=None):
     return query.order_by(Equipment.unit_number)
 
 
+def reportable_equipment_list(company=None):
+    """Reportable trucks in natural unit-number order — the shared order for
+    every shop-side truck list (dropdowns + queue cards)."""
+    return sorted(reportable_equipment_query(company=company).all(),
+                  key=lambda eq: eq.unit_sort_key)
+
+
 def update_issue_status(issue, new_status, changed_by_user_id=None,
                         changed_by_employee_id=None, notes=None):
     old_status = issue.current_status
@@ -143,7 +150,7 @@ def report(token):
     employee = Employee.query.filter_by(access_token=token).first_or_404()
     if employee.is_archived:
         return render_template('issues/link_inactive.html'), 410
-    trucks = reportable_equipment_query(company=employee.company).all()
+    trucks = reportable_equipment_list(company=employee.company)
     return render_template('issues/report.html',
                            employee=employee,
                            trucks=trucks,
@@ -199,7 +206,7 @@ def report_submit(token):
             errors.append(f'Problema {idx}: debe incluir una descripción.')
 
     if errors:
-        trucks = reportable_equipment_query(company=employee.company).all()
+        trucks = reportable_equipment_list(company=employee.company)
         for error in errors:
             flash(error, 'danger')
         return render_template('issues/report.html',
@@ -341,7 +348,7 @@ def queue():
                           or equipment_filter or category_filter)
 
     def build_truck_profiles(company):
-        all_trucks = reportable_equipment_query(company=company).all()
+        all_trucks = reportable_equipment_list(company=company)
         profiles = []
         for eq in all_trucks:
             issues = issues_by_equipment.get(eq.id, [])
@@ -359,11 +366,11 @@ def queue():
                 'worst_severity_rank': worst_rank,
                 'auto_expand': len(issues) > 0,
             })
-        # Default ('unit') sorts trucks by vehicle (unit # / display name),
+        # Default ('unit') sorts trucks in natural unit-number order,
         # matching the truck dropdown order. The other sorts reorder cards by
-        # their issues (empty trucks last, alphabetical among themselves).
+        # their issues (empty trucks last, by unit number among themselves).
         def name_key(p):
-            return p['equipment'].display_name.lower()
+            return p['equipment'].unit_sort_key
 
         if sort_by == 'severity':
             profiles.sort(key=lambda p: (-p['worst_severity_rank'], name_key(p)))
@@ -400,7 +407,7 @@ def queue():
                                  .filter(Issue.severity == code)
                                  .count())
 
-    trucks = reportable_equipment_query().all()
+    trucks = reportable_equipment_list()
     # Issues with no linked equipment appear in no truck panel — surface them
     # in their own section so they stay reachable.
     unlinked_issues = [i for i in all_issues if not i.equipment_id]
@@ -610,7 +617,7 @@ def find_duplicate_issue(equipment_id, category, description, report_day):
 @issues_bp.route('/new', methods=['GET'])
 @shop_manager_required
 def new():
-    trucks = reportable_equipment_query().all()
+    trucks = reportable_equipment_list()
     return render_template('issues/manual_new.html',
                            trucks=trucks,
                            categories=ISSUE_CATEGORIES,
@@ -657,7 +664,7 @@ def create():
         for error in errors:
             flash(error, 'danger')
         return render_template('issues/manual_new.html',
-                               trucks=reportable_equipment_query().all(),
+                               trucks=reportable_equipment_list(),
                                categories=ISSUE_CATEGORIES,
                                severities=ISSUE_SEVERITIES,
                                statuses=ISSUE_STATUSES), 422

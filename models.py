@@ -1,9 +1,14 @@
+import re
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 
 db = SQLAlchemy()
+
+# Splits a unit number into digit / non-digit runs for natural ordering
+_UNIT_CHUNK_RE = re.compile(r'(\d+)')
 
 # ── USERS ──────────────────────────────────────────────────────────────
 
@@ -305,6 +310,22 @@ class Equipment(db.Model):
         if self.unit_number:
             return self.unit_number
         return f'Equipo #{self.id}'
+
+    @property
+    def unit_sort_key(self):
+        """Natural (human) order for unit numbers: 2 < 12 < 100, T-2 < T-12.
+        Digit runs compare as ints, text runs as text; each chunk is a
+        (is_text, text, number) triple so an int never compares to a str.
+        Blank units sort last (deterministic across SQLite/Postgres, which
+        disagree on NULL placement), tiebroken by display_name."""
+        raw = (self.unit_number or '').strip().lstrip('#').strip()
+        if not raw:
+            return (1, (), self.display_name.lower())
+        parts = tuple(
+            (0, '', int(c)) if c.isdigit() else (1, c, 0)
+            for c in _UNIT_CHUNK_RE.split(raw.lower()) if c
+        )
+        return (0, parts, '')
 
     @property
     def is_archived(self):
