@@ -37,7 +37,7 @@
 </div>
 {% endmacro %}
 
-{% macro truck_panel(company_name, logo_file, panel_class, trucks, issue_count, severities, statuses, is_admin, filters_active=false) %}
+{% macro truck_panel(company_name, logo_file, panel_class, trucks, issue_count, severities, statuses, is_admin, is_shop_manager, filters_active=false) %}
 <div class="company-panel">
     <div class="panel-header {{ panel_class }}">
         <h2><img src="{{ url_for('static', filename='img/' ~ logo_file) }}" alt="{{ company_name }}" class="company-logo"> {{ company_name }}</h2>
@@ -60,10 +60,19 @@
                         {%- if truck.equipment.year %} ({{ truck.equipment.year }}){% endif %}
                         {%- if truck.equipment.plate_number %} &middot; {{ truck.equipment.plate_number }}{% endif %}
                     </div>
-                    {% if is_admin %}
-                    <a href="{{ url_for('equipment_detail', id=truck.equipment.id) }}" class="truck-edit-link" onclick="event.stopPropagation()">
-                        <i class="fas fa-edit"></i> Ver ficha / editar camión
-                    </a>
+                    {% if is_admin or is_shop_manager %}
+                    <div class="truck-links">
+                        {% if is_admin %}
+                        <a href="{{ url_for('equipment_detail', id=truck.equipment.id) }}" class="truck-edit-link" onclick="event.stopPropagation()">
+                            <i class="fas fa-edit"></i> Ver ficha / editar camión
+                        </a>
+                        {% endif %}
+                        {% if is_shop_manager %}
+                        <a href="{{ url_for('issues.new', equipment_id=truck.equipment.id) }}" class="truck-edit-link" onclick="event.stopPropagation()">
+                            <i class="fas fa-plus-circle"></i> Agregar reporte
+                        </a>
+                        {% endif %}
+                    </div>
                     {% endif %}
                 </div>
                 <div class="truck-indicators">
@@ -192,8 +201,8 @@
 </div>
 
 <div class="company-panels">
-    {{ truck_panel('LB Caribe Services', 'logo-lb.png', 'panel-lb', lb_trucks, lb_issue_count, severities, statuses, current_user.is_admin, filters_active) }}
-    {{ truck_panel('Professional Logistics', 'logo-pli.png', 'panel-pli', pli_trucks, pli_issue_count, severities, statuses, current_user.is_admin, filters_active) }}
+    {{ truck_panel('LB Caribe Services', 'logo-lb.png', 'panel-lb', lb_trucks, lb_issue_count, severities, statuses, current_user.is_admin, current_user.is_shop_manager, filters_active) }}
+    {{ truck_panel('Professional Logistics', 'logo-pli.png', 'panel-pli', pli_trucks, pli_issue_count, severities, statuses, current_user.is_admin, current_user.is_shop_manager, filters_active) }}
 </div>
 
 {% if unlinked_issues %}

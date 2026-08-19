@@ -2,21 +2,40 @@
 {% block title %}Agregar Reporte{% endblock %}
 
 {% block content %}
+{# form_data is the sticky-value source: request.args on GET (prefill from the
+   queue's per-truck link and the save-and-add-another loop), request.form on a
+   422 re-render. #}
+{% set prefilled_truck = form_data.get('equipment_id')|int %}
 <div class="detail-page">
     <div class="detail-header">
         <a href="{{ url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Reportes</a>
         <h1><i class="fas fa-plus-circle"></i> {% if current_user.is_admin %}Agregar Reporte Manual{% else %}Agregar Reporte{% endif %}</h1>
     </div>
 
-    <form method="POST" action="{{ url_for('issues.create') }}" class="report-form">
+    {% if created_issues %}
+    <div class="created-strip">
+        <span class="created-strip-label">Agregados en esta sesión</span>
+        <div class="created-strip-items">
+            {% for issue in created_issues %}
+            <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="created-chip">
+                <span class="created-chip-id">#{{ issue.id }}</span>
+                {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }} &middot; {{ issue.category_label }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('issues.create') }}" class="report-form" id="manual-report-form">
+        <input type="hidden" name="created" value="{{ created_csv }}">
         <div class="form-section">
             <h3><i class="fas fa-truck"></i> Camión</h3>
             <div class="form-group">
                 <label for="equipment_id">Unidad *</label>
-                <select name="equipment_id" id="equipment_id" required>
+                <select name="equipment_id" id="equipment_id" required {% if not prefilled_truck %}autofocus{% endif %}>
                     <option value="">— Seleccionar unidad —</option>
                     {% for truck in trucks %}
-                    <option value="{{ truck.id }}" {% if request.form.get('equipment_id')|int == truck.id %}selected{% endif %}>
+                    <option value="{{ truck.id }}" {% if prefilled_truck == truck.id %}selected{% endif %}>
                         {{ truck.display_name }} ({{ truck.company }}){% if truck.make or truck.model %} — {{ truck.make }} {{ truck.model }}{% endif %}{% if truck.year %} ({{ truck.year }}){% endif %}
                     </option>
                     {% endfor %}
@@ -32,7 +51,7 @@
                     <select name="category" id="category" required>
                         <option value="">— Seleccionar —</option>
                         {% for code, label in categories %}
-                        <option value="{{ code }}" {% if request.form.get('category') == code %}selected{% endif %}>{{ label }}</option>
+                        <option value="{{ code }}" {% if form_data.get('category') == code %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -40,14 +59,14 @@
                     <label for="severity">Severidad *</label>
                     <select name="severity" id="severity" required>
                         {% for code, label in severities %}
-                        <option value="{{ code }}" {% if request.form.get('severity', 'media') == code %}selected{% endif %}>{{ label }}</option>
+                        <option value="{{ code }}" {% if form_data.get('severity', 'media') == code %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
             </div>
             <div class="form-group">
                 <label for="description">Descripción del problema *</label>
-                <textarea name="description" id="description" rows="4" required autocapitalize="sentences" placeholder="Describa el problema con el mayor detalle posible...">{{ request.form.get('description', '') }}</textarea>
+                <textarea name="description" id="description" rows="4" required autocapitalize="sentences" {% if prefilled_truck %}autofocus{% endif %} placeholder="Describa el problema con el mayor detalle posible...">{{ form_data.get('description', '') }}</textarea>
             </div>
         </div>
 
@@ -59,31 +78,54 @@
                     <label for="status">Estado *</label>
                     <select name="status" id="status" required>
                         {% for code, label in statuses %}
-                        <option value="{{ code }}" {% if request.form.get('status', 'reportado') == code %}selected{% endif %}>{{ label }}</option>
+                        <option value="{{ code }}" {% if form_data.get('status', 'reportado') == code %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="fecha_reporte">Fecha de Reporte</label>
-                    <input type="date" name="fecha_reporte" id="fecha_reporte" value="{{ request.form.get('fecha_reporte', '') }}">
+                    <input type="date" name="fecha_reporte" id="fecha_reporte" value="{{ form_data.get('fecha_reporte', '') }}">
                 </div>
                 <div class="form-group">
                     <label for="fecha_resuelto">Fecha de Resolución</label>
-                    <input type="date" name="fecha_resuelto" id="fecha_resuelto" value="{{ request.form.get('fecha_resuelto', '') }}">
+                    <input type="date" name="fecha_resuelto" id="fecha_resuelto" value="{{ form_data.get('fecha_resuelto', '') }}">
                 </div>
             </div>
             <div class="form-group">
                 <label for="notes">Nota inicial (opcional)</label>
-                <input type="text" name="notes" id="notes" value="{{ request.form.get('notes', '') }}" placeholder="Ej. reportado por teléfono por Juan...">
+                <input type="text" name="notes" id="notes" value="{{ form_data.get('notes', '') }}" placeholder="Ej. reportado por teléfono por Juan...">
             </div>
         </div>
         {% endif %}
 
         <div class="form-actions">
-            <button type="submit" class="btn btn-primary btn-lg">
+            <button type="submit" class="btn btn-primary btn-lg" id="save-btn">
                 <i class="fas fa-save"></i> Guardar Reporte
             </button>
+            <button type="submit" name="save_and_new" value="1" class="btn btn-secondary btn-lg" id="save-and-new-btn">
+                <i class="fas fa-plus"></i> Guardar y agregar otro
+            </button>
         </div>
+        <p class="form-help form-shortcut-hint">
+            <kbd>Ctrl</kbd>+<kbd>Enter</kbd> guarda &middot;
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> guarda y abre otro
+        </p>
     </form>
 </div>
+
+<script>
+// Ctrl/Cmd+Enter submits, +Shift loops back for another report. Buttons are
+// .click()ed rather than form.submit()ed so the save_and_new name/value is
+// included in the POST.
+(function () {
+    var form = document.getElementById('manual-report-form');
+    if (!form) return;
+    form.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        var btn = document.getElementById(e.shiftKey ? 'save-and-new-btn' : 'save-btn');
+        if (btn) btn.click();
+    });
+})();
+</script>
 {% endblock %}

@@ -614,15 +614,44 @@ def find_duplicate_issue(equipment_id, category, description, report_day):
     return None
 
 
+# ── SHOP MANAGER: MANUAL REPORT ENTRY ────────────────────────────────
+
+# Cap on the "agregados en esta sesión" strip — keeps the save-and-add-another
+# URL short while still showing a useful trail of what was just filed.
+RECENT_CREATED_LIMIT = 10
+
+
+def _created_ids(raw):
+    """Parse the created-issue CSV carried through the save-and-add-another
+    loop (same idiom as report_success's issue_ids)."""
+    ids = [int(part) for part in (raw or '').split(',') if part.strip().isdigit()]
+    return ids[-RECENT_CREATED_LIMIT:]
+
+
+def _render_manual_form(form_data, status_code=200):
+    """Single render path for the manual entry form. form_data is the source of
+    sticky values: request.args on GET (query-arg prefill from the queue link
+    and the save-and-add-another redirect), request.form on a 422 re-render."""
+    created_ids = _created_ids(form_data.get('created', ''))
+    created_issues = []
+    if created_ids:
+        found = {i.id: i for i in Issue.query.filter(Issue.id.in_(created_ids)).all()}
+        # newest first, following the CSV's append order
+        created_issues = [found[i] for i in reversed(created_ids) if i in found]
+    return render_template('issues/manual_new.html',
+                           trucks=reportable_equipment_list(),
+                           categories=ISSUE_CATEGORIES,
+                           severities=ISSUE_SEVERITIES,
+                           statuses=ISSUE_STATUSES,
+                           form_data=form_data,
+                           created_issues=created_issues,
+                           created_csv=','.join(str(i) for i in created_ids)), status_code
+
+
 @issues_bp.route('/new', methods=['GET'])
 @shop_manager_required
 def new():
-    trucks = reportable_equipment_list()
-    return render_template('issues/manual_new.html',
-                           trucks=trucks,
-                           categories=ISSUE_CATEGORIES,
-                           severities=ISSUE_SEVERITIES,
-                           statuses=ISSUE_STATUSES)
+    return _render_manual_form(request.args)
 
 
 @issues_bp.route('/new', methods=['POST'])
@@ -663,11 +692,7 @@ def create():
     if errors:
         for error in errors:
             flash(error, 'danger')
-        return render_template('issues/manual_new.html',
-                               trucks=reportable_equipment_list(),
-                               categories=ISSUE_CATEGORIES,
-                               severities=ISSUE_SEVERITIES,
-                               statuses=ISSUE_STATUSES), 422
+        return _render_manual_form(request.form, status_code=422)
 
     issue = Issue(
         equipment_id=equipment_id,
@@ -691,6 +716,17 @@ def create():
     db.session.commit()
 
     flash(f'Reporte #{issue.id} agregado.', 'success')
+
+    if request.form.get('save_and_new'):
+        # Rapid-entry loop: come straight back to a blank form with the truck
+        # (and the admin's working date/status) carried forward.
+        created = _created_ids(request.form.get('created', '')) + [issue.id]
+        return redirect(url_for('issues.new',
+                                equipment_id=equipment_id,
+                                fecha_reporte=request.form.get('fecha_reporte') or None,
+                                status=status if current_user.is_admin else None,
+                                created=','.join(str(i) for i in created[-RECENT_CREATED_LIMIT:])))
+
     return redirect(url_for('issues.detail', issue_id=issue.id))
 
 

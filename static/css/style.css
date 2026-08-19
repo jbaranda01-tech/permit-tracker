@@ -2123,6 +2123,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     text-decoration: none;
 }
 .truck-edit-link:hover { text-decoration: underline; }
+.truck-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    margin-left: calc(var(--space-sm) + 18px);
+}
+.truck-links .truck-edit-link { margin-left: 0; }
 .issue-history-list {
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -2479,4 +2486,61 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 
     /* Status change form */
     .status-change-form .form-row { flex-direction: column; }
+}
+
+/* ── Manual report entry: session trail + shortcut hint ────────────── */
+.created-strip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-md);
+    margin-bottom: var(--space-lg);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+.created-strip-label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+.created-strip-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+.created-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: 4px var(--space-sm);
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+}
+.created-chip:hover { border-color: var(--accent); }
+.created-chip-id {
+    font-family: var(--font-mono);
+    color: var(--accent);
+}
+.form-shortcut-hint {
+    margin-top: var(--space-sm);
+}
+.form-shortcut-hint kbd {
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+/* Touch devices have no Ctrl+Enter — hide the hint rather than lie about it. */
+@media (hover: none) and (pointer: coarse) {
+    .form-shortcut-hint { display: none; }
 }
