@@ -26,6 +26,7 @@ from models import (
     db, User, Employee, EmployeePermit, Equipment, EquipmentPermit,
     CompanyPermit, EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES,
     COMPANY_PERMIT_TYPES, FileStorage, NotificationLog,
+    protect_uploaded_files, ProtectedFileError,
     Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
@@ -1114,6 +1115,7 @@ def equipment_new():
             company=request.form['company'],
             equipment_class=_resolve_equipment_class(request.form),
             titular=request.form.get('titular', ''),
+            name=request.form.get('name', ''),
             unit_number=request.form.get('unit_number', ''),
             plate_number=request.form.get('plate_number', ''),
             make=request.form.get('make', ''),
@@ -1173,6 +1175,7 @@ def equipment_edit(id):
         equip.company = request.form['company']
         equip.equipment_class = _resolve_equipment_class(request.form)
         equip.titular = request.form.get('titular', '')
+        equip.name = request.form.get('name', '')
         equip.unit_number = request.form.get('unit_number', '')
         equip.plate_number = request.form.get('plate_number', '')
         equip.make = request.form.get('make', '')
@@ -1594,6 +1597,7 @@ def run_dedup():
 
 @app.route('/import', methods=['GET', 'POST'])
 @admin_required
+@protect_uploaded_files()   # documents are manual-only; see models.py
 def import_data():
     if request.method == 'POST':
         # Validate idempotency token to prevent double-submission
@@ -1832,6 +1836,9 @@ def import_data():
             archived_clause = f', {archivados} omitidos por archivado' if archivados else ''
             flash(f'Importación completa: {imported} nuevos, {updated} actualizados, {skipped} omitidos{archived_clause}.', 'success')
 
+        except ProtectedFileError as e:
+            db.session.rollback()
+            flash(f'Importación cancelada para proteger documentos adjuntos: {e}', 'danger')
         except Exception as e:
             db.session.rollback()
             flash(f'Error en la importación: {str(e)}', 'danger')
@@ -1850,6 +1857,7 @@ def import_data():
 
 @app.route('/import/equipment', methods=['POST'])
 @admin_required
+@protect_uploaded_files()   # documents are manual-only; see models.py
 def import_equipment():
     import unicodedata
 
@@ -2100,6 +2108,9 @@ def import_equipment():
         archived_clause = f', {archivados} omitidos por archivado' if archivados else ''
         flash(f'Importación completa: {imported} equipos importados, {skipped} actualizados{archived_clause}.', 'success')
 
+    except ProtectedFileError as e:
+        db.session.rollback()
+        flash(f'Importación cancelada para proteger documentos adjuntos: {e}', 'danger')
     except Exception as e:
         db.session.rollback()
         flash(f'Error en la importación: {str(e)}', 'danger')
@@ -2639,7 +2650,7 @@ def dedup_data(dry_run):
         keeper = group[0]
         for dup in group[1:]:
             # Merge non-empty scalar fields into keeper where keeper's is empty.
-            for col in ['titular', 'unit_number', 'plate_number', 'make', 'model',
+            for col in ['name', 'titular', 'unit_number', 'plate_number', 'make', 'model',
                         'year', 'vin_serial', 'insurance_company', 'cost', 'notes',
                         'equipment_type', 'status',
                         'archived_at', 'archive_reason', 'archive_note']:

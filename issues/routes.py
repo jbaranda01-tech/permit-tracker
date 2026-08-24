@@ -16,7 +16,7 @@ from models import (
     db, Employee, Equipment, EquipmentPermit, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     EXCLUDED_EQUIPMENT_MODELS, EQUIPMENT_PERMIT_TYPES,
-    classify_equipment,
+    classify_equipment, protect_uploaded_files,
 )
 
 SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
@@ -823,6 +823,7 @@ def import_form():
 
 @issues_bp.route('/import', methods=['POST'])
 @admin_required
+@protect_uploaded_files()   # documents are manual-only; see models.py
 def import_issues():
     from openpyxl import load_workbook
     from sqlalchemy.exc import IntegrityError

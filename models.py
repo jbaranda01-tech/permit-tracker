@@ -1,7 +1,11 @@
+import logging
 import re
+import threading
+from contextlib import contextmanager
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from sqlalchemy import event as sa_event, inspect as sa_inspect
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 
@@ -278,6 +282,7 @@ class Equipment(db.Model):
     equipment_type = db.Column(db.String(20), default='vehicle')  # deprecated in UI; kept for data
     equipment_class = db.Column(db.String(20))  # truck | chassis | tank | generator
     titular = db.Column(db.String(200))
+    name = db.Column(db.String(120))  # optional manual display name; see display_name
     unit_number = db.Column(db.String(50))
     plate_number = db.Column(db.String(50))
     make = db.Column(db.String(100))
@@ -307,9 +312,9 @@ class Equipment(db.Model):
 
     @property
     def display_name(self):
-        if self.unit_number:
-            return self.unit_number
-        return f'Equipo #{self.id}'
+        """Manual name first, then unit #, then plate; the id is a last resort."""
+        return (self.name or self.unit_number or self.plate_number
+                or f'Equipo #{self.id}')
 
     @property
     def unit_sort_key(self):
@@ -667,3 +672,110 @@ class UserIssueRole(db.Model):
     role = db.Column(db.String(20), nullable=False)
 
     user = db.relationship('User', backref=db.backref('issue_roles', lazy='select', cascade='all, delete-orphan'))
+
+
+# ── UPLOADED-FILE PROTECTION ─────────────────────────────────────────
+# Uploaded documents (permit PDFs, licence scans, certificates) may only be
+# attached, replaced or removed through the manual upload/edit routes. Excel
+# imports are data-only: they refresh dates and applicability, never documents.
+#
+# Today's importers already leave the document columns alone, but that is a
+# convention a future edit could quietly break — and a lost permit PDF is not
+# recoverable from the spreadsheet. `protect_uploaded_files()` turns the
+# convention into an enforced invariant: while it is active, any write to a
+# document column is reverted before it reaches the database, and any attempt
+# to delete a stored file aborts the whole import.
+
+# Model → the columns on it that point at a stored document.
+PROTECTED_FILE_FIELDS = {
+    'Employee': ('license_file',),
+    'EmployeePermit': ('file_path',),
+    'EquipmentPermit': ('file_path',),
+    'CompanyPermit': ('file_path',),
+    'IssuePhoto': ('storage_filename',),
+}
+
+_file_guard = threading.local()
+
+
+def uploaded_files_protected():
+    """True while an import (or other bulk job) is running under the guard."""
+    return getattr(_file_guard, 'active', False)
+
+
+@contextmanager
+def protect_uploaded_files():
+    """Block all writes to uploaded documents for the duration of the block.
+
+    Wraps the Excel importers. Re-entrant, and restores the previous state on
+    exit so nesting (or an exception) can't leave the guard stuck on.
+    """
+    previous = getattr(_file_guard, 'active', False)
+    _file_guard.active = True
+    try:
+        yield
+    finally:
+        _file_guard.active = previous
+
+
+class ProtectedFileError(RuntimeError):
+    """Raised when a guarded operation tries to destroy a stored document."""
+
+
+def _protected_fields(obj):
+    return PROTECTED_FILE_FIELDS.get(type(obj).__name__)
+
+
+@sa_event.listens_for(db.session, 'before_flush')
+def _block_document_writes(session, flush_context, instances):
+    if not uploaded_files_protected():
+        return
+
+    reverted = []
+
+    # 1. Existing rows: put back the committed filename. The rest of the
+    #    row's changes (expiration_date, applicability, …) still go through.
+    for obj in session.dirty:
+        fields = _protected_fields(obj)
+        if not fields:
+            continue
+        state = sa_inspect(obj)
+        for field in fields:
+            history = state.attrs[field].history
+            if not history.has_changes():
+                continue
+            original = history.deleted[0] if history.deleted else None
+            setattr(obj, field, original)
+            reverted.append(f'{type(obj).__name__}(id={obj.id}).{field}')
+
+    # 2. New rows: an import has no document to attach, so a filename here is
+    #    either a mistake or a second reference to someone else's file.
+    for obj in session.new:
+        fields = _protected_fields(obj)
+        if not fields:
+            continue
+        for field in fields:
+            if getattr(obj, field, None) is not None:
+                setattr(obj, field, None)
+                reverted.append(f'new {type(obj).__name__}.{field}')
+
+    # 3. Deletions are not recoverable, so they abort the transaction instead
+    #    of being silently patched up.
+    for obj in session.deleted:
+        if isinstance(obj, FileStorage):
+            raise ProtectedFileError(
+                f'Una importación intentó eliminar el archivo almacenado '
+                f'"{obj.filename}". Los documentos solo se pueden reemplazar manualmente.'
+            )
+        fields = _protected_fields(obj)
+        if fields and any(getattr(obj, f, None) for f in fields):
+            raise ProtectedFileError(
+                f'Una importación intentó eliminar {type(obj).__name__} '
+                f'id={obj.id}, que tiene un documento adjunto.'
+            )
+
+    if reverted:
+        logging.getLogger(__name__).warning(
+            'Importación bloqueada de modificar documentos adjuntos: %s',
+            ', '.join(reverted),
+        )
