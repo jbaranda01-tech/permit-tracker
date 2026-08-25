@@ -1,5 +1,7 @@
 import os
+import re
 import uuid
+import unicodedata
 import secrets
 import click
 import logging
@@ -1031,6 +1033,104 @@ def equipment_detail(id):
                            issues=issues)
 
 
+# ── EQUIPMENT SHEET COLUMN MAPPING ─────────────────────────────────────
+# The equipment import locates every column by its header text instead of a
+# fixed position. Aliases are matched against accent-stripped, upper-cased
+# headers: exact match first, then substring, so "SEGURO" can't swallow a
+# more specific column. Add new spellings here, not new positional indexes.
+EQUIPMENT_COLUMN_ALIASES = [
+    ('titular',    ('TITULAR', 'TITULO', 'DUENO', 'PROPIETARIO')),
+    ('unit',       ('UNIDAD', 'NO UNIDAD', 'NUM UNIDAD', 'UNIT')),
+    ('company',    ('COMPANIA', 'COMPANIA DUENA', 'EMPRESA', 'COMPANY', 'CIA')),
+    ('clase',      ('CLASE', 'TIPO')),
+    ('make',       ('MARCA', 'MAKE')),
+    ('model',      ('MODELO', 'MODEL')),
+    ('year',       ('ANO', 'YEAR')),
+    ('vin',        ('VIN', 'SERIAL', 'NO SERIE')),
+    ('plate',      ('TABLILLA', 'PLACA', 'PLATE')),
+    ('insurance',  ('SEGURO', 'ASEGURADORA', 'INSURANCE')),
+    ('MARBETE',    ('MARBETE',)),
+    ('INSPECCION', ('INSPECCION', 'INSPECION')),
+    ('VOUCHER',    ('VOUCHER',)),
+    ('NTSP',       ('NTSP',)),
+    ('cost',       ('COSTO', 'PRECIO', 'COST')),
+]
+
+# Human labels for the abort message when a required column can't be found.
+EQUIPMENT_REQUIRED_COLUMNS = [('company', 'Compañía')]
+# At least one identifying column must be present, otherwise every row would
+# look like a brand-new vehicle.
+EQUIPMENT_IDENTITY_COLUMNS = [('unit', 'Unidad'), ('vin', 'VIN'), ('plate', 'Tablilla')]
+
+
+def _normalize_header(value):
+    """Accent-stripped, upper-cased, single-spaced header text."""
+    if value is None:
+        return ''
+    s = unicodedata.normalize('NFKD', str(value)).encode('ascii', 'ignore').decode()
+    s = re.sub(r'[^A-Za-z0-9]+', ' ', s)
+    return ' '.join(s.split()).upper()
+
+
+def _map_equipment_columns(normalized_headers):
+    """Map canonical field names to column indexes by header text."""
+    mapping = {}
+    used = set()
+    for exact in (True, False):
+        for field, aliases in EQUIPMENT_COLUMN_ALIASES:
+            if field in mapping:
+                continue
+            for idx, header in enumerate(normalized_headers):
+                if idx in used or not header:
+                    continue
+                hit = (header in aliases) if exact else any(a in header for a in aliases)
+                if hit:
+                    mapping[field] = idx
+                    used.add(idx)
+                    break
+    return mapping
+
+
+def _missing_equipment_columns(columns):
+    """Spanish labels of the columns the sheet must have but doesn't."""
+    missing = [label for field, label in EQUIPMENT_REQUIRED_COLUMNS if field not in columns]
+    if not any(field in columns for field, _ in EQUIPMENT_IDENTITY_COLUMNS):
+        missing.append(' / '.join(label for _, label in EQUIPMENT_IDENTITY_COLUMNS))
+    return missing
+
+
+def _resolve_company(*cells):
+    """First recognizable company among the given cells, else None.
+
+    Returning None (instead of defaulting to LB) is deliberate: a blank or
+    unreadable Compañía cell must stop the row, not misfile the vehicle.
+    """
+    for cell in cells:
+        raw = _normalize_header(cell)
+        if not raw:
+            continue
+        if 'PERSONAL' in raw:
+            return 'Personal'
+        if 'PLI' in raw or 'PROFESSIONAL' in raw or 'LOGISTIC' in raw:
+            return 'PLI'
+        if raw == 'LB' or raw.startswith('LB ') or 'CARIBE' in raw:
+            return 'LB'
+    return None
+
+
+def _resolve_import_class(class_cell, model):
+    """Equipment class from the sheet's Clase/Tipo column, else from the model."""
+    raw = _normalize_header(class_cell)
+    if raw:
+        for code, label in EQUIPMENT_CLASSES:
+            if raw == code.upper() or raw == _normalize_header(label):
+                return code
+        inferred = classify_equipment(raw)
+        if inferred != 'truck' or raw == _normalize_header('Camión'):
+            return inferred
+    return classify_equipment(model)
+
+
 def find_duplicate_equipment(vin_serial, plate_number, unit_number, company,
                              titular=None, model=None, year=None):
     """Return an existing Equipment matching by VIN, then plate, then unit#+company.
@@ -1859,7 +1959,15 @@ def import_data():
 @admin_required
 @protect_uploaded_files()   # documents are manual-only; see models.py
 def import_equipment():
-    import unicodedata
+    """Upsert the equipment master sheet.
+
+    Columns are located by HEADER NAME (see EQUIPMENT_COLUMN_ALIASES), never by
+    position: a spreadsheet that gains or reorders a column used to shift every
+    field silently — models landing in vin_serial, years in plate_number, permit
+    dates blanked, and rows whose Compañía cell moved out from under the reader
+    defaulting into LB. Rows whose company cannot be resolved are reported, not
+    filed under a default company.
+    """
 
     def to_date(cell):
         """Coerce an Excel cell to a date or None."""
@@ -1929,6 +2037,8 @@ def import_equipment():
         imported = 0
         skipped = 0
         archivados = 0
+        sin_empresa = 0          # rows whose Compañía cell could not be read
+        reasignados = 0          # rows moved to the company the sheet declares
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             flash('El archivo está vacío.', 'warning')
@@ -1936,21 +2046,27 @@ def import_equipment():
 
         # Reject files that don't look like an equipment sheet (mirrors the
         # guard in import_data() so neither endpoint accepts the wrong template).
-        headers = [str(h).strip().upper() if h else '' for h in rows[0]]
-        normalized_headers = [
-            unicodedata.normalize('NFKD', h).encode('ascii', 'ignore').decode()
-            for h in headers
-        ]
+        normalized_headers = [_normalize_header(h) for h in rows[0]]
         joined_headers = ' '.join(normalized_headers)
         employee_markers = ('TWIC', 'HAZMAT', 'CERT MEDICO', 'ANTECEDENTES')
-        looks_like_equipment = any(
-            m in joined_headers for m in ('TITULO', 'UNIDAD', 'VIN', 'MARBETE', 'TABLILLA', 'COMPANIA')
-        )
-        looks_like_employee = any(m in joined_headers for m in employee_markers)
-        if not looks_like_equipment or looks_like_employee:
+        if any(m in joined_headers for m in employee_markers):
             wb.close()
             os.remove(filepath)
             flash('El archivo no parece ser de equipos. Verifique que está usando la plantilla correcta.', 'danger')
+            return redirect(url_for('import_data'))
+
+        columns = _map_equipment_columns(normalized_headers)
+        missing = _missing_equipment_columns(columns)
+        if missing:
+            wb.close()
+            os.remove(filepath)
+            found = ', '.join(h for h in normalized_headers if h) or '(ninguno)'
+            flash(
+                'No se pudieron identificar estas columnas en el archivo: '
+                f'{", ".join(missing)}. Encabezados encontrados: {found}. '
+                'Revise que la primera fila tenga los títulos de columna.',
+                'danger',
+            )
             return redirect(url_for('import_data'))
 
         def parse_permit_cell(val):
@@ -1972,58 +2088,66 @@ def import_equipment():
                 return ('YES', d)
             return ('YES', to_date(val))
 
+        def text_at(row, field):
+            """Trimmed string from the column mapped to `field` ('' when absent)."""
+            idx = columns.get(field)
+            if idx is None or idx >= len(row) or row[idx] is None:
+                return ''
+            return str(row[idx]).strip()
+
+        def digits_only(value):
+            """Strip Excel's trailing .0 from numeric-looking identifiers."""
+            if value and value.replace('.', '').replace(',', '').isdigit():
+                return str(int(float(value.replace(',', ''))))
+            return value
+
         for row in rows[1:]:
             if not row or not any(row):
                 continue
 
-            # Column mapping (Registro de Equipos.xlsx):
-            # 0 Titulo | 1 Unidad | 2 Compañia | 3 Modelo | 4 Año | 5 VIN |
-            # 6 Tablilla | 7 Seguro | 8 Marbete | 9 Inspección | 10 Voucher |
-            # 11 NTSP | 12 Costo
-            titulo = str(row[0]).strip() if row[0] is not None else ''
-            unit_number = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ''
-            # Numeric unit numbers come back as int/float — strip the trailing .0
-            if unit_number and unit_number.replace('.', '').isdigit():
-                unit_number = str(int(float(unit_number)))
+            titulo = text_at(row, 'titular')
+            unit_number = digits_only(text_at(row, 'unit'))
 
-            company_raw = str(row[2]).strip().upper() if len(row) > 2 and row[2] is not None else ''
-            if 'PERSONAL' in company_raw:
-                company = 'Personal'
-            elif 'PLI' in company_raw:
-                company = 'PLI'
-            else:
-                company = 'LB'
+            # The sheet is the master record: an unreadable company is reported,
+            # never silently filed under a default one (that is what put PLI and
+            # Personal vehicles in the LB list).
+            company = _resolve_company(text_at(row, 'company'), titulo)
 
-            model = str(row[3]).strip() if len(row) > 3 and row[3] is not None else ''
+            model = text_at(row, 'model')
+            make = text_at(row, 'make')
 
             year = None
-            if len(row) > 4 and row[4] is not None:
+            year_raw = row[columns['year']] if columns.get('year') is not None and columns['year'] < len(row) else None
+            if year_raw is not None:
                 try:
-                    year = int(row[4])
+                    year = int(float(str(year_raw).strip()))
                 except (ValueError, TypeError):
                     pass
 
-            vin_serial = str(row[5]).strip() if len(row) > 5 and row[5] is not None else ''
-            if vin_serial and vin_serial.replace('.', '').replace(',', '').isdigit():
-                vin_serial = str(int(float(vin_serial)))
-
-            plate_number = str(row[6]).strip() if len(row) > 6 and row[6] is not None else ''
-            if plate_number and plate_number.replace('.', '').isdigit():
-                plate_number = str(int(float(plate_number)))
+            vin_serial = digits_only(text_at(row, 'vin'))
+            plate_number = digits_only(text_at(row, 'plate'))
 
             # Skip rows with no identifying data (empty/junk rows from Excel)
             if not titulo and not unit_number and not vin_serial and not plate_number:
                 continue
 
-            insurance_company = str(row[7]).strip() if len(row) > 7 and row[7] is not None else ''
+            if company is None:
+                sin_empresa += 1
+                continue
 
-            permit_info = {
-                'MARBETE':    parse_permit_cell(row[8])  if len(row) > 8  else ('YES', None),
-                'INSPECCION': parse_permit_cell(row[9])  if len(row) > 9  else ('YES', None),
-                'VOUCHER':    parse_permit_cell(row[10]) if len(row) > 10 else ('YES', None),
-                'NTSP':       parse_permit_cell(row[11]) if len(row) > 11 else ('YES', None),
-            }
-            cost            = to_float(row[12]) if len(row) > 12 else None
+            insurance_company = text_at(row, 'insurance')
+            equipment_class = _resolve_import_class(text_at(row, 'clase'), model)
+
+            # Only permits the sheet actually carries are touched — a missing
+            # column must never blank a stored expiration date.
+            permit_info = {}
+            for ptype in ('MARBETE', 'INSPECCION', 'VOUCHER', 'NTSP'):
+                idx = columns.get(ptype)
+                if idx is None:
+                    continue
+                permit_info[ptype] = parse_permit_cell(row[idx] if idx < len(row) else None)
+
+            cost = to_float(row[columns['cost']]) if columns.get('cost') is not None and columns['cost'] < len(row) else None
 
             # Look up existing equipment via the shared case-insensitive cascade
             # (VIN → plate → unit#+company) and upsert in place, so re-imports never
@@ -2044,7 +2168,13 @@ def import_equipment():
                 if cost is not None:  existing.cost = cost
                 if year is not None:  existing.year = year
                 if model:             existing.model = model
-                existing.equipment_class = classify_equipment(existing.model, existing.equipment_type)
+                if make:              existing.make = make
+                if existing.company != company:
+                    # The sheet reassigned the vehicle; without this an earlier
+                    # bad import could never be corrected by re-importing.
+                    existing.company = company
+                    reasignados += 1
+                existing.equipment_class = equipment_class
 
                 existing_permits = {p.permit_type: p for p in existing.permits}
                 for ptype, (cell_applicability, pdate) in permit_info.items():
@@ -2070,8 +2200,9 @@ def import_equipment():
                 company=company,
                 titular=titulo,
                 unit_number=unit_number,
+                make=make,
                 model=model,
-                equipment_class=classify_equipment(model),
+                equipment_class=equipment_class,
                 year=year,
                 vin_serial=vin_serial,
                 plate_number=plate_number,
@@ -2105,8 +2236,18 @@ def import_equipment():
             return redirect(url_for('import_data'))
 
         os.remove(filepath)
-        archived_clause = f', {archivados} omitidos por archivado' if archivados else ''
-        flash(f'Importación completa: {imported} equipos importados, {skipped} actualizados{archived_clause}.', 'success')
+        extra = ''
+        if archivados:
+            extra += f', {archivados} omitidos por archivado'
+        if reasignados:
+            extra += f', {reasignados} reasignados de empresa'
+        flash(f'Importación completa: {imported} equipos importados, {skipped} actualizados{extra}.', 'success')
+        if sin_empresa:
+            flash(
+                f'{sin_empresa} fila(s) se omitieron porque la columna Compañía está vacía o no '
+                'se reconoce (valores válidos: LB, PLI, Personal). Complete esa columna y vuelva a importar.',
+                'warning',
+            )
 
     except ProtectedFileError as e:
         db.session.rollback()
