@@ -2,10 +2,6 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="dashboard">
-    <div class="page-titlebar">
-        <div class="page-title">Permisos<strong>{{ 'Empleados' if view == 'employees' else ('Equipos' if view == 'equipment' else 'Empresa') }}</strong></div>
-    </div>
-
     {% if view != 'company' %}
     <div class="stat-tiles">
             <a href="{{ url_for('dashboard', view=view, search=search or none, company=company_filter or none,
