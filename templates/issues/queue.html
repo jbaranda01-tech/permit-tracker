@@ -21,7 +21,7 @@
         <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
         {% if issue.reporter %}<span><i class="fas fa-user"></i> {{ issue.reporter.name }}</span>{% endif %}
         {% if show_resolved and issue.resolved_at %}
-        <span><i class="fas fa-check"></i> Resuelto {{ issue.resolved_at|time_ago }}</span>
+        <span><i class="fas fa-check"></i> Cerrado {{ issue.resolved_at|time_ago }}</span>
         {% elif issue.reported_at %}
         <span><i class="fas fa-clock"></i> {{ issue.reported_at|time_ago }}</span>
         {% endif %}
@@ -141,7 +141,6 @@
     <div class="issue-status-tabs">
         <a href="{{ url_for('issues.queue', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none, sort=current_sort if current_sort != 'unit' else none) }}" class="status-tab {% if not current_status %}active{% endif %}">
             Abiertos
-            {% set open_count = (status_counts.get('reportado', 0) + status_counts.get('en_revision', 0) + status_counts.get('en_reparacion', 0)) %}
             {% if open_count > 0 %}<span class="badge">{{ open_count }}</span>{% endif %}
         </a>
         {% for code, label in statuses %}
@@ -185,8 +184,8 @@
                 <option value="severity" {% if current_sort == 'severity' %}selected{% endif %}>Ordenar: Severidad</option>
             </select>
         </form>
-        {% if filters_active %}
-        <a href="{{ url_for('issues.queue') }}" class="clear-filters-link">
+        {% if prefs_active %}
+        <a href="{{ url_for('issues.queue', reset=1) }}" class="clear-filters-link">
             <i class="fas fa-times"></i> Limpiar filtros
         </a>
         {% endif %}
@@ -225,7 +224,7 @@
     <div class="profile-card">
         <div class="card-header collapsible-card-header" role="button" tabindex="0"
              aria-expanded="false" aria-controls="resolved-issues-body" onclick="toggleResolvedSection()">
-            <span><i class="fas fa-check-circle"></i> Resueltos <span class="badge">{{ resolved_count }}</span></span>
+            <span><i class="fas fa-check-circle"></i> Cerrados <span class="badge">{{ resolved_count }}</span></span>
             <i class="fas fa-chevron-down truck-chevron" id="chevron-resolved"></i>
         </div>
         <div class="card-body" id="resolved-issues-body" style="padding: 0; display: none;">
@@ -235,7 +234,7 @@
             {% if resolved_count > resolved_issues|length %}
             <div class="resolved-more-note">
                 Mostrando {{ resolved_issues|length }} de {{ resolved_count }} &middot;
-                <a href="{{ url_for('issues.queue', status='resuelto', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none, sort=current_sort if current_sort != 'unit' else none) }}">Ver todos</a>
+                <a href="{{ url_for('issues.queue', status='cerrado', severity=current_severity or none, equipment_id=current_equipment or none, category=current_category or none, search=search or none, sort=current_sort if current_sort != 'unit' else none) }}">Ver todos</a>
             </div>
             {% endif %}
         </div>

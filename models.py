@@ -634,11 +634,25 @@ ISSUE_SEVERITIES = [
 
 ISSUE_STATUSES = [
     ('reportado', 'Reportado'),
-    ('en_revision', 'En Revisión'),
-    ('en_reparacion', 'En Reparación'),
-    ('resuelto', 'Resuelto'),
+    ('en_proceso', 'En Proceso'),
     ('cerrado', 'Cerrado'),
 ]
+
+# Open vs terminal. Imported by issues/routes.py and app.py so the queue, the
+# reports and the resolved section can never disagree about what "open" means.
+OPEN_STATUSES = ['reportado', 'en_proceso']
+RESOLVED_STATUSES = ['cerrado']
+
+# Retired status codes -> their replacement. 'en_revision'/'en_reparacion' were
+# the same working state and 'resuelto'/'cerrado' the same terminal one, so each
+# pair collapsed into one. Consumed by the boot-time migration, the
+# migrate-issue-statuses CLI command, the Excel importer (old spreadsheets still
+# say "Resuelto") and the queue's ?status= filter (old bookmarks).
+LEGACY_ISSUE_STATUSES = {
+    'en_revision': 'en_proceso',
+    'en_reparacion': 'en_proceso',
+    'resuelto': 'cerrado',
+}
 
 
 class Issue(db.Model):

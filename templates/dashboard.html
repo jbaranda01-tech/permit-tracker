@@ -89,6 +89,11 @@
                     <option value="expiration" {% if sort_by == 'expiration' %}selected{% endif %}>Ordenar: Próximo a vencer</option>
                 </select>
             </form>
+        {% if filters_active %}
+        <a href="{{ url_for('dashboard', view=view if view != 'employees' else none, reset=1) }}" class="clear-filters-link">
+            <i class="fas fa-times"></i> Limpiar filtros
+        </a>
+        {% endif %}
         <div class="spacer"></div>
         {% if current_user.is_manager %}
         {% if view == 'employees' %}

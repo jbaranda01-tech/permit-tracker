@@ -15,12 +15,15 @@ from issues.decorators import shop_required, admin_required, shop_manager_requir
 from models import (
     db, Employee, Equipment, EquipmentPermit, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
+    OPEN_STATUSES, RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES,
     EXCLUDED_EQUIPMENT_MODELS, EQUIPMENT_PERMIT_TYPES,
     classify_equipment, protect_uploaded_files,
 )
+from list_prefs import (
+    QUEUE_PREF_PARAMS, restore_list_args, remember_list_args, forget_list_args,
+)
 
 SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
-RESOLVED_STATUSES = ['resuelto', 'cerrado']
 QUEUE_SORTS = ('unit', 'recent', 'oldest', 'severity')
 
 
@@ -95,9 +98,9 @@ def update_issue_status(issue, new_status, changed_by_user_id=None,
 
     issue.current_status = new_status
 
-    if new_status in ('resuelto', 'cerrado') and issue.resolved_at is None:
+    if new_status in RESOLVED_STATUSES and issue.resolved_at is None:
         issue.resolved_at = datetime.utcnow()
-    elif new_status not in ('resuelto', 'cerrado'):
+    elif new_status not in RESOLVED_STATUSES:
         issue.resolved_at = None
 
 
@@ -137,7 +140,7 @@ def synthesize_status_history(issue, final_status, reported_at, resolved_at=None
         ))
 
     issue.current_status = final_status
-    if final_status in ('resuelto', 'cerrado'):
+    if final_status in RESOLVED_STATUSES:
         issue.resolved_at = resolved_at or reported_at
     else:
         issue.resolved_at = None
@@ -293,8 +296,15 @@ def _queue_context(args, with_counts=True):
     not_archived = db.or_(Issue.equipment_id.is_(None),
                           Equipment.archived_at.is_(None))
 
+    # A request with no queue state of its own (sidebar click, a detail-page
+    # redirect with no `next`) picks up this user's remembered filters/sort.
+    args = restore_list_args('issues:queue', args, QUEUE_PREF_PARAMS)
+
     # Unknown filter values silently reset to defaults (dashboard pattern)
     status_filter = args.get('status', '')
+    # Translate retired codes first so old bookmarks (?status=resuelto) still
+    # land on the right tab instead of silently resetting to the open view.
+    status_filter = LEGACY_ISSUE_STATUSES.get(status_filter, status_filter)
     if status_filter not in {code for code, _ in ISSUE_STATUSES}:
         status_filter = ''
     severity_filter = args.get('severity', '')
@@ -401,11 +411,15 @@ def _queue_context(args, with_counts=True):
 
     status_counts = {}
     severity_counts = {}
+    open_count = 0
     if with_counts:
         for code, _label in ISSUE_STATUSES:
             status_counts[code] = (scoped_query(exclude='status')
                                    .filter(Issue.current_status == code)
                                    .count())
+        # Derived from OPEN_STATUSES so the "Abiertos" tab can't drift from the
+        # per-status tabs the way a hand-summed template expression did.
+        open_count = sum(status_counts.get(code, 0) for code in OPEN_STATUSES)
 
         for code, _label in ISSUE_SEVERITIES:
             severity_counts[code] = (scoped_query(exclude='severity')
@@ -468,6 +482,7 @@ def _queue_context(args, with_counts=True):
         'categories': ISSUE_CATEGORIES,
         'trucks': trucks,
         'status_counts': status_counts,
+        'open_count': open_count,
         'severity_counts': severity_counts,
         'current_status': status_filter,
         'current_severity': severity_filter,
@@ -476,6 +491,10 @@ def _queue_context(args, with_counts=True):
         'current_sort': sort_by,
         'search': search,
         'filters_active': filters_active,
+        # Reset-link visibility only. Deliberately NOT folded into
+        # filters_active, which also hides empty trucks and switches the panels
+        # to the "no results" text — sorting must never hide the fleet.
+        'prefs_active': filters_active or sort_by != 'unit',
         'nav_args': nav_args,
     }
 
@@ -521,7 +540,15 @@ def _issue_sibling_nav(issue_id, args):
 @issues_bp.route('/', methods=['GET'])
 @shop_required
 def queue():
-    return render_template('issues/queue.html', **_queue_context(request.args))
+    # "Limpiar filtros" — forget the remembered choices, then land on a clean
+    # URL (which restores nothing, the bucket having just been dropped).
+    if request.args.get('reset'):
+        forget_list_args('issues:queue')
+        return redirect(url_for('issues.queue'))
+
+    context = _queue_context(request.args)
+    remember_list_args('issues:queue', context['nav_args'], QUEUE_PREF_PARAMS)
+    return render_template('issues/queue.html', **context)
 
 
 # ── ISSUE DETAIL ──────────────────────────────────────────────────────
@@ -916,6 +943,15 @@ def import_issues():
     sev_map.update({s[1].lower(): s[0] for s in ISSUE_SEVERITIES})
     status_map = {s[0]: s[0] for s in ISSUE_STATUSES}
     status_map.update({s[1].lower(): s[0] for s in ISSUE_STATUSES})
+    # Backlog spreadsheets still in circulation carry the retired five-status
+    # vocabulary. Without these aliases an unmapped value is an outright row
+    # error (see the `continue` below), so every legacy row would be rejected.
+    status_map.update(LEGACY_ISSUE_STATUSES)
+    status_map.update({
+        'en revisión': 'en_proceso', 'en revision': 'en_proceso',
+        'en reparación': 'en_proceso', 'en reparacion': 'en_proceso',
+        'resuelto': 'cerrado',
+    })
 
     # Truck lookup by unit_number, falling back to plate_number (both normalized).
     # Matches against ALL equipment so a historical backlog issue can attach to any

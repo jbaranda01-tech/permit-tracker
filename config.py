@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -26,6 +27,9 @@ class Config:
             'pool_size': 5,
             'max_overflow': 2,
         }
+    # Sticky list preferences (see list_prefs.py) ride in the session cookie
+    # and are meant to outlive the browser window, so the session is permanent.
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file upload
     ALERT_DAYS_BEFORE = 30  # Days before expiration to trigger alert
 

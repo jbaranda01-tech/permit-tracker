@@ -31,10 +31,15 @@ from models import (
     protect_uploaded_files, ProtectedFileError,
     Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
+    RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES,
     EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
     EQUIPMENT_CLASSES, classify_equipment,
     INSURANCE_TYPE_BY_CLASS,
     INSURANCE_OWN, INSURANCE_POLICY_CHOICES, sync_vehicle_insurance_permit,
+)
+from list_prefs import (
+    DASHBOARD_PREF_PARAMS, restore_list_args, remember_list_args,
+    forget_list_args,
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -505,6 +510,10 @@ def _dashboard_context(args, view=None, with_counts=True):
     view = view or args.get('view', 'employees')
     if view not in ('employees', 'equipment'):
         view = 'employees'
+    # A request with no list state of its own (sidebar click, post-edit
+    # redirect) picks up this user's remembered filters/sort for THIS view.
+    # Keyed per view: permit_type/equipment_class/exp_month are view-scoped.
+    args = restore_list_args(f'dashboard:{view}', args, DASHBOARD_PREF_PARAMS)
     search = args.get('search', '').strip()
     company_filter = args.get('company', '')
     status_filter = args.get('status', '')
@@ -602,6 +611,12 @@ def _dashboard_context(args, view=None, with_counts=True):
     pli_items = _sort_dashboard_items(pli_items, sort_by, view, permit_type)
     personal_items = _sort_dashboard_items(personal_items, sort_by, view, permit_type)
 
+    # Drives the "Limpiar filtros" link only. Unlike the queue's flag of the
+    # same name, sort counts: sort is sticky now, so it must be resettable.
+    filters_active = bool(search or company_filter or status_filter
+                          or permit_type or permit_status or exp_month
+                          or equipment_class or sort_by != 'name')
+
     # The params that identify "which list am I browsing": they ride from the
     # dashboard into every entity link so a detail page can rebuild this exact
     # sequence for its prev/next arrows. Only non-default values ride along, so
@@ -636,6 +651,7 @@ def _dashboard_context(args, view=None, with_counts=True):
         'equipment_class': equipment_class,
         'equipment_classes': EQUIPMENT_CLASSES,
         'tile_counts': tile_counts,
+        'filters_active': filters_active,
         'nav_args': nav_args,
     }
 
@@ -677,6 +693,13 @@ def _sibling_nav(view, current_id, args):
 def dashboard():
     view = request.args.get('view', 'employees')  # employees, equipment or company
 
+    # "Limpiar filtros" — forget this view's remembered choices, then land on a
+    # clean URL (which restores nothing, the bucket having just been dropped).
+    if request.args.get('reset'):
+        if view in ('employees', 'equipment'):
+            forget_list_args(f'dashboard:{view}')
+        return redirect(url_for('dashboard', view=view if view != 'employees' else None))
+
     if view == 'company':
         # Backfill missing company permits
         changed = False
@@ -698,7 +721,10 @@ def dashboard():
             pli_permits=pli_permits,
         )
 
-    return render_template('dashboard.html', **_dashboard_context(request.args))
+    context = _dashboard_context(request.args)
+    remember_list_args(f'dashboard:{context["view"]}', context['nav_args'],
+                       DASHBOARD_PREF_PARAMS)
+    return render_template('dashboard.html', **context)
 
 
 @app.route('/archive')
@@ -2395,7 +2421,7 @@ def _gather_report_data(report_type, company_filter):
         # excluded here, still visible in-app on the equipment detail page.
         iq = (Issue.query
               .join(Equipment, Issue.equipment_id == Equipment.id)
-              .filter(Issue.current_status.notin_(['resuelto', 'cerrado']),
+              .filter(Issue.current_status.notin_(RESOLVED_STATUSES),
                       Equipment.archived_at.is_(None)))
         if company_filter:
             iq = iq.filter(Equipment.company == company_filter)
@@ -3036,6 +3062,67 @@ def remove_voucher_permits(dry_run):
     print(f'{prefix}{len(permits)} permiso(s) VOUCHER eliminado(s).')
 
 
+def _migrate_issue_statuses(dry_run=False):
+    """Rewrite retired issue-status codes to the merged three-status vocabulary.
+
+    The shop workflow collapsed from five stages to three: en_revision and
+    en_reparacion were the same working state (now en_proceso), and resuelto and
+    cerrado the same terminal one (now cerrado). This rewrites
+    ``issues.current_status`` plus both ``issue_status_history`` status columns,
+    then drops transitions the merge made meaningless (a real
+    en_revision → en_reparacion step becomes en_proceso → en_proceso, which reads
+    as noise on the detail timeline). The ``from_status IS NULL`` creation rows
+    are never touched.
+
+    Idempotent — a second run finds nothing. Returns {label: rows_affected}.
+    """
+    targets = (('issues', 'current_status'),
+               ('issue_status_history', 'from_status'),
+               ('issue_status_history', 'to_status'))
+    counts = {}
+
+    for old, new in LEGACY_ISSUE_STATUSES.items():
+        for table, column in targets:
+            n = db.session.execute(
+                db.text(f'SELECT COUNT(*) FROM {table} WHERE {column} = :old'),
+                {'old': old}).scalar() or 0
+            if n:
+                counts[f'{table}.{column} {old} -> {new}'] = n
+                db.session.execute(
+                    db.text(f'UPDATE {table} SET {column} = :new WHERE {column} = :old'),
+                    {'old': old, 'new': new})
+
+    # Counted after the updates land in the session (not committed yet) so a
+    # --dry-run reports the redundant rows the merge *would* create, not just
+    # any that already existed.
+    redundant = ('FROM issue_status_history '
+                 'WHERE from_status IS NOT NULL AND from_status = to_status')
+    n = db.session.execute(db.text(f'SELECT COUNT(*) {redundant}')).scalar() or 0
+    if n:
+        counts['issue_status_history transiciones redundantes eliminadas'] = n
+        db.session.execute(db.text(f'DELETE {redundant}'))
+
+    if dry_run:
+        db.session.rollback()
+    else:
+        db.session.commit()
+    return counts
+
+
+@app.cli.command('migrate-issue-statuses')
+@click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
+def migrate_issue_statuses(dry_run):
+    """Merge the retired issue statuses into the current three-status flow."""
+    prefix = '[DRY RUN] ' if dry_run else ''
+    counts = _migrate_issue_statuses(dry_run=dry_run)
+    if not counts:
+        print(f'{prefix}No hay estados heredados que migrar.')
+        return
+    for label, n in counts.items():
+        print(f'  {prefix}{label}: {n} fila(s)')
+    print(f'{prefix}{sum(counts.values())} fila(s) afectada(s).')
+
+
 @app.cli.command('reclassify-equipment')
 @click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
 def reclassify_equipment(dry_run):
@@ -3232,6 +3319,15 @@ with app.app_context():
         # Rename CPR → PRIMEROS_AUXILIOS in existing records
         db.session.execute(db.text("UPDATE employee_permits SET permit_type = 'PRIMEROS_AUXILIOS' WHERE permit_type = 'CPR'"))
         db.session.commit()
+
+        # Merge the retired five-status issue vocabulary into the current three.
+        # Runs on boot (not just via `flask migrate-issue-statuses`) because
+        # RESOLVED_STATUSES no longer lists 'resuelto' — an unmigrated DB would
+        # show every historically resolved issue as open in the queue and in the
+        # PDF/Excel reports until the command was run by hand. Idempotent.
+        migrated = _migrate_issue_statuses()
+        if migrated:
+            print(f"[INFO] Issue status migration: {migrated}")
 
         # Backfill equipment_class for rows that predate the column (idempotent)
         unclassified = Equipment.query.filter(Equipment.equipment_class.is_(None)).all()

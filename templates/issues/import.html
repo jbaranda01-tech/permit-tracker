@@ -57,7 +57,7 @@
                 <p><i class="fas fa-info-circle"></i> <strong>Unidad</strong> debe ser solo el número de unidad (o la placa) de un camión existente — sin el símbolo <strong>#</strong> (ej. <code>204</code>, no <code>#204</code>). Las filas sin coincidencia se omiten y se listan como error.</p>
                 <p><i class="fas fa-info-circle"></i> <strong>Categoría</strong>: {{ categories|map(attribute=1)|join(', ') }}.</p>
                 <p><i class="fas fa-info-circle"></i> <strong>Severidad</strong>: {{ severities|map(attribute=1)|join(', ') }} (por defecto: Media).</p>
-                <p><i class="fas fa-info-circle"></i> <strong>Estado</strong>: {{ statuses|map(attribute=1)|join(', ') }} (por defecto: Reportado). Los estados <strong>Resuelto</strong>/<strong>Cerrado</strong> usan la Fecha Resuelto.</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Estado</strong>: {{ statuses|map(attribute=1)|join(', ') }} (por defecto: Reportado). El estado <strong>Cerrado</strong> usa la Fecha Resuelto.</p>
                 <p><i class="fas fa-info-circle"></i> Se acepta el nombre en español o el código interno. <strong>Fecha Reporte</strong> usa la fecha de hoy si se deja en blanco.</p>
             </div>
         </div>
