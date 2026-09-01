@@ -238,6 +238,9 @@
                     <p class="permit-shared-note">
                         <i class="fas fa-building"></i> Seguro compartido a nivel de empresa.
                         <a href="{{ url_for('dashboard', view='company') }}">Editar en Empresa</a>
+                        {% if current_user.is_manager %}
+                        · <a href="{{ url_for('equipment_edit', id=equipment.id) }}">Cambiar póliza</a>
+                        {% endif %}
                     </p>
                 </div>
             </div>

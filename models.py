@@ -290,6 +290,10 @@ class Equipment(db.Model):
     year = db.Column(db.Integer)
     vin_serial = db.Column(db.String(100))
     insurance_company = db.Column(db.String(200))
+    # Which insurance policy covers this vehicle. NULL = automática (derive from
+    # equipment_class), a SEGURO_* code = that shared CompanyPermit, INSURANCE_OWN
+    # = the vehicle carries its own editable per-vehicle SEGURO permit.
+    insurance_policy_type = db.Column(db.String(30))
     cost = db.Column(db.Numeric(10, 2))
     notes = db.Column(db.Text)
     status = db.Column(db.String(20), default='activo')
@@ -351,6 +355,29 @@ class Equipment(db.Model):
         return 'Camión'
 
     @property
+    def insurance_permit_type(self):
+        """CompanyPermit type of the shared policy covering this vehicle.
+
+        None means the vehicle is on its own per-vehicle SEGURO permit (Personal
+        equipment, or an explicit INSURANCE_OWN choice). This is the single place
+        the policy is resolved — detail view, Excel and PDF all read it.
+        """
+        if self.company not in ('LB', 'PLI'):
+            return None
+        choice = self.insurance_policy_type
+        if choice == INSURANCE_OWN:
+            return None
+        if choice in set(INSURANCE_TYPE_BY_CLASS.values()):
+            return choice
+        # NULL (or a stale/unknown code) ⇒ automática: follow the equipment class.
+        cls = self.equipment_class or classify_equipment(self.model, self.equipment_type)
+        return INSURANCE_TYPE_BY_CLASS.get(cls, 'SEGURO_TRUCK')
+
+    @property
+    def insurance_card_title(self):
+        return INSURANCE_CARD_TITLES.get(self.insurance_permit_type, 'Seguro (compartido)')
+
+    @property
     def permit_status_summary(self):
         today = date.today()
         alert_date = today + timedelta(days=30)
@@ -380,7 +407,6 @@ class Equipment(db.Model):
 EQUIPMENT_PERMIT_TYPES = [
     ('MARBETE', 'Marbete'),
     ('SEGURO', 'Seguro / Insurance'),
-    ('VOUCHER', 'Voucher'),
     ('INSPECCION', 'Inspección'),
     ('NTSP', 'NTSP'),
     ('OTHER', 'Otro'),
@@ -462,12 +488,43 @@ INSURANCE_TYPE_BY_CLASS = {
     'generator': 'SEGURO_GENERATOR',
 }
 
+# Keyed by CompanyPermit type (not class) — Equipment.insurance_permit_type
+# resolves to a type, which may differ from the vehicle's class when overridden.
 INSURANCE_CARD_TITLES = {
-    'truck': 'Seguro de camiones (compartido)',
-    'chassis': 'Seguro de chasis (compartido)',
-    'tank': 'Seguro de tanques (compartido)',
-    'generator': 'Seguro de generadores (compartido)',
+    'SEGURO_TRUCK': 'Seguro de camiones (compartido)',
+    'SEGURO_CHASSIS': 'Seguro de chasis (compartido)',
+    'SEGURO_TANK': 'Seguro de tanques (compartido)',
+    'SEGURO_GENERATOR': 'Seguro de generadores (compartido)',
 }
+
+# Sentinel stored in Equipment.insurance_policy_type when the vehicle carries its
+# own policy instead of one of the shared company policies.
+INSURANCE_OWN = 'OWN'
+
+# (code, label) options for the equipment form's "Póliza de Seguro" select —
+# derived from COMPANY_PERMIT_TYPES so the labels live in exactly one place.
+INSURANCE_POLICY_CHOICES = [
+    (code, label) for code, label, _companies in COMPANY_PERMIT_TYPES
+    if code in set(INSURANCE_TYPE_BY_CLASS.values())
+]
+
+
+def sync_vehicle_insurance_permit(equip):
+    """Align the per-vehicle SEGURO permit with the vehicle's insurance choice.
+
+    A vehicle covered by a shared company policy keeps its SEGURO permit at 'N/A'
+    (the detail view hides it and shows the read-only policy card instead); a
+    vehicle on its own policy gets an editable 'YES' permit. The expiration date
+    is deliberately left intact — unlike the /toggle routes — so switching to a
+    shared policy and back restores the vehicle's own dates.
+    """
+    permit = equip.permits.filter_by(permit_type='SEGURO').first()
+    applicability = 'N/A' if equip.insurance_permit_type else 'YES'
+    if permit is None:
+        permit = EquipmentPermit(equipment_id=equip.id, permit_type='SEGURO')
+        db.session.add(permit)
+    permit.applicability = applicability
+    return permit
 
 
 class CompanyPermit(db.Model):

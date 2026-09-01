@@ -33,7 +33,8 @@ from models import (
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
     EQUIPMENT_CLASSES, classify_equipment,
-    INSURANCE_TYPE_BY_CLASS, INSURANCE_CARD_TITLES,
+    INSURANCE_TYPE_BY_CLASS,
+    INSURANCE_OWN, INSURANCE_POLICY_CHOICES, sync_vehicle_insurance_permit,
 )
 
 # ── APP INIT ───────────────────────────────────────────────────────────
@@ -1080,17 +1081,16 @@ def equipment_detail(id):
     active_permits = [p for p in all_permits if p.applicability != 'N/A']
     hidden_permits = [p for p in all_permits if p.applicability == 'N/A']
 
-    # Insurance is shared at the company level for LB/PLI (one policy per
-    # equipment class) — show it read-only and drop the redundant per-vehicle
-    # SEGURO permit from the lists.
+    # Insurance is normally shared at the company level for LB/PLI — show the
+    # policy read-only and drop the redundant per-vehicle SEGURO permit. A vehicle
+    # set to its own policy resolves to None and keeps its editable SEGURO card.
     shared_insurance = None
     shared_insurance_title = None
-    if equip.company in ('LB', 'PLI'):
-        cls = equip.equipment_class or classify_equipment(equip.model, equip.equipment_type)
+    insurance_type = equip.insurance_permit_type
+    if insurance_type:
         shared_insurance = CompanyPermit.query.filter_by(
-            company=equip.company,
-            permit_type=INSURANCE_TYPE_BY_CLASS.get(cls, 'SEGURO_TRUCK')).first()
-        shared_insurance_title = INSURANCE_CARD_TITLES.get(cls, 'Seguro (compartido)')
+            company=equip.company, permit_type=insurance_type).first()
+        shared_insurance_title = equip.insurance_card_title
         active_permits = [p for p in active_permits if p.permit_type != 'SEGURO']
         hidden_permits = [p for p in hidden_permits if p.permit_type != 'SEGURO']
 
@@ -1124,7 +1124,6 @@ EQUIPMENT_COLUMN_ALIASES = [
     ('insurance',  ('SEGURO', 'ASEGURADORA', 'INSURANCE')),
     ('MARBETE',    ('MARBETE',)),
     ('INSPECCION', ('INSPECCION', 'INSPECION')),
-    ('VOUCHER',    ('VOUCHER',)),
     ('NTSP',       ('NTSP',)),
     ('cost',       ('COSTO', 'PRECIO', 'COST')),
 ]
@@ -1254,6 +1253,22 @@ def _resolve_equipment_class(form):
     return cls
 
 
+def _resolve_insurance_policy(form, company):
+    """Validated insurance choice from the form select.
+
+    None = automática (follow the equipment class); a SEGURO_* code = that shared
+    company policy; INSURANCE_OWN = the vehicle's own per-vehicle SEGURO permit.
+    Unknown values silently reset to automática (the dashboard filter idiom).
+    Personal equipment has no shared policies, so it is always on its own.
+    """
+    if company not in ('LB', 'PLI'):
+        return INSURANCE_OWN
+    choice = form.get('insurance_policy_type', '')
+    if choice == INSURANCE_OWN or choice in set(INSURANCE_TYPE_BY_CLASS.values()):
+        return choice
+    return None
+
+
 @app.route('/equipment/new', methods=['GET', 'POST'])
 @manager_required
 def equipment_new():
@@ -1283,10 +1298,13 @@ def equipment_new():
             )
             return render_template('equipment_form.html', equipment=None,
                                    form_data=request.form, duplicate=match,
-                                   equipment_classes=EQUIPMENT_CLASSES), 422
+                                   equipment_classes=EQUIPMENT_CLASSES,
+                                   insurance_policy_choices=INSURANCE_POLICY_CHOICES), 422
         equip = Equipment(
             company=request.form['company'],
             equipment_class=_resolve_equipment_class(request.form),
+            insurance_policy_type=_resolve_insurance_policy(
+                request.form, request.form['company']),
             titular=request.form.get('titular', ''),
             name=request.form.get('name', ''),
             unit_number=request.form.get('unit_number', ''),
@@ -1318,26 +1336,23 @@ def equipment_new():
         # Create default permit slots
         for code, name in EQUIPMENT_PERMIT_TYPES:
             if code != 'OTHER':
-                applicability = 'YES'
-                # Voucher does not apply to Personal equipment
-                if code == 'VOUCHER' and equip.company == 'Personal':
-                    applicability = 'N/A'
-                # Insurance is shared at the company level for LB/PLI
-                if code == 'SEGURO' and equip.company in ('LB', 'PLI'):
-                    applicability = 'N/A'
                 permit = EquipmentPermit(
                     equipment_id=equip.id,
                     permit_type=code,
-                    applicability=applicability,
+                    applicability='YES',
                 )
                 db.session.add(permit)
+
+        # SEGURO goes N/A when a shared company policy covers the vehicle.
+        sync_vehicle_insurance_permit(equip)
 
         db.session.commit()
         flash(f'Equipo {equip.display_name} creado.', 'success')
         return redirect(url_for('equipment_detail', id=equip.id))
 
     return render_template('equipment_form.html', equipment=None,
-                           equipment_classes=EQUIPMENT_CLASSES)
+                           equipment_classes=EQUIPMENT_CLASSES,
+                           insurance_policy_choices=INSURANCE_POLICY_CHOICES)
 
 
 @app.route('/equipment/<int:id>/edit', methods=['GET', 'POST'])
@@ -1347,6 +1362,8 @@ def equipment_edit(id):
     if request.method == 'POST':
         equip.company = request.form['company']
         equip.equipment_class = _resolve_equipment_class(request.form)
+        equip.insurance_policy_type = _resolve_insurance_policy(
+            request.form, equip.company)
         equip.titular = request.form.get('titular', '')
         equip.name = request.form.get('name', '')
         equip.unit_number = request.form.get('unit_number', '')
@@ -1375,12 +1392,16 @@ def equipment_edit(id):
         else:
             equip.cost = None
 
+        # Company/class/policy changes can flip which side owns the insurance.
+        sync_vehicle_insurance_permit(equip)
+
         db.session.commit()
         flash(f'Equipo {equip.display_name} actualizado.', 'success')
         return redirect(url_for('equipment_detail', id=equip.id))
 
     return render_template('equipment_form.html', equipment=equip,
-                           equipment_classes=EQUIPMENT_CLASSES)
+                           equipment_classes=EQUIPMENT_CLASSES,
+                           insurance_policy_choices=INSURANCE_POLICY_CHOICES)
 
 
 @app.route('/equipment/<int:id>/delete', methods=['POST'])
@@ -1531,9 +1552,14 @@ def equipment_permit_delete_form(eq_id, permit_id):
 @manager_required
 def equipment_permit_new(eq_id):
     equip = Equipment.query.get_or_404(eq_id)
+    # A stale open tab could post a retired type (e.g. VOUCHER) — anything not
+    # in the current vocabulary falls back to OTHER.
+    permit_type = request.form.get('permit_type', 'OTHER')
+    if permit_type not in {code for code, _ in EQUIPMENT_PERMIT_TYPES}:
+        permit_type = 'OTHER'
     permit = EquipmentPermit(
         equipment_id=equip.id,
-        permit_type=request.form.get('permit_type', 'OTHER'),
+        permit_type=permit_type,
         permit_name=request.form.get('permit_name', ''),
         applicability='YES',
     )
@@ -2214,7 +2240,7 @@ def import_equipment():
             # Only permits the sheet actually carries are touched — a missing
             # column must never blank a stored expiration date.
             permit_info = {}
-            for ptype in ('MARBETE', 'INSPECCION', 'VOUCHER', 'NTSP'):
+            for ptype in ('MARBETE', 'INSPECCION', 'NTSP'):
                 idx = columns.get(ptype)
                 if idx is None:
                     continue
@@ -2250,11 +2276,7 @@ def import_equipment():
                 existing.equipment_class = equipment_class
 
                 existing_permits = {p.permit_type: p for p in existing.permits}
-                for ptype, (cell_applicability, pdate) in permit_info.items():
-                    if ptype == 'VOUCHER' and company == 'Personal':
-                        applicability = 'N/A'
-                    else:
-                        applicability = cell_applicability
+                for ptype, (applicability, pdate) in permit_info.items():
                     if ptype in existing_permits:
                         permit = existing_permits[ptype]
                         permit.applicability = applicability
@@ -2266,6 +2288,9 @@ def import_equipment():
                             applicability=applicability,
                             expiration_date=pdate if applicability == 'YES' else None,
                         ))
+                # The sheet can reassign company or class, which flips whether a
+                # shared policy covers the vehicle — realign its SEGURO permit.
+                sync_vehicle_insurance_permit(existing)
                 skipped += 1
                 continue
 
@@ -2286,17 +2311,16 @@ def import_equipment():
             db.session.add(equip)
             db.session.flush()
 
-            for ptype, (cell_applicability, pdate) in permit_info.items():
-                if ptype == 'VOUCHER' and company == 'Personal':
-                    applicability = 'N/A'
-                else:
-                    applicability = cell_applicability
+            for ptype, (applicability, pdate) in permit_info.items():
                 db.session.add(EquipmentPermit(
                     equipment_id=equip.id,
                     permit_type=ptype,
                     applicability=applicability,
                     expiration_date=pdate if applicability == 'YES' else None,
                 ))
+            # The sheet carries no per-vehicle insurance column, so this creates the
+            # SEGURO slot at the right applicability for the vehicle's policy.
+            sync_vehicle_insurance_permit(equip)
 
             imported += 1
 
@@ -2395,6 +2419,26 @@ def _gather_report_data(report_type, company_filter):
     return employees, equipment_list, issues, company_permits
 
 
+def _insurance_permits_by_equipment(equipment_list):
+    """equipment id → the permit record covering its insurance.
+
+    That is the shared company policy for vehicles on one, else the vehicle's own
+    SEGURO permit. Shared by generate_pdf and export_excel so the Seguro column
+    cannot mean different things in the two formats.
+    """
+    shared_policies = {
+        (cp.company, cp.permit_type): cp
+        for cp in CompanyPermit.query.filter(
+            CompanyPermit.permit_type.in_(list(INSURANCE_TYPE_BY_CLASS.values()))).all()
+    }
+    resolved = {}
+    for eq in equipment_list:
+        ptype = eq.insurance_permit_type
+        resolved[eq.id] = (shared_policies.get((eq.company, ptype)) if ptype
+                           else eq.permits.filter_by(permit_type='SEGURO').first())
+    return resolved
+
+
 @app.route('/report/pdf')
 @login_required
 def generate_pdf():
@@ -2407,6 +2451,7 @@ def generate_pdf():
     html = render_template('report_pdf.html',
         employees=employees,
         equipment_list=equipment_list,
+        insurance_by_eq=_insurance_permits_by_equipment(equipment_list),
         issues=issues,
         company_permits=company_permits,
         report_type=report_type,
@@ -2540,16 +2585,11 @@ def export_excel():
                 col += 1
 
     if equipment_list:
-        # Shared class policies for LB/PLI insurance cells
-        shared_policies = {
-            (cp.company, cp.permit_type): cp
-            for cp in CompanyPermit.query.filter(
-                CompanyPermit.permit_type.in_(list(INSURANCE_TYPE_BY_CLASS.values()))).all()
-        }
+        insurance_by_eq = _insurance_permits_by_equipment(equipment_list)
         eq_headers = ['Empresa', 'Unidad', 'Titular', 'Clase', 'Marca', 'Modelo', 'Año',
-                      'VIN', 'Tablilla', 'Marbete', 'Seguro', 'Voucher', 'Inspección', 'NTSP']
+                      'VIN', 'Tablilla', 'Marbete', 'Seguro', 'Inspección', 'NTSP']
         ws = new_sheet(wb, 'Equipos', eq_headers,
-                       [10, 12, 22, 12, 14, 18, 8, 20, 12, 14, 14, 14, 14, 14])
+                       [10, 12, 22, 12, 14, 18, 8, 20, 12, 14, 14, 14, 14])
         for r, eq in enumerate(equipment_list, start=2):
             ws.cell(row=r, column=1, value=eq.company)
             ws.cell(row=r, column=2, value=eq.display_name)
@@ -2562,16 +2602,9 @@ def export_excel():
             ws.cell(row=r, column=9, value=eq.plate_number or '')
             permits_by_type = {p.permit_type: p for p in eq.permits}
             write_permit_cell(ws, r, 10, permits_by_type.get('MARBETE'))
-            if eq.company in ('LB', 'PLI'):
-                cls = eq.equipment_class or classify_equipment(eq.model, eq.equipment_type)
-                policy = shared_policies.get(
-                    (eq.company, INSURANCE_TYPE_BY_CLASS.get(cls, 'SEGURO_TRUCK')))
-                write_permit_cell(ws, r, 11, policy)
-            else:
-                write_permit_cell(ws, r, 11, permits_by_type.get('SEGURO'))
-            write_permit_cell(ws, r, 12, permits_by_type.get('VOUCHER'))
-            write_permit_cell(ws, r, 13, permits_by_type.get('INSPECCION'))
-            write_permit_cell(ws, r, 14, permits_by_type.get('NTSP'))
+            write_permit_cell(ws, r, 11, insurance_by_eq.get(eq.id))
+            write_permit_cell(ws, r, 12, permits_by_type.get('INSPECCION'))
+            write_permit_cell(ws, r, 13, permits_by_type.get('NTSP'))
 
     if issues:
         ws = new_sheet(wb, 'Averías',
@@ -2865,7 +2898,8 @@ def dedup_data(dry_run):
         for dup in group[1:]:
             # Merge non-empty scalar fields into keeper where keeper's is empty.
             for col in ['name', 'titular', 'unit_number', 'plate_number', 'make', 'model',
-                        'year', 'vin_serial', 'insurance_company', 'cost', 'notes',
+                        'year', 'vin_serial', 'insurance_company', 'insurance_policy_type',
+                        'cost', 'notes',
                         'equipment_type', 'status',
                         'archived_at', 'archive_reason', 'archive_note']:
                 keeper_val = getattr(keeper, col)
@@ -2977,6 +3011,29 @@ def dedup_data(dry_run):
 
     prefix = '[DRY RUN] ' if dry_run else ''
     print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {equip_deleted} duplicate equipment, {eq_permit_deleted} duplicate equipment permits, {issue_deleted} duplicate issues removed.')
+
+
+@app.cli.command('remove-voucher-permits')
+@click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
+def remove_voucher_permits(dry_run):
+    """Delete every retired VOUCHER equipment permit and its attached document."""
+    prefix = '[DRY RUN] ' if dry_run else ''
+    permits = EquipmentPermit.query.filter_by(permit_type='VOUCHER').all()
+
+    for permit in permits:
+        equip = permit.equipment
+        label = f'{equip.display_name} ({equip.company})' if equip else f'equipo #{permit.equipment_id}'
+        exp = permit.expiration_date.strftime('%m/%d/%Y') if permit.expiration_date else 'sin fecha'
+        print(f'  {prefix}{label} — {exp}, documento: {"sí" if permit.file_path else "no"}')
+        if not dry_run:
+            if permit.file_path:
+                delete_stored_file(permit.file_path)
+            db.session.delete(permit)
+
+    if not dry_run and permits:
+        db.session.commit()
+
+    print(f'{prefix}{len(permits)} permiso(s) VOUCHER eliminado(s).')
 
 
 @app.cli.command('reclassify-equipment')

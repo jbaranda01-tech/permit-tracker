@@ -228,7 +228,10 @@
                     <td>{{ eq.plate_number or '—' }}</td>
                     <td>{{ eq.vin_serial or '—' }}</td>
                     {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}
-                        {% set permit = eq.permits.filter_by(permit_type=ptype).first() %}
+                        {# Seguro comes from the shared company policy when one covers
+                           the vehicle; own-policy/Personal fall back to its own permit. #}
+                        {% set permit = insurance_by_eq.get(eq.id) if ptype == 'SEGURO'
+                                        else eq.permits.filter_by(permit_type=ptype).first() %}
                         {% if permit %}
                             {{ status_cell(permit.expiration_date, permit.applicability) }}
                         {% else %}
@@ -266,7 +269,10 @@
                     <td>{{ eq.plate_number or '—' }}</td>
                     <td>{{ eq.vin_serial or '—' }}</td>
                     {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}
-                        {% set permit = eq.permits.filter_by(permit_type=ptype).first() %}
+                        {# Seguro comes from the shared company policy when one covers
+                           the vehicle; own-policy/Personal fall back to its own permit. #}
+                        {% set permit = insurance_by_eq.get(eq.id) if ptype == 'SEGURO'
+                                        else eq.permits.filter_by(permit_type=ptype).first() %}
                         {% if permit %}
                             {{ status_cell(permit.expiration_date, permit.applicability) }}
                         {% else %}
@@ -304,7 +310,10 @@
                     <td>{{ eq.plate_number or '—' }}</td>
                     <td>{{ eq.vin_serial or '—' }}</td>
                     {% for ptype in ['MARBETE', 'SEGURO', 'INSPECCION'] %}
-                        {% set permit = eq.permits.filter_by(permit_type=ptype).first() %}
+                        {# Seguro comes from the shared company policy when one covers
+                           the vehicle; own-policy/Personal fall back to its own permit. #}
+                        {% set permit = insurance_by_eq.get(eq.id) if ptype == 'SEGURO'
+                                        else eq.permits.filter_by(permit_type=ptype).first() %}
                         {% if permit %}
                             {{ status_cell(permit.expiration_date, permit.applicability) }}
                         {% else %}

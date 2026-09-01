@@ -91,6 +91,18 @@
                     <input type="text" id="insurance_company" name="insurance_company" value="{{ equipment.insurance_company if equipment else fd.get('insurance_company', '') }}" placeholder="MAPFRE">
                 </div>
                 <div class="form-group">
+                    <label for="insurance_policy_type">Póliza de Seguro</label>
+                    {% set sel_policy = equipment.insurance_policy_type if equipment else fd.get('insurance_policy_type', '') %}
+                    <select id="insurance_policy_type" name="insurance_policy_type">
+                        <option value="" {% if not sel_policy %}selected{% endif %}>— Automática (según la clase) —</option>
+                        {% for code, label in insurance_policy_choices %}
+                        <option value="{{ code }}" class="policy-shared" {% if sel_policy == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                        <option value="OWN" {% if sel_policy == 'OWN' %}selected{% endif %}>Póliza propia del vehículo</option>
+                    </select>
+                    <small class="text-muted-sm">Las pólizas compartidas se editan en la vista Empresa.</small>
+                </div>
+                <div class="form-group">
                     <label for="cost">Costo ($)</label>
                     <input type="number" step="0.01" min="0" id="cost" name="cost" value="{{ equipment.cost if equipment and equipment.cost is not none else fd.get('cost', '') }}" placeholder="$25,000.00">
                 </div>
@@ -115,4 +127,23 @@
         </div>
     </form>
 </div>
+
+<script>
+// Personal equipment has no shared company policies — force "Póliza propia".
+// The server enforces the same rule in _resolve_insurance_policy regardless.
+(function () {
+    var company = document.getElementById('company');
+    var policy = document.getElementById('insurance_policy_type');
+    if (!company || !policy) return;
+    function syncPolicyOptions() {
+        var personal = company.value === 'Personal';
+        policy.querySelectorAll('option.policy-shared').forEach(function (opt) {
+            opt.disabled = personal;
+        });
+        if (personal) policy.value = 'OWN';
+    }
+    company.addEventListener('change', syncPolicyOptions);
+    syncPolicyOptions();
+})();
+</script>
 {% endblock %}
