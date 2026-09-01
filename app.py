@@ -488,53 +488,44 @@ def _sort_dashboard_items(items, sort_by, view, permit_type=''):
     return sorted(items, key=entity_name)
 
 
-@app.route('/')
-@login_required
-def dashboard():
-    view = request.args.get('view', 'employees')  # employees or equipment
-    search = request.args.get('search', '').strip()
-    company_filter = request.args.get('company', '')
-    status_filter = request.args.get('status', '')
-    sort_by = request.args.get('sort', 'name')
+# ── DASHBOARD LIST CONTEXT ─────────────────────────────────────────────
+
+def _dashboard_context(args, view=None, with_counts=True):
+    """Normalized params + the filtered/sorted LB/PLI/Personal panels for a set
+    of dashboard GET args.
+
+    Shared by dashboard() and _sibling_nav() so the sequence the detail-page
+    arrows walk can never drift from the list on screen. `view` overrides
+    args['view'] — a detail page knows which list it belongs to. The 'company'
+    view is handled by the route; this helper only knows employees/equipment.
+    `with_counts=False` skips the tile totals, whose per-item
+    `permit_status_summary` loads every permit row the nav doesn't need.
+    """
+    view = view or args.get('view', 'employees')
+    if view not in ('employees', 'equipment'):
+        view = 'employees'
+    search = args.get('search', '').strip()
+    company_filter = args.get('company', '')
+    status_filter = args.get('status', '')
+    sort_by = args.get('sort', 'name')
     if sort_by not in DASHBOARD_SORTS:
         sort_by = 'name'
-    permit_status = request.args.get('permit_status', '')
+    permit_status = args.get('permit_status', '')
     if permit_status not in PERMIT_STATUS_MAP:
         permit_status = ''
     if view == 'equipment':
         permit_types = list(EQUIPMENT_PERMIT_TYPES)
     else:
         permit_types = [('LICENCIA', 'Licencia de Conducir')] + list(EMPLOYEE_PERMIT_TYPES)
-    permit_type = request.args.get('permit_type', '')
+    permit_type = args.get('permit_type', '')
     if permit_type not in {code for code, _label in permit_types}:
         permit_type = ''
-    equipment_class = request.args.get('equipment_class', '')
+    equipment_class = args.get('equipment_class', '')
     if view != 'equipment' or equipment_class not in {code for code, _ in EQUIPMENT_CLASSES}:
         equipment_class = ''
 
-    if view == 'company':
-        # Backfill missing company permits
-        changed = False
-        for code, name, companies in COMPANY_PERMIT_TYPES:
-            for company in companies:
-                existing = CompanyPermit.query.filter_by(company=company, permit_type=code).first()
-                if not existing:
-                    db.session.add(CompanyPermit(company=company, permit_type=code, applicability='YES'))
-                    changed = True
-        if changed:
-            db.session.commit()
-
-        lb_permits = CompanyPermit.query.filter_by(company='LB').order_by(CompanyPermit.permit_type).all()
-        pli_permits = CompanyPermit.query.filter_by(company='PLI').order_by(CompanyPermit.permit_type).all()
-
-        return render_template('dashboard.html',
-            view=view,
-            lb_permits=lb_permits,
-            pli_permits=pli_permits,
-        )
-
     exp_month_options = _exp_month_options(view)
-    exp_month = request.args.get('exp_month', '')
+    exp_month = args.get('exp_month', '')
     if exp_month not in {value for value, _label in exp_month_options}:
         exp_month = ''
 
@@ -595,10 +586,11 @@ def dashboard():
 
     all_items = lb_items + pli_items + personal_items
     tile_counts = {'expired': 0, 'expiring': 0, 'total': len(all_items)}
-    for item in all_items:
-        summary = item.permit_status_summary
-        tile_counts['expired'] += summary['expired']
-        tile_counts['expiring'] += summary['expiring_soon']
+    if with_counts:
+        for item in all_items:
+            summary = item.permit_status_summary
+            tile_counts['expired'] += summary['expired']
+            tile_counts['expiring'] += summary['expiring_soon']
 
     if permit_status:
         lb_items = _filter_dashboard_items(lb_items, permit_type, permit_status, view)
@@ -609,24 +601,103 @@ def dashboard():
     pli_items = _sort_dashboard_items(pli_items, sort_by, view, permit_type)
     personal_items = _sort_dashboard_items(personal_items, sort_by, view, permit_type)
 
-    return render_template('dashboard.html',
-        view=view,
-        lb_items=lb_items,
-        pli_items=pli_items,
-        personal_items=personal_items,
-        search=search,
-        company_filter=company_filter,
-        status_filter=status_filter,
-        sort_by=sort_by,
-        permit_type=permit_type,
-        permit_status=permit_status,
-        permit_types=permit_types,
-        exp_month=exp_month,
-        exp_months=exp_month_options,
-        equipment_class=equipment_class,
-        equipment_classes=EQUIPMENT_CLASSES,
-        tile_counts=tile_counts,
-    )
+    # The params that identify "which list am I browsing": they ride from the
+    # dashboard into every entity link so a detail page can rebuild this exact
+    # sequence for its prev/next arrows. Only non-default values ride along, so
+    # URLs stay clean (the `... or none` idiom, on the normalized values).
+    # A new list param belongs here, or the arrows walk an unfiltered list.
+    nav_args = {key: value for key, value in (
+        ('view', view if view != 'employees' else ''),
+        ('search', search),
+        ('company', company_filter),
+        ('status', status_filter),
+        ('sort', sort_by if sort_by != 'name' else ''),
+        ('permit_type', permit_type),
+        ('permit_status', permit_status),
+        ('exp_month', exp_month),
+        ('equipment_class', equipment_class),
+    ) if value}
+
+    return {
+        'view': view,
+        'lb_items': lb_items,
+        'pli_items': pli_items,
+        'personal_items': personal_items,
+        'search': search,
+        'company_filter': company_filter,
+        'status_filter': status_filter,
+        'sort_by': sort_by,
+        'permit_type': permit_type,
+        'permit_status': permit_status,
+        'permit_types': permit_types,
+        'exp_month': exp_month,
+        'exp_months': exp_month_options,
+        'equipment_class': equipment_class,
+        'equipment_classes': EQUIPMENT_CLASSES,
+        'tile_counts': tile_counts,
+        'nav_args': nav_args,
+    }
+
+
+def _sibling_nav(view, current_id, args):
+    """Prev/next links for an entity detail page.
+
+    Walks the same filtered + sorted sequence the dashboard rendered, flattened
+    LB → PLI → Personal, so the arrows follow exactly what was on screen.
+    Returns None when the record isn't in that list (archived, or filtered out
+    by the args it was reached with) — the template then renders no arrows.
+    """
+    ctx = _dashboard_context(args, view=view, with_counts=False)
+    items = ctx['lb_items'] + ctx['pli_items'] + ctx['personal_items']
+    ids = [item.id for item in items]
+    if current_id not in ids:
+        return None
+    index = ids.index(current_id)
+    endpoint = 'equipment_detail' if view == 'equipment' else 'employee_detail'
+    nav_args = ctx['nav_args']
+
+    def entry(item):
+        if item is None:
+            return None
+        label = item.display_name if view == 'equipment' else item.name
+        return {'url': url_for(endpoint, id=item.id, **nav_args), 'label': label}
+
+    return {
+        'prev': entry(items[index - 1] if index > 0 else None),
+        'next': entry(items[index + 1] if index + 1 < len(items) else None),
+        'position': index + 1,
+        'total': len(items),
+        'list_url': url_for('dashboard', **nav_args),
+    }
+
+
+@app.route('/')
+@login_required
+def dashboard():
+    view = request.args.get('view', 'employees')  # employees, equipment or company
+
+    if view == 'company':
+        # Backfill missing company permits
+        changed = False
+        for code, name, companies in COMPANY_PERMIT_TYPES:
+            for company in companies:
+                existing = CompanyPermit.query.filter_by(company=company, permit_type=code).first()
+                if not existing:
+                    db.session.add(CompanyPermit(company=company, permit_type=code, applicability='YES'))
+                    changed = True
+        if changed:
+            db.session.commit()
+
+        lb_permits = CompanyPermit.query.filter_by(company='LB').order_by(CompanyPermit.permit_type).all()
+        pli_permits = CompanyPermit.query.filter_by(company='PLI').order_by(CompanyPermit.permit_type).all()
+
+        return render_template('dashboard.html',
+            view=view,
+            lb_permits=lb_permits,
+            pli_permits=pli_permits,
+        )
+
+    return render_template('dashboard.html', **_dashboard_context(request.args))
 
 
 @app.route('/archive')
@@ -689,7 +760,8 @@ def employee_detail(id):
     hidden_permits = [p for p in all_permits if p.applicability == 'N/A']
     return render_template('employee.html', employee=emp,
                            permits=active_permits, hidden_permits=hidden_permits,
-                           permit_types=EMPLOYEE_PERMIT_TYPES)
+                           permit_types=EMPLOYEE_PERMIT_TYPES,
+                           nav=_sibling_nav('employees', emp.id, request.args))
 
 
 @app.route('/employee/new', methods=['GET', 'POST'])
@@ -1030,7 +1102,8 @@ def equipment_detail(id):
                            shared_insurance=shared_insurance,
                            shared_insurance_title=shared_insurance_title,
                            permit_types=EQUIPMENT_PERMIT_TYPES,
-                           issues=issues)
+                           issues=issues,
+                           nav=_sibling_nav('equipment', equip.id, request.args))
 
 
 # ── EQUIPMENT SHEET COLUMN MAPPING ─────────────────────────────────────

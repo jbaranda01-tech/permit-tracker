@@ -1,0 +1,36 @@
+{# Prev/next through the same list the user was browsing. `nav` comes from
+   _sibling_nav() (permits) / _issue_sibling_nav() (issues) and is None when
+   the record isn't part of the current list — then nothing renders. #}
+{% if nav %}
+<nav class="detail-nav" aria-label="Navegación entre registros"
+     data-prev-url="{{ nav.prev.url if nav.prev else '' }}"
+     data-next-url="{{ nav.next.url if nav.next else '' }}">
+    {% if nav.prev %}
+    <a href="{{ nav.prev.url }}" class="detail-nav-btn" rel="prev" title="Anterior: {{ nav.prev.label }}">
+        <i class="fas fa-chevron-left"></i>
+        <span class="detail-nav-name">{{ nav.prev.label }}</span>
+    </a>
+    {% else %}
+    <span class="detail-nav-btn is-disabled" aria-disabled="true">
+        <i class="fas fa-chevron-left"></i>
+        <span class="detail-nav-name">Primero</span>
+    </span>
+    {% endif %}
+
+    <a href="{{ nav.list_url }}" class="detail-nav-count" title="Volver a la lista">
+        {{ nav.position }} <span class="detail-nav-of">de</span> {{ nav.total }}
+    </a>
+
+    {% if nav.next %}
+    <a href="{{ nav.next.url }}" class="detail-nav-btn" rel="next" title="Siguiente: {{ nav.next.label }}">
+        <span class="detail-nav-name">{{ nav.next.label }}</span>
+        <i class="fas fa-chevron-right"></i>
+    </a>
+    {% else %}
+    <span class="detail-nav-btn is-disabled" aria-disabled="true">
+        <span class="detail-nav-name">Último</span>
+        <i class="fas fa-chevron-right"></i>
+    </span>
+    {% endif %}
+</nav>
+{% endif %}

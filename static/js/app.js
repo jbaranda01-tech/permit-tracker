@@ -180,3 +180,24 @@ function sortTableRows(table, colIndex, type, dir) {
 }
 
 document.addEventListener('DOMContentLoaded', initSortableTables);
+
+// ── Detail prev/next keyboard shortcuts ────────────────────────────────
+// ← / → walk the sibling records rendered by _detail_nav.html. Ignored while
+// typing, and while a modifier is held (so browser back/forward still work).
+function initDetailNavKeys() {
+    var nav = document.querySelector('.detail-nav');
+    if (!nav) return;
+    document.addEventListener('keydown', function (e) {
+        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        var el = document.activeElement;
+        if (el && (el.isContentEditable ||
+                   /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName))) return;
+        var url = nav.getAttribute(e.key === 'ArrowLeft' ? 'data-prev-url' : 'data-next-url');
+        if (!url) return;
+        e.preventDefault();
+        window.location.href = url;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initDetailNavKeys);

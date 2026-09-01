@@ -281,27 +281,31 @@ def _search_clause(search):
     return db.or_(*clauses)
 
 
-@issues_bp.route('/', methods=['GET'])
-@shop_required
-def queue():
+def _queue_context(args, with_counts=True):
+    """Everything the queue renders, for a set of GET args.
+
+    Shared by queue() and _issue_sibling_nav() so the sequence the detail-page
+    arrows walk can never drift from the queue on screen. `with_counts=False`
+    skips the per-axis COUNT queries the nav doesn't need.
+    """
     # Issues on archived (sold/scrapped) equipment are hidden from the queue;
     # unlinked issues (equipment_id NULL) stay visible.
     not_archived = db.or_(Issue.equipment_id.is_(None),
                           Equipment.archived_at.is_(None))
 
     # Unknown filter values silently reset to defaults (dashboard pattern)
-    status_filter = request.args.get('status', '')
+    status_filter = args.get('status', '')
     if status_filter not in {code for code, _ in ISSUE_STATUSES}:
         status_filter = ''
-    severity_filter = request.args.get('severity', '')
+    severity_filter = args.get('severity', '')
     if severity_filter not in {code for code, _ in ISSUE_SEVERITIES}:
         severity_filter = ''
-    category_filter = request.args.get('category', '')
+    category_filter = args.get('category', '')
     if category_filter not in {code for code, _ in ISSUE_CATEGORIES}:
         category_filter = ''
-    equipment_filter = request.args.get('equipment_id', type=int)
-    search = request.args.get('search', '').strip()
-    sort_by = request.args.get('sort', 'unit')
+    equipment_filter = args.get('equipment_id', type=int)
+    search = args.get('search', '').strip()
+    sort_by = args.get('sort', 'unit')
     if sort_by not in QUEUE_SORTS:
         sort_by = 'unit'
 
@@ -396,18 +400,19 @@ def queue():
     pli_trucks = build_truck_profiles('PLI')
 
     status_counts = {}
-    for code, _label in ISSUE_STATUSES:
-        status_counts[code] = (scoped_query(exclude='status')
-                               .filter(Issue.current_status == code)
-                               .count())
-
     severity_counts = {}
-    for code, _label in ISSUE_SEVERITIES:
-        severity_counts[code] = (scoped_query(exclude='severity')
-                                 .filter(Issue.severity == code)
-                                 .count())
+    if with_counts:
+        for code, _label in ISSUE_STATUSES:
+            status_counts[code] = (scoped_query(exclude='status')
+                                   .filter(Issue.current_status == code)
+                                   .count())
 
-    trucks = reportable_equipment_list()
+        for code, _label in ISSUE_SEVERITIES:
+            severity_counts[code] = (scoped_query(exclude='severity')
+                                     .filter(Issue.severity == code)
+                                     .count())
+
+    trucks = reportable_equipment_list() if with_counts else []
     # Issues with no linked equipment appear in no truck panel — surface them
     # in their own section so they stay reachable.
     unlinked_issues = [i for i in all_issues if not i.equipment_id]
@@ -436,27 +441,87 @@ def queue():
                            .order_by(*resolved_order)
                            .limit(20).all())
 
-    return render_template('issues/queue.html',
-                           lb_trucks=lb_trucks,
-                           pli_trucks=pli_trucks,
-                           lb_issue_count=sum(t['issue_count'] for t in lb_trucks),
-                           pli_issue_count=sum(t['issue_count'] for t in pli_trucks),
-                           unlinked_issues=unlinked_issues,
-                           resolved_issues=resolved_issues,
-                           resolved_count=resolved_count,
-                           statuses=ISSUE_STATUSES,
-                           severities=ISSUE_SEVERITIES,
-                           categories=ISSUE_CATEGORIES,
-                           trucks=trucks,
-                           status_counts=status_counts,
-                           severity_counts=severity_counts,
-                           current_status=status_filter,
-                           current_severity=severity_filter,
-                           current_equipment=equipment_filter,
-                           current_category=category_filter,
-                           current_sort=sort_by,
-                           search=search,
-                           filters_active=filters_active)
+    # The params that identify "which queue am I browsing": they ride into
+    # every issue link so the detail page can rebuild this exact sequence for
+    # its prev/next arrows. Only non-default values ride along, so URLs stay
+    # clean (the `... or none` idiom, on the normalized values). A new filter
+    # param belongs here, or the arrows walk an unfiltered queue.
+    nav_args = {key: value for key, value in (
+        ('status', status_filter),
+        ('severity', severity_filter),
+        ('equipment_id', equipment_filter),
+        ('category', category_filter),
+        ('search', search),
+        ('sort', sort_by if sort_by != 'unit' else ''),
+    ) if value}
+
+    return {
+        'lb_trucks': lb_trucks,
+        'pli_trucks': pli_trucks,
+        'lb_issue_count': sum(t['issue_count'] for t in lb_trucks),
+        'pli_issue_count': sum(t['issue_count'] for t in pli_trucks),
+        'unlinked_issues': unlinked_issues,
+        'resolved_issues': resolved_issues,
+        'resolved_count': resolved_count,
+        'statuses': ISSUE_STATUSES,
+        'severities': ISSUE_SEVERITIES,
+        'categories': ISSUE_CATEGORIES,
+        'trucks': trucks,
+        'status_counts': status_counts,
+        'severity_counts': severity_counts,
+        'current_status': status_filter,
+        'current_severity': severity_filter,
+        'current_equipment': equipment_filter,
+        'current_category': category_filter,
+        'current_sort': sort_by,
+        'search': search,
+        'filters_active': filters_active,
+        'nav_args': nav_args,
+    }
+
+
+def _issue_sibling_nav(issue_id, args):
+    """Prev/next links for an issue detail page.
+
+    Walks the queue's rendered order — LB truck cards, then PLI, then the
+    unlinked section, then Resueltos — so the arrows follow exactly what was
+    on screen. Returns None when the issue isn't in that list (filtered out,
+    or on archived equipment).
+    """
+    ctx = _queue_context(args, with_counts=False)
+    sequence = []
+    for profiles in (ctx['lb_trucks'], ctx['pli_trucks']):
+        for profile in profiles:
+            sequence.extend(profile['issues'])
+    sequence.extend(ctx['unlinked_issues'])
+    sequence.extend(ctx['resolved_issues'])
+
+    ids = [i.id for i in sequence]
+    if issue_id not in ids:
+        return None
+    index = ids.index(issue_id)
+    nav_args = ctx['nav_args']
+
+    def entry(issue):
+        if issue is None:
+            return None
+        truck = issue.equipment.display_name if issue.equipment else 'Sin unidad'
+        return {'url': url_for('issues.detail', issue_id=issue.id, **nav_args),
+                'label': f'#{issue.id} · {truck}'}
+
+    return {
+        'prev': entry(sequence[index - 1] if index > 0 else None),
+        'next': entry(sequence[index + 1] if index + 1 < len(sequence) else None),
+        'position': index + 1,
+        'total': len(sequence),
+        'list_url': url_for('issues.queue', **nav_args),
+    }
+
+
+@issues_bp.route('/', methods=['GET'])
+@shop_required
+def queue():
+    return render_template('issues/queue.html', **_queue_context(request.args))
 
 
 # ── ISSUE DETAIL ──────────────────────────────────────────────────────
@@ -469,7 +534,8 @@ def detail(issue_id):
     return render_template('issues/detail.html',
                            issue=issue,
                            history=history,
-                           statuses=ISSUE_STATUSES)
+                           statuses=ISSUE_STATUSES,
+                           nav=_issue_sibling_nav(issue.id, request.args))
 
 
 @issues_bp.route('/<int:issue_id>/status', methods=['POST'])

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Reportes de Problemas{% endblock %}
 
-{% macro issue_row(issue, statuses, show_truck=false, show_resolved=false) %}
+{% macro issue_row(issue, statuses, nav_args, show_truck=false, show_resolved=false) %}
 {# Stretched-link row: the whole card is clickable via .issue-row-link::after,
    while the inline status form sits above the overlay (z-index) — a nested
    form inside a whole-row <a> would be invalid HTML. #}
@@ -14,7 +14,7 @@
         {% endif %}
         <span class="issue-id">#{{ issue.id }}</span>
     </div>
-    <a href="{{ url_for('issues.detail', issue_id=issue.id) }}" class="issue-row-link" aria-label="Ver reporte #{{ issue.id }}">
+    <a href="{{ url_for('issues.detail', issue_id=issue.id, **nav_args) }}" class="issue-row-link" aria-label="Ver reporte #{{ issue.id }}">
         <p class="issue-row-desc">{{ issue.description }}</p>
     </a>
     <div class="issue-row-meta">
@@ -37,7 +37,7 @@
 </div>
 {% endmacro %}
 
-{% macro truck_panel(company_name, logo_file, panel_class, trucks, issue_count, severities, statuses, is_admin, is_shop_manager, filters_active=false) %}
+{% macro truck_panel(company_name, logo_file, panel_class, trucks, issue_count, severities, statuses, nav_args, is_admin, is_shop_manager, filters_active=false) %}
 <div class="company-panel">
     <div class="panel-header {{ panel_class }}">
         <h2><img src="{{ url_for('static', filename='img/' ~ logo_file) }}" alt="{{ company_name }}" class="company-logo"> {{ company_name }}</h2>
@@ -88,7 +88,7 @@
             <div class="truck-issues" id="issues-{{ truck.equipment.id }}" {% if not expanded %}style="display:none"{% endif %}>
                 {% if truck.issues %}
                 {% for issue in truck.issues %}
-                {{ issue_row(issue, statuses) }}
+                {{ issue_row(issue, statuses, nav_args) }}
                 {% endfor %}
                 {% else %}
                 <div class="truck-no-issues">Sin reportes</div>
@@ -201,8 +201,8 @@
 </div>
 
 <div class="company-panels">
-    {{ truck_panel('LB Caribe Services', 'logo-lb.png', 'panel-lb', lb_trucks, lb_issue_count, severities, statuses, current_user.is_admin, current_user.is_shop_manager, filters_active) }}
-    {{ truck_panel('Professional Logistics', 'logo-pli.png', 'panel-pli', pli_trucks, pli_issue_count, severities, statuses, current_user.is_admin, current_user.is_shop_manager, filters_active) }}
+    {{ truck_panel('LB Caribe Services', 'logo-lb.png', 'panel-lb', lb_trucks, lb_issue_count, severities, statuses, nav_args, current_user.is_admin, current_user.is_shop_manager, filters_active) }}
+    {{ truck_panel('Professional Logistics', 'logo-pli.png', 'panel-pli', pli_trucks, pli_issue_count, severities, statuses, nav_args, current_user.is_admin, current_user.is_shop_manager, filters_active) }}
 </div>
 
 {% if unlinked_issues %}
@@ -213,7 +213,7 @@
         </div>
         <div class="card-body" style="padding: 0;">
             {% for issue in unlinked_issues %}
-            {{ issue_row(issue, statuses, show_truck=true) }}
+            {{ issue_row(issue, statuses, nav_args, show_truck=true) }}
             {% endfor %}
         </div>
     </div>
@@ -230,7 +230,7 @@
         </div>
         <div class="card-body" id="resolved-issues-body" style="padding: 0; display: none;">
             {% for issue in resolved_issues %}
-            {{ issue_row(issue, statuses, show_truck=true, show_resolved=true) }}
+            {{ issue_row(issue, statuses, nav_args, show_truck=true, show_resolved=true) }}
             {% endfor %}
             {% if resolved_count > resolved_issues|length %}
             <div class="resolved-more-note">

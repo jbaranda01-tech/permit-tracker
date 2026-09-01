@@ -1008,6 +1008,71 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
 }
 .back-link:hover { color: var(--text-primary); }
 
+/* Prev/next through the list the record was reached from (_detail_nav.html) */
+.detail-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.detail-nav {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+    min-width: 0;
+}
+
+.detail-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    max-width: 200px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+.detail-nav-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+.detail-nav-btn.is-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.detail-nav-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.detail-nav-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    transition: color var(--transition), border-color var(--transition);
+}
+.detail-nav-count:hover {
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+.detail-nav-of { opacity: 0.6; }
+
 .detail-title-row {
     display: flex;
     justify-content: space-between;
@@ -2407,6 +2472,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 /* ── Small Phone (480px) ──────────────────────────────────────────── */
 @media (max-width: 480px) {
     html { font-size: 14px; }
+    /* Arrows only — the sibling's name doesn't fit beside the back-link */
+    .detail-nav-btn .detail-nav-name { display: none; }
+    .detail-nav-btn { max-width: none; }
     .main-content {
         padding: var(--space-sm);
         padding-top: calc(56px + env(safe-area-inset-top) + var(--space-sm));
@@ -2543,4 +2611,5 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 /* Touch devices have no Ctrl+Enter — hide the hint rather than lie about it. */
 @media (hover: none) and (pointer: coarse) {
     .form-shortcut-hint { display: none; }
+    .detail-nav-btn, .detail-nav-count { min-height: 44px; }
 }

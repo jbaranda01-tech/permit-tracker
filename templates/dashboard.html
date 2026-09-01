@@ -375,7 +375,7 @@
             <div class="panel-body">
                 {% if view == 'employees' %}
                     {% for emp in lb_items %}
-                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card">
+                    <a href="{{ url_for('employee_detail', id=emp.id, **nav_args) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ emp.name }}</div>
                             <div class="entity-meta">{{ emp.area or '—' }}</div>
@@ -405,7 +405,7 @@
                     {% endif %}
                 {% else %}
                     {% for eq in lb_items %}
-                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
+                    <a href="{{ url_for('equipment_detail', id=eq.id, **nav_args) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ eq.display_name }}</div>
                             <div class="entity-meta">{{ eq.plate_number or '—' }}{% if eq.model %} · {{ eq.model }}{% endif %}</div>
@@ -448,7 +448,7 @@
             <div class="panel-body">
                 {% if view == 'employees' %}
                     {% for emp in pli_items %}
-                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card">
+                    <a href="{{ url_for('employee_detail', id=emp.id, **nav_args) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ emp.name }}</div>
                             <div class="entity-meta">{{ emp.area or '—' }}</div>
@@ -478,7 +478,7 @@
                     {% endif %}
                 {% else %}
                     {% for eq in pli_items %}
-                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
+                    <a href="{{ url_for('equipment_detail', id=eq.id, **nav_args) }}" class="entity-card">
                         <div class="entity-info">
                             <div class="entity-name">{{ eq.display_name }}</div>
                             <div class="entity-meta">{{ eq.plate_number or '—' }}{% if eq.model %} · {{ eq.model }}{% endif %}</div>
@@ -520,7 +520,7 @@
             </div>
             <div class="panel-body">
                 {% for eq in personal_items %}
-                <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card">
+                <a href="{{ url_for('equipment_detail', id=eq.id, **nav_args) }}" class="entity-card">
                     <div class="entity-info">
                         <div class="entity-name">{{ eq.display_name }}</div>
                         <div class="entity-meta">{{ eq.plate_number or '—' }}{% if eq.model %} · {{ eq.model }}{% endif %}</div>
