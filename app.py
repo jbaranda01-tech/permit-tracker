@@ -1578,8 +1578,8 @@ def equipment_permit_delete_form(eq_id, permit_id):
 @manager_required
 def equipment_permit_new(eq_id):
     equip = Equipment.query.get_or_404(eq_id)
-    # A stale open tab could post a retired type (e.g. VOUCHER) — anything not
-    # in the current vocabulary falls back to OTHER.
+    # A stale open tab could post a retired type — anything not in the current
+    # vocabulary falls back to OTHER.
     permit_type = request.form.get('permit_type', 'OTHER')
     if permit_type not in {code for code, _ in EQUIPMENT_PERMIT_TYPES}:
         permit_type = 'OTHER'
@@ -3037,29 +3037,6 @@ def dedup_data(dry_run):
 
     prefix = '[DRY RUN] ' if dry_run else ''
     print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {equip_deleted} duplicate equipment, {eq_permit_deleted} duplicate equipment permits, {issue_deleted} duplicate issues removed.')
-
-
-@app.cli.command('remove-voucher-permits')
-@click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
-def remove_voucher_permits(dry_run):
-    """Delete every retired VOUCHER equipment permit and its attached document."""
-    prefix = '[DRY RUN] ' if dry_run else ''
-    permits = EquipmentPermit.query.filter_by(permit_type='VOUCHER').all()
-
-    for permit in permits:
-        equip = permit.equipment
-        label = f'{equip.display_name} ({equip.company})' if equip else f'equipo #{permit.equipment_id}'
-        exp = permit.expiration_date.strftime('%m/%d/%Y') if permit.expiration_date else 'sin fecha'
-        print(f'  {prefix}{label} — {exp}, documento: {"sí" if permit.file_path else "no"}')
-        if not dry_run:
-            if permit.file_path:
-                delete_stored_file(permit.file_path)
-            db.session.delete(permit)
-
-    if not dry_run and permits:
-        db.session.commit()
-
-    print(f'{prefix}{len(permits)} permiso(s) VOUCHER eliminado(s).')
 
 
 def _migrate_issue_statuses(dry_run=False):
