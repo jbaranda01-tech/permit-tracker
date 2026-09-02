@@ -186,10 +186,18 @@ EMPLOYEE_PERMIT_TYPES = [
     ('CERT_MEDICO', 'Certificado Médico Choferil'),
     ('ANTECEDENTES', 'Antecedentes Penales'),
     ('RECORD_CHOFERIL', 'Record Choferil'),
-    ('HM126', 'HM-126'),
-    ('HM232', 'HM-232'),
+    ('HM126', 'HM-126 / HM-232'),
     ('PRIMEROS_AUXILIOS', 'Primeros Auxilios'),
     ('OTHER', 'Otro'),
+]
+
+# Retired codes that may still have rows in the DB. HM-126 and HM-232 were merged
+# into a single HM126 permit (one document, one expiration date); employees whose
+# two rows carried genuinely distinct dates/documents keep their HM232 row rather
+# than losing data. Nothing creates new rows with these codes -- they only need a
+# readable label, plus the reachability wiring in app.py.
+LEGACY_EMPLOYEE_PERMIT_TYPES = [
+    ('HM232', 'HM-232 (legado)'),
 ]
 
 
@@ -217,6 +225,9 @@ class EmployeePermit(db.Model):
         if self.permit_type == 'OTHER' and self.permit_name:
             return self.permit_name
         for code, name in EMPLOYEE_PERMIT_TYPES:
+            if code == self.permit_type:
+                return name
+        for code, name in LEGACY_EMPLOYEE_PERMIT_TYPES:
             if code == self.permit_type:
                 return name
         return self.permit_type

@@ -7,7 +7,7 @@ Sistema de gestión y seguimiento de permisos, certificaciones y documentos para
 - **Dashboard dual**: Vista lado a lado de ambas compañías (LB / PLI)
 - **Perfiles de empleados**: Info personal, laboral, licencia de conducir, upload de documentos
 - **Perfiles de equipos**: Vehículos y generadores con tablilla, marca/modelo/año, VIN
-- **Tracking de permisos**: NTSP, TWIC, Cert. Médico, Antecedentes, Record Choferil, HM-126, HM-232, Marbete, Seguro, Inspección, y permisos custom
+- **Tracking de permisos**: NTSP, TWIC, Cert. Médico, Antecedentes, Record Choferil, HM-126 / HM-232, Marbete, Seguro, Inspección, y permisos custom
 - **Alertas automáticas**: Permisos por vencer (30 días) y vencidos, con contadores en tiempo real
 - **Reporte PDF**: Exportación color-coded del estado de todos los permisos
 - **Importación Excel**: Carga masiva de datos desde archivo Excel existente

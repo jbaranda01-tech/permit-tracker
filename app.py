@@ -26,7 +26,8 @@ from config import Config
 from flask_compress import Compress
 from models import (
     db, User, Employee, EmployeePermit, Equipment, EquipmentPermit,
-    CompanyPermit, EMPLOYEE_PERMIT_TYPES, EQUIPMENT_PERMIT_TYPES,
+    CompanyPermit, EMPLOYEE_PERMIT_TYPES, LEGACY_EMPLOYEE_PERMIT_TYPES,
+    EQUIPMENT_PERMIT_TYPES,
     COMPANY_PERMIT_TYPES, FileStorage, NotificationLog,
     protect_uploaded_files, ProtectedFileError,
     Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
@@ -388,6 +389,25 @@ SPANISH_MONTHS = ('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre')
 
 
+def _legacy_employee_permit_types():
+    """Retired employee permit codes that still have rows in the DB.
+
+    HM-232 rows survive the HM-126/HM-232 merge only where the pair carried
+    genuinely distinct dates/documents. Those rows still count toward the
+    dashboard alert tiles, so the filter select and the Excel export have to
+    keep reaching them. Returns [] once the last one is merged away, which
+    removes the option and the column on its own."""
+    codes = {code for code, _label in LEGACY_EMPLOYEE_PERMIT_TYPES}
+    if not codes:
+        return []
+    present = {
+        row[0] for row in db.session.query(EmployeePermit.permit_type)
+        .filter(EmployeePermit.permit_type.in_(codes)).distinct()
+    }
+    return [(code, label) for code, label in LEGACY_EMPLOYEE_PERMIT_TYPES
+            if code in present]
+
+
 def _exp_month_options(view):
     """('YYYY-MM', 'Agosto 2026') pairs for every month with a counted expiration.
 
@@ -440,7 +460,15 @@ def _permit_type_status(item, permit_type, view):
             return 'expiring_soon'
         return 'valid'
     permit = next((p for p in item.permits if p.permit_type == permit_type), None)
-    return permit.status if permit else 'missing'
+    if permit:
+        return permit.status
+    # An absent row normally means the permit is pending. Not so for a retired
+    # code (HM232): almost nobody has one, and reporting the whole roster as
+    # "missing HM-232" is backwards — the filter exists to find the few rows
+    # that survived the merge, not to demand the type from everyone else.
+    if permit_type in {code for code, _label in LEGACY_EMPLOYEE_PERMIT_TYPES}:
+        return 'na'
+    return 'missing'
 
 
 def _filter_dashboard_items(items, permit_type, permit_status, view):
@@ -527,7 +555,9 @@ def _dashboard_context(args, view=None, with_counts=True):
     if view == 'equipment':
         permit_types = list(EQUIPMENT_PERMIT_TYPES)
     else:
-        permit_types = [('LICENCIA', 'Licencia de Conducir')] + list(EMPLOYEE_PERMIT_TYPES)
+        permit_types = ([('LICENCIA', 'Licencia de Conducir')]
+                        + list(EMPLOYEE_PERMIT_TYPES)
+                        + _legacy_employee_permit_types())
     permit_type = args.get('permit_type', '')
     if permit_type not in {code for code, _label in permit_types}:
         permit_type = ''
@@ -1079,9 +1109,14 @@ def employee_license_delete_form(id):
 @manager_required
 def employee_permit_new(emp_id):
     emp = Employee.query.get_or_404(emp_id)
+    # Validate against the current vocabulary so a stale open tab can't mint a
+    # retired code (e.g. HM232 after the HM-126/HM-232 merge).
+    ptype = request.form.get('permit_type', 'OTHER')
+    if ptype not in {code for code, _label in EMPLOYEE_PERMIT_TYPES}:
+        ptype = 'OTHER'
     permit = EmployeePermit(
         employee_id=emp.id,
-        permit_type=request.form.get('permit_type', 'OTHER'),
+        permit_type=ptype,
         permit_name=request.form.get('permit_name', ''),
         applicability='YES',
     )
@@ -1131,6 +1166,74 @@ def equipment_detail(id):
                            permit_types=EQUIPMENT_PERMIT_TYPES,
                            issues=issues,
                            nav=_sibling_nav('equipment', equip.id, request.args))
+
+
+# ── EMPLOYEE SHEET COLUMN MAPPING ──────────────────────────────────────
+# The employee import is positional (unlike the header-driven equipment one).
+# Two columns feed a single permit: HM-126 and HM-232 are one certification —
+# one document, one expiration date — so both spreadsheet columns resolve to
+# the merged HM126 permit. Pointing them at the same code naively would add two
+# rows with the same (employee_id, 'HM126') and trip uq_employee_permit_type,
+# so the cells are collapsed by _resolve_employee_permits() before any write.
+EMPLOYEE_PERMIT_COLUMNS = {
+    7: 'NTSP',
+    8: 'TWIC',
+    9: 'CERT_MEDICO',
+    10: 'ANTECEDENTES',
+    11: 'RECORD_CHOFERIL',
+    # 12 is Camisas (shirt_size), read separately
+    13: 'HM126',
+    14: 'HM126',
+    15: 'PRIMEROS_AUXILIOS',
+}
+
+
+def _employee_permit_cell(val):
+    """One spreadsheet cell → (applicability, expiration_date).
+
+    None/blank = applicable but missing; N/A-like text = not applicable;
+    a date-like value = the expiration (with the Excel 2-digit-year fix)."""
+    applicability = 'YES'
+    exp_date = None
+
+    if val is None:
+        return applicability, exp_date
+    if isinstance(val, str):
+        val_upper = val.strip().upper()
+        if val_upper in ('N/A', 'NA', '', 'NO'):
+            applicability = 'N/A'
+    elif hasattr(val, 'date'):
+        d = val.date() if hasattr(val, 'date') else val
+        if hasattr(d, 'year') and d.year < 2000:
+            try:
+                d = d.replace(year=d.year + 100)
+            except ValueError:
+                pass
+        exp_date = d
+    return applicability, exp_date
+
+
+def _resolve_employee_permits(row):
+    """Row → {permit_type: (applicability, expiration_date)}.
+
+    Columns sharing a permit code (the two HM ones) are combined by precedence:
+    a real date wins — the later of two dates — then an explicit N/A over a
+    blank cell, then blank (applicable but missing)."""
+    resolved = {}
+    for col_idx, ptype in EMPLOYEE_PERMIT_COLUMNS.items():
+        if col_idx >= len(row):
+            continue
+        applicability, exp_date = _employee_permit_cell(row[col_idx])
+        if ptype not in resolved:
+            resolved[ptype] = (applicability, exp_date)
+            continue
+
+        _prev_app, prev_date = resolved[ptype]
+        if exp_date and (prev_date is None or exp_date > prev_date):
+            resolved[ptype] = (applicability, exp_date)
+        elif prev_date is None and exp_date is None and applicability == 'N/A':
+            resolved[ptype] = (applicability, prev_date)
+    return resolved
 
 
 # ── EQUIPMENT SHEET COLUMN MAPPING ─────────────────────────────────────
@@ -1911,41 +2014,7 @@ def import_data():
                     continue
                 if existing:
                     # Update permits for existing employee
-                    permit_map = {
-                        7: 'NTSP',
-                        8: 'TWIC',
-                        9: 'CERT_MEDICO',
-                        10: 'ANTECEDENTES',
-                        11: 'RECORD_CHOFERIL',
-                        13: 'HM126',
-                        14: 'HM232',
-                        15: 'PRIMEROS_AUXILIOS',
-                    }
-                    for col_idx, ptype in permit_map.items():
-                        if col_idx >= len(row):
-                            continue
-                        val = row[col_idx]
-                        applicability = 'YES'
-                        exp_date = None
-
-                        if val is None:
-                            applicability = 'YES'
-                            exp_date = None
-                        elif isinstance(val, str):
-                            val_upper = val.strip().upper()
-                            if val_upper in ('N/A', 'NA', ''):
-                                applicability = 'N/A'
-                            elif val_upper in ('NO',):
-                                applicability = 'N/A'
-                        elif hasattr(val, 'date'):
-                            d = val.date() if hasattr(val, 'date') else val
-                            if hasattr(d, 'year') and d.year < 2000:
-                                try:
-                                    d = d.replace(year=d.year + 100)
-                                except ValueError:
-                                    pass
-                            exp_date = d
-
+                    for ptype, (applicability, exp_date) in _resolve_employee_permits(row).items():
                         permit = EmployeePermit.query.filter_by(
                             employee_id=existing.id, permit_type=ptype
                         ).first()
@@ -2010,42 +2079,7 @@ def import_data():
                 db.session.flush()
 
                 # Create permits from columns
-                permit_map = {
-                    7: 'NTSP',
-                    8: 'TWIC',
-                    9: 'CERT_MEDICO',
-                    10: 'ANTECEDENTES',
-                    11: 'RECORD_CHOFERIL',
-                    13: 'HM126',
-                    14: 'HM232',
-                    15: 'PRIMEROS_AUXILIOS',
-                }
-
-                for col_idx, ptype in permit_map.items():
-                    if col_idx >= len(row):
-                        continue
-                    val = row[col_idx]
-                    applicability = 'YES'
-                    exp_date = None
-
-                    if val is None:
-                        applicability = 'YES'  # Applicable but missing
-                        exp_date = None
-                    elif isinstance(val, str):
-                        val_upper = val.strip().upper()
-                        if val_upper in ('N/A', 'NA', ''):
-                            applicability = 'N/A'
-                        elif val_upper in ('NO',):
-                            applicability = 'N/A'
-                    elif hasattr(val, 'date'):
-                        d = val.date() if hasattr(val, 'date') else val
-                        if hasattr(d, 'year') and d.year < 2000:
-                            try:
-                                d = d.replace(year=d.year + 100)
-                            except ValueError:
-                                pass
-                        exp_date = d
-
+                for ptype, (applicability, exp_date) in _resolve_employee_permits(row).items():
                     permit = EmployeePermit(
                         employee_id=emp.id,
                         permit_type=ptype,
@@ -2598,8 +2632,12 @@ def export_excel():
     wb.remove(wb.active)  # drop the default sheet; we create named ones
 
     if employees:
+        # Legacy codes get a column only while rows still carry them, so the
+        # sheet doesn't grow a permanently empty HM-232 column after the merge.
+        emp_permit_types = [(c, l) for c, l in EMPLOYEE_PERMIT_TYPES if c != 'OTHER'] \
+                           + _legacy_employee_permit_types()
         emp_headers = ['Empresa', 'Nombre', 'Área', 'Puesto', 'Licencia'] + \
-                      [label for _code, label in EMPLOYEE_PERMIT_TYPES if _code != 'OTHER']
+                      [label for _code, label in emp_permit_types]
         ws = new_sheet(wb, 'Empleados', emp_headers,
                        [10, 28, 16, 16, 12] + [14] * (len(emp_headers) - 5))
         for r, emp in enumerate(employees, start=2):
@@ -2610,9 +2648,7 @@ def export_excel():
             write_date_cell(ws, r, 5, emp.license_expiration)
             permits_by_type = {p.permit_type: p for p in emp.permits}
             col = 6
-            for code, _label in EMPLOYEE_PERMIT_TYPES:
-                if code == 'OTHER':
-                    continue
+            for code, _label in emp_permit_types:
                 write_permit_cell(ws, r, col, permits_by_type.get(code))
                 col += 1
 
@@ -3221,6 +3257,100 @@ def migrate_shared_insurance(dry_run):
         db.session.commit()
 
     print(f'{prefix}Shared-insurance migration complete.')
+
+
+@app.cli.command('merge-hm-permits')
+@click.option('--dry-run', is_flag=True, help='Preview changes without modifying the database.')
+def merge_hm_permits(dry_run):
+    """Merge each employee's HM-232 permit into the merged HM-126 slot.
+
+    HM-126 and HM-232 are one certification (one document, one expiration), so
+    HM232 was dropped from EMPLOYEE_PERMIT_TYPES. Surviving rows are folded into
+    the HM126 row where that is unambiguous; a pair carrying genuinely distinct
+    dates or two distinct documents is LEFT ALONE and reported, so no real data
+    is lost (those render as "HM-232 (legado)"). Idempotent.
+
+    Deliberately not @protect_uploaded_files()-decorated: that guard exists to
+    stop *imports* touching documents and would raise ProtectedFileError on the
+    legitimate file transfer below (same reasoning as `flask dedup`)."""
+    prefix = '[DRY RUN] ' if dry_run else ''
+
+    MERGE_FIELDS = ('expiration_date', 'permit_number', 'issuing_authority',
+                    'file_path', 'renewal_cost', 'notes')
+
+    legacy = EmployeePermit.query.filter_by(permit_type='HM232').all()
+    if not legacy:
+        print(f'{prefix}No hay permisos HM-232 pendientes — nada que fusionar.')
+        return
+
+    renombrados = fusionados = 0
+    conflictos = []
+
+    for old in legacy:
+        emp = Employee.query.get(old.employee_id)
+        who = emp.name if emp else f'empleado #{old.employee_id}'
+        keeper = EmployeePermit.query.filter_by(
+            employee_id=old.employee_id, permit_type='HM126'
+        ).first()
+
+        if not keeper:
+            # Nothing to merge into — rename in place, preserving id/file/dates.
+            print(f'  {prefix}{who}: HM-232 → HM-126 (id={old.id}, '
+                  f'exp={old.expiration_date}, doc={"sí" if old.file_path else "no"})')
+            if not dry_run:
+                old.permit_type = 'HM126'
+            renombrados += 1
+            continue
+
+        keeper_blank = keeper.expiration_date is None and not keeper.file_path
+        old_blank = old.expiration_date is None and not old.file_path
+        same_date = keeper.expiration_date == old.expiration_date
+        same_doc = (not old.file_path) or old.file_path == keeper.file_path
+
+        if keeper_blank:
+            # The usual case: employee_detail's write-on-read backfill already
+            # created an empty N/A HM126 slot. Move the real data into it.
+            print(f'  {prefix}{who}: HM-232 (id={old.id}) → HM-126 vacío (id={keeper.id})')
+            if not dry_run:
+                for field in MERGE_FIELDS:
+                    if not getattr(keeper, field):
+                        setattr(keeper, field, getattr(old, field))
+                keeper.applicability = old.applicability or keeper.applicability
+                # file_path was transferred — do NOT delete_stored_file here
+                db.session.delete(old)
+            fusionados += 1
+        elif old_blank:
+            # Also common: the backfill left an empty HM-232 slot beside a real
+            # HM-126. There is nothing to preserve, and it is not a conflict.
+            print(f'  {prefix}{who}: HM-232 (id={old.id}) sin datos — se elimina')
+            if not dry_run:
+                db.session.delete(old)
+            fusionados += 1
+        elif same_date and same_doc:
+            # Redundant copy of the same certification — drop it. The blob is
+            # either absent or shared with the keeper, so it is never deleted.
+            print(f'  {prefix}{who}: HM-232 (id={old.id}) duplica HM-126 — se elimina')
+            if not dry_run:
+                db.session.delete(old)
+            fusionados += 1
+        else:
+            conflictos.append(
+                f'  - {who}: HM-126 exp={keeper.expiration_date} '
+                f'doc={"sí" if keeper.file_path else "no"} | '
+                f'HM-232 exp={old.expiration_date} '
+                f'doc={"sí" if old.file_path else "no"}'
+            )
+
+    if conflictos:
+        print(f'\n{prefix}Conflictos (fechas o documentos distintos — se conservan ambos):')
+        for line in conflictos:
+            print(line)
+
+    if not dry_run:
+        db.session.commit()
+
+    print(f'\n{prefix}Fusión HM-126/HM-232 completa: {renombrados} renombrados, '
+          f'{fusionados} fusionados, {len(conflictos)} conflictos.')
 
 
 @app.cli.command('send-notifications')
