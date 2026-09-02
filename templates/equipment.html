@@ -248,7 +248,9 @@
             {% for permit in permits %}
             <div class="permit-card permit-{{ permit.status }}">
                 <div class="permit-card-header">
-                    <span class="permit-name">{{ permit.display_name }}</span>
+                    {# The vehicle's own SEGURO card is titled by its policy choice
+                       (e.g. "Seguro Compulsorio"); every other permit uses its own name. #}
+                    <span class="permit-name">{% if permit.permit_type == 'SEGURO' %}{{ equipment.own_insurance_label }}{% else %}{{ permit.display_name }}{% endif %}</span>
                     <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
                 </div>
                 <div class="permit-card-body">

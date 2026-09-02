@@ -359,23 +359,30 @@ class Equipment(db.Model):
         """CompanyPermit type of the shared policy covering this vehicle.
 
         None means the vehicle is on its own per-vehicle SEGURO permit (Personal
-        equipment, or an explicit INSURANCE_OWN choice). This is the single place
-        the policy is resolved — detail view, Excel and PDF all read it.
+        equipment, or an explicit SELF_INSURANCE_TYPES choice — INSURANCE_OWN or
+        INSURANCE_COMPULSORY). This is the single place the policy is resolved —
+        detail view, Excel and PDF all read it.
         """
         if self.company not in ('LB', 'PLI'):
             return None
         choice = self.insurance_policy_type
-        if choice == INSURANCE_OWN:
+        if choice in SELF_INSURANCE_TYPES:
             return None
         if choice in set(INSURANCE_TYPE_BY_CLASS.values()):
             return choice
         # NULL (or a stale/unknown code) ⇒ automática: follow the equipment class.
+        # Compulsorio is absent from this map on purpose — it is never auto-applied.
         cls = self.equipment_class or classify_equipment(self.model, self.equipment_type)
         return INSURANCE_TYPE_BY_CLASS.get(cls, 'SEGURO_TRUCK')
 
     @property
     def insurance_card_title(self):
         return INSURANCE_CARD_TITLES.get(self.insurance_permit_type, 'Seguro (compartido)')
+
+    @property
+    def own_insurance_label(self):
+        """Header for the vehicle's own SEGURO permit card (Compulsorio vs ordinary)."""
+        return INSURANCE_OWN_TITLES.get(self.insurance_policy_type, 'Seguro / Insurance')
 
     @property
     def permit_status_summary(self):
@@ -500,6 +507,22 @@ INSURANCE_CARD_TITLES = {
 # Sentinel stored in Equipment.insurance_policy_type when the vehicle carries its
 # own policy instead of one of the shared company policies.
 INSURANCE_OWN = 'OWN'
+
+# Compulsorio is a per-vehicle policy — its expiration date lives on the vehicle's
+# own SEGURO EquipmentPermit, exactly like INSURANCE_OWN — NOT a company policy.
+# Available to every company (LB, PLI and Personal), and never auto-applied: it is
+# deliberately absent from INSURANCE_TYPE_BY_CLASS so only an explicit choice sets it.
+INSURANCE_COMPULSORY = 'COMPULSORIO'
+
+# Choices meaning "this vehicle carries its own SEGURO permit" rather than a shared
+# company policy. Both keep the per-vehicle SEGURO permit editable ('YES').
+SELF_INSURANCE_TYPES = (INSURANCE_OWN, INSURANCE_COMPULSORY)
+
+# Header for the vehicle's own SEGURO permit card, keyed by the stored choice.
+# Anything not listed here (INSURANCE_OWN, Personal, NULL) keeps the plain name.
+INSURANCE_OWN_TITLES = {
+    INSURANCE_COMPULSORY: 'Seguro Compulsorio',
+}
 
 # (code, label) options for the equipment form's "Póliza de Seguro" select —
 # derived from COMPANY_PERMIT_TYPES so the labels live in exactly one place.

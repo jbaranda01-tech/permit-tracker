@@ -35,7 +35,8 @@ from models import (
     EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
     EQUIPMENT_CLASSES, classify_equipment,
     INSURANCE_TYPE_BY_CLASS,
-    INSURANCE_OWN, INSURANCE_POLICY_CHOICES, sync_vehicle_insurance_permit,
+    INSURANCE_OWN, INSURANCE_COMPULSORY, INSURANCE_POLICY_CHOICES,
+    sync_vehicle_insurance_permit,
 )
 from list_prefs import (
     DASHBOARD_PREF_PARAMS, restore_list_args, remember_list_args,
@@ -1283,13 +1284,18 @@ def _resolve_insurance_policy(form, company):
     """Validated insurance choice from the form select.
 
     None = automática (follow the equipment class); a SEGURO_* code = that shared
-    company policy; INSURANCE_OWN = the vehicle's own per-vehicle SEGURO permit.
+    company policy; INSURANCE_OWN = the vehicle's own per-vehicle SEGURO permit;
+    INSURANCE_COMPULSORY = its own permit too, labeled as the compulsory policy.
     Unknown values silently reset to automática (the dashboard filter idiom).
     Personal equipment has no shared policies, so it is always on its own.
     """
+    choice = form.get('insurance_policy_type', '')
+    # Compulsorio is a per-vehicle policy, so it is valid for every company —
+    # including Personal, which otherwise falls through to its own policy.
+    if choice == INSURANCE_COMPULSORY:
+        return choice
     if company not in ('LB', 'PLI'):
         return INSURANCE_OWN
-    choice = form.get('insurance_policy_type', '')
     if choice == INSURANCE_OWN or choice in set(INSURANCE_TYPE_BY_CLASS.values()):
         return choice
     return None
