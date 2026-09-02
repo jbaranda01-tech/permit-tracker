@@ -492,6 +492,10 @@ COMPANY_PERMIT_TYPES = [
     ('NMFTA_CERT', 'Certificado NMFTA', ['PLI']),
     ('USDOT_BIENNIAL', 'USDOT Biennial Report', ['LB', 'PLI']),
     ('NTSP_FRANCHISE', 'Franquicia NTSP', ['LB', 'PLI']),
+    ('REG_COMERCIANTE_CARRETERA', 'Registro de Comerciante — Transporte de Carga (Carretera)', ['PLI']),
+    ('REG_COMERCIANTE_OTROS', 'Registro de Comerciante — Transporte de Carga (Otros Servicios)', ['PLI']),
+    ('REG_COMERCIANTE_GENERADORES', 'Registro de Comerciante — Generadores', ['LB']),
+    ('REG_COMERCIANTE_COMBUSTIBLE', 'Registro de Comerciante — Combustible', ['LB']),
 ]
 
 # Shared insurance is split per equipment class (one policy covers all LB/PLI

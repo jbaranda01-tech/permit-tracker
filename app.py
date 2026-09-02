@@ -2698,7 +2698,7 @@ def export_excel():
     if company_permits:
         ws = new_sheet(wb, 'Empresa',
                        ['Empresa', 'Permiso', 'Vence', 'Número', 'Autoridad'],
-                       [10, 28, 14, 20, 24])
+                       [10, 45, 14, 20, 24])
         for r, cp in enumerate(company_permits, start=2):
             ws.cell(row=r, column=1, value=cp.company)
             ws.cell(row=r, column=2, value=cp.display_name)
