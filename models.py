@@ -303,7 +303,8 @@ class Equipment(db.Model):
     insurance_company = db.Column(db.String(200))
     # Which insurance policy covers this vehicle. NULL = automática (derive from
     # equipment_class), a SEGURO_* code = that shared CompanyPermit, INSURANCE_OWN
-    # = the vehicle carries its own editable per-vehicle SEGURO permit.
+    # = not covered by a company policy, so it carries its own compulsorio on its
+    # editable per-vehicle SEGURO permit.
     insurance_policy_type = db.Column(db.String(30))
     cost = db.Column(db.Numeric(10, 2))
     notes = db.Column(db.Text)
@@ -369,31 +370,27 @@ class Equipment(db.Model):
     def insurance_permit_type(self):
         """CompanyPermit type of the shared policy covering this vehicle.
 
-        None means the vehicle is on its own per-vehicle SEGURO permit (Personal
-        equipment, or an explicit SELF_INSURANCE_TYPES choice — INSURANCE_OWN or
-        INSURANCE_COMPULSORY). This is the single place the policy is resolved —
-        detail view, Excel and PDF all read it.
+        None means the vehicle is not on a company policy and carries its own
+        compulsorio on its per-vehicle SEGURO permit (Personal equipment, or an
+        explicit INSURANCE_OWN choice). This is the single place the policy is
+        resolved — detail view, Excel and PDF all read it.
         """
         if self.company not in ('LB', 'PLI'):
             return None
         choice = self.insurance_policy_type
-        if choice in SELF_INSURANCE_TYPES:
+        choice = LEGACY_INSURANCE_POLICY_TYPES.get(choice, choice)
+        if choice == INSURANCE_OWN:
             return None
         if choice in set(INSURANCE_TYPE_BY_CLASS.values()):
             return choice
         # NULL (or a stale/unknown code) ⇒ automática: follow the equipment class.
-        # Compulsorio is absent from this map on purpose — it is never auto-applied.
+        # The compulsorio is never reached from here — only an explicit choice.
         cls = self.equipment_class or classify_equipment(self.model, self.equipment_type)
         return INSURANCE_TYPE_BY_CLASS.get(cls, 'SEGURO_TRUCK')
 
     @property
     def insurance_card_title(self):
         return INSURANCE_CARD_TITLES.get(self.insurance_permit_type, 'Seguro (compartido)')
-
-    @property
-    def own_insurance_label(self):
-        """Header for the vehicle's own SEGURO permit card (Compulsorio vs ordinary)."""
-        return INSURANCE_OWN_TITLES.get(self.insurance_policy_type, 'Seguro / Insurance')
 
     @property
     def permit_status_summary(self):
@@ -515,25 +512,16 @@ INSURANCE_CARD_TITLES = {
     'SEGURO_GENERATOR': 'Seguro de generadores (compartido)',
 }
 
-# Sentinel stored in Equipment.insurance_policy_type when the vehicle carries its
-# own policy instead of one of the shared company policies.
+# Sentinel stored in Equipment.insurance_policy_type when the vehicle is NOT
+# covered by a company policy: it carries its own compulsorio, tracked on its
+# per-vehicle SEGURO permit. Labeled "Compulsorio" in the equipment form.
 INSURANCE_OWN = 'OWN'
 
-# Compulsorio is a per-vehicle policy — its expiration date lives on the vehicle's
-# own SEGURO EquipmentPermit, exactly like INSURANCE_OWN — NOT a company policy.
-# Available to every company (LB, PLI and Personal), and never auto-applied: it is
-# deliberately absent from INSURANCE_TYPE_BY_CLASS so only an explicit choice sets it.
-INSURANCE_COMPULSORY = 'COMPULSORIO'
-
-# Choices meaning "this vehicle carries its own SEGURO permit" rather than a shared
-# company policy. Both keep the per-vehicle SEGURO permit editable ('YES').
-SELF_INSURANCE_TYPES = (INSURANCE_OWN, INSURANCE_COMPULSORY)
-
-# Header for the vehicle's own SEGURO permit card, keyed by the stored choice.
-# Anything not listed here (INSURANCE_OWN, Personal, NULL) keeps the plain name.
-INSURANCE_OWN_TITLES = {
-    INSURANCE_COMPULSORY: 'Seguro Compulsorio',
-}
+# Retired: 'Compulsorio' briefly had its own code before it was merged into
+# INSURANCE_OWN — they are one state (a unit not covered by a company policy).
+# Accepted on read so a row saved during that window never falls through to the
+# class fallback and reads as company-covered; the boot migration rewrites them.
+LEGACY_INSURANCE_POLICY_TYPES = {'COMPULSORIO': INSURANCE_OWN}
 
 # (code, label) options for the equipment form's "Póliza de Seguro" select —
 # derived from COMPANY_PERMIT_TYPES so the labels live in exactly one place.

@@ -36,7 +36,7 @@ from models import (
     EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
     EQUIPMENT_CLASSES, classify_equipment,
     INSURANCE_TYPE_BY_CLASS,
-    INSURANCE_OWN, INSURANCE_COMPULSORY, INSURANCE_POLICY_CHOICES,
+    INSURANCE_OWN, LEGACY_INSURANCE_POLICY_TYPES, INSURANCE_POLICY_CHOICES,
     sync_vehicle_insurance_permit,
 )
 from list_prefs import (
@@ -1387,18 +1387,17 @@ def _resolve_insurance_policy(form, company):
     """Validated insurance choice from the form select.
 
     None = automática (follow the equipment class); a SEGURO_* code = that shared
-    company policy; INSURANCE_OWN = the vehicle's own per-vehicle SEGURO permit;
-    INSURANCE_COMPULSORY = its own permit too, labeled as the compulsory policy.
+    company policy; INSURANCE_OWN = not covered by a company policy, so the vehicle
+    carries its own compulsorio on its per-vehicle SEGURO permit.
     Unknown values silently reset to automática (the dashboard filter idiom).
-    Personal equipment has no shared policies, so it is always on its own.
+    Personal equipment has no company policies, so it is always on the compulsorio.
     """
-    choice = form.get('insurance_policy_type', '')
-    # Compulsorio is a per-vehicle policy, so it is valid for every company —
-    # including Personal, which otherwise falls through to its own policy.
-    if choice == INSURANCE_COMPULSORY:
-        return choice
     if company not in ('LB', 'PLI'):
         return INSURANCE_OWN
+    choice = form.get('insurance_policy_type', '')
+    # A stale open tab may still post the retired 'Compulsorio' code; map it onto
+    # the surviving sentinel rather than silently resetting to automática.
+    choice = LEGACY_INSURANCE_POLICY_TYPES.get(choice, choice)
     if choice == INSURANCE_OWN or choice in set(INSURANCE_TYPE_BY_CLASS.values()):
         return choice
     return None
@@ -3431,6 +3430,16 @@ with app.app_context():
 
         # Rename CPR → PRIMEROS_AUXILIOS in existing records
         db.session.execute(db.text("UPDATE employee_permits SET permit_type = 'PRIMEROS_AUXILIOS' WHERE permit_type = 'CPR'"))
+        db.session.commit()
+
+        # Fold the retired per-vehicle insurance codes onto their replacement.
+        # 'Compulsorio' shipped briefly as its own code before it was merged into
+        # INSURANCE_OWN (one state: not covered by a company policy). Idempotent.
+        for legacy_code, replacement in LEGACY_INSURANCE_POLICY_TYPES.items():
+            db.session.execute(
+                db.text('UPDATE equipment SET insurance_policy_type = :new '
+                        'WHERE insurance_policy_type = :old'),
+                {'new': replacement, 'old': legacy_code})
         db.session.commit()
 
         # Merge the retired five-status issue vocabulary into the current three.

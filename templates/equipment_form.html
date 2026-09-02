@@ -98,12 +98,11 @@
                         {% for code, label in insurance_policy_choices %}
                         <option value="{{ code }}" class="policy-shared" {% if sel_policy == code %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
-                        <option value="OWN" {% if sel_policy == 'OWN' %}selected{% endif %}>Póliza propia del vehículo</option>
-                        {# Compulsorio is per-vehicle, so it deliberately carries no
-                           .policy-shared class — it stays enabled for Personal too. #}
-                        <option value="COMPULSORIO" {% if sel_policy == 'COMPULSORIO' %}selected{% endif %}>Seguro Compulsorio (por vehículo)</option>
+                        {# The compulsorio is the one non-company answer: a unit not
+                           covered by a company policy carries it on its own SEGURO permit. #}
+                        <option value="OWN" {% if sel_policy == 'OWN' %}selected{% endif %}>Compulsorio</option>
                     </select>
-                    <small class="text-muted-sm">Las pólizas compartidas se editan en la vista Empresa. El Compulsorio se registra en este vehículo.</small>
+                    <small class="text-muted-sm">Las pólizas de empresa se editan en la vista Empresa. El compulsorio se registra en este vehículo.</small>
                 </div>
                 <div class="form-group">
                     <label for="cost">Costo ($)</label>
@@ -132,9 +131,7 @@
 </div>
 
 <script>
-// Personal equipment has no shared company policies — force "Póliza propia",
-// but only when the current pick is one of the options just disabled, so a
-// per-vehicle choice (Compulsorio) survives switching the company to Personal.
+// Personal equipment has no company policies — force the compulsorio.
 // The server enforces the same rule in _resolve_insurance_policy regardless.
 (function () {
     var company = document.getElementById('company');
@@ -145,8 +142,7 @@
         policy.querySelectorAll('option.policy-shared').forEach(function (opt) {
             opt.disabled = personal;
         });
-        var selected = policy.selectedOptions[0];
-        if (personal && selected && selected.disabled) policy.value = 'OWN';
+        if (personal) policy.value = 'OWN';
     }
     company.addEventListener('change', syncPolicyOptions);
     syncPolicyOptions();

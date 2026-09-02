@@ -248,9 +248,7 @@
             {% for permit in permits %}
             <div class="permit-card permit-{{ permit.status }}">
                 <div class="permit-card-header">
-                    {# The vehicle's own SEGURO card is titled by its policy choice
-                       (e.g. "Seguro Compulsorio"); every other permit uses its own name. #}
-                    <span class="permit-name">{% if permit.permit_type == 'SEGURO' %}{{ equipment.own_insurance_label }}{% else %}{{ permit.display_name }}{% endif %}</span>
+                    <span class="permit-name">{{ permit.display_name }}</span>
                     <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
                 </div>
                 <div class="permit-card-body">
@@ -270,6 +268,11 @@
                     <a href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank" class="file-link">
                         <i class="fas fa-paperclip"></i> Ver documento
                     </a>
+                    {% endif %}
+                    {% if permit.permit_type == 'SEGURO' and not equipment.insurance_permit_type %}
+                    <p class="permit-shared-note">
+                        <i class="fas fa-info-circle"></i> Compulsorio — no cubierto por una póliza de empresa.
+                    </p>
                     {% endif %}
                 </div>
                 {% if current_user.is_manager %}
