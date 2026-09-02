@@ -1594,6 +1594,75 @@ th.sort-desc .sort-arrow { opacity: 1; color: var(--accent2); }
 
 .inline-edit-form .form-group { min-width: 150px; }
 
+/* ── Password reset (admin users) ──────────────────────────────────── */
+/* Eye-toggle inside a password field. Note .input-icon (used on login) puts
+   its icon on the LEFT and is not reusable here. */
+.input-with-toggle { position: relative; }
+.input-with-toggle input { width: 100%; padding-right: 40px; }
+.input-toggle-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+}
+.input-toggle-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.input-toggle-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+
+.pw-reset-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
+
+/* Amber, not green: the message is "copy this now, it disappears" -- a
+   warning, not a success. The success flash is the green one. */
+.pw-reveal {
+    margin-bottom: var(--space-md);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    background: var(--color-expiring-bg);
+    border: 1px solid var(--color-expiring);
+}
+.pw-reveal-label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-tertiary);
+}
+.pw-reveal-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-top: var(--space-xs);
+}
+/* user-select:all -- one click selects the whole password, which is the
+   manual fallback when clipboard access is denied. */
+.pw-reveal-value {
+    font-family: var(--font-mono);
+    font-size: 1.05rem;
+    letter-spacing: 0.06em;
+    user-select: all;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    word-break: break-all;
+}
+.pw-reveal-note {
+    margin-top: var(--space-xs);
+    font-size: 0.78rem;
+    color: var(--color-expiring-text);
+}
+
 
 /* ── Modal ─────────────────────────────────────────────────────────── */
 .modal-overlay {
@@ -1848,6 +1917,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 
     /* Keep small buttons a comfortable tap target */
     .btn-sm { min-height: 40px; }
+
+    /* Password eye-toggle: real 44px tap target, with room made for it */
+    .input-toggle-btn { width: 44px; height: 44px; }
+    .input-with-toggle input { padding-right: 48px; }
 
     /* Inline queue-row status select: compact on desktop, real target on touch */
     .issue-row-status-form select { min-height: 40px; }

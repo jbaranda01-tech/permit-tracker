@@ -24,7 +24,13 @@
                 </div>
                 <div class="form-group">
                     <label for="password">Contraseña</label>
-                    <input type="password" id="password" name="password" required minlength="6">
+                    <div class="input-with-toggle">
+                        <input type="password" id="password" name="password" required minlength="6" autocomplete="new-password">
+                        <button type="button" class="input-toggle-btn" aria-pressed="false"
+                                aria-label="Mostrar contraseña" onclick="togglePasswordVisibility(this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="role">Rol</label>
@@ -79,8 +85,11 @@
                     <td>{{ user.created_at.strftime('%m/%d/%Y') if user.created_at else '—' }}</td>
                     <td>
                         <div class="table-actions">
-                            <button class="btn btn-ghost btn-sm" onclick="toggleEditUser({{ user.id }})">
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditUser({{ user.id }})">
                                 <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="toggleUserPanel({{ user.id }}, 'pw')">
+                                <i class="fas fa-key"></i> Contraseña
                             </button>
                             {% if user.id != current_user.id %}
                             <form method="POST" action="{{ url_for('admin_user_delete', id=user.id) }}" style="display:inline"
@@ -120,12 +129,70 @@
                                     </div>
                                     <div class="form-group">
                                         <label>Nueva Contraseña (dejar vacío para no cambiar)</label>
-                                        <input type="password" name="password">
+                                        <div class="input-with-toggle">
+                                            <input type="password" name="password" autocomplete="new-password">
+                                            <button type="button" class="input-toggle-btn" aria-pressed="false"
+                                                    aria-label="Mostrar contraseña" onclick="togglePasswordVisibility(this)">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="form-group" style="align-self:flex-end">
                                         <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
                                     </div>
                                 </div>
+                            </form>
+                        </div>
+
+                        <div id="pw-user-{{ user.id }}" class="inline-edit-form pw-reset-form"
+                             style="display:{% if reveal_user_id == user.id or open_user_id == user.id %}block{% else %}none{% endif %}">
+                            {% if reveal_user_id == user.id %}
+                            <div class="pw-reveal">
+                                <div class="pw-reveal-label">Nueva contraseña de {{ user.username }}</div>
+                                <div class="pw-reveal-row">
+                                    <code class="pw-reveal-value" id="pw-reveal-{{ user.id }}">{{ reveal_password }}</code>
+                                    <button type="button" class="btn btn-secondary btn-sm"
+                                            onclick="copyRevealedPassword({{ user.id }}, this)">
+                                        <i class="fas fa-copy"></i> Copiar
+                                    </button>
+                                </div>
+                                <div class="pw-reveal-note">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Se muestra una sola vez. Cópiela y entréguela al empleado antes de salir de esta página.
+                                </div>
+                            </div>
+                            {% endif %}
+                            <form method="POST" action="{{ url_for('admin_user_reset_password', id=user.id) }}"
+                                  autocomplete="off"
+                                  onsubmit="return confirmPwReset('{{ user.username|e }}')">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="pw-input-{{ user.id }}">Nueva contraseña para {{ user.username }}</label>
+                                        <div class="input-with-toggle">
+                                            <input type="password" id="pw-input-{{ user.id }}" name="new_password"
+                                                   required minlength="6" autocomplete="new-password" spellcheck="false">
+                                            <button type="button" class="input-toggle-btn" aria-pressed="false"
+                                                    aria-label="Mostrar contraseña" onclick="togglePasswordVisibility(this)">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="align-self:flex-end">
+                                        <div class="pw-reset-actions">
+                                            <button type="button" class="btn btn-secondary btn-sm"
+                                                    onclick="fillGeneratedPassword({{ user.id }})">
+                                                <i class="fas fa-random"></i> Generar
+                                            </button>
+                                            <button type="submit" class="btn btn-primary btn-sm">
+                                                <i class="fas fa-key"></i> Restablecer
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if user.id == current_user.id %}
+                                <p class="pw-reveal-note">Es su propia cuenta: su sesión actual seguirá abierta, pero deberá
+                                   usar la nueva contraseña la próxima vez que inicie sesión.</p>
+                                {% endif %}
                             </form>
                         </div>
                     </td>
@@ -137,9 +204,126 @@
 </div>
 
 <script>
-function toggleEditUser(id) {
-    const form = document.getElementById('edit-user-' + id);
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+// Password characters, minus the ambiguous 0/O/1/l/I that get misread when a
+// generated password is written down or read aloud to an employee.
+var PW_UPPER = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+var PW_LOWER = 'abcdefghijkmnpqrstuvwxyz';
+var PW_DIGIT = '23456789';
+
+// The two inline panels share one <td>; opening either closes the other so the
+// row doesn't grow two stacked blocks.
+function toggleUserPanel(id, which) {
+    var edit = document.getElementById('edit-user-' + id);
+    var pw = document.getElementById('pw-user-' + id);
+    var target = which === 'pw' ? pw : edit;
+    var other = which === 'pw' ? edit : pw;
+    if (!target) return;
+    if (other) other.style.display = 'none';
+    target.style.display = target.style.display === 'none' ? 'block' : 'none';
+    if (target.style.display === 'block') {
+        var input = target.querySelector('input:not([type=checkbox])');
+        if (input) input.focus();
+    }
 }
+
+// Kept so the existing onclick="toggleEditUser(id)" call sites keep working.
+function toggleEditUser(id) { toggleUserPanel(id, 'edit'); }
+
+function togglePasswordVisibility(btn) {
+    var input = btn.parentElement.querySelector('input');
+    if (!input) return;
+    var show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+    btn.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    var icon = btn.querySelector('i');
+    if (icon) icon.className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+}
+
+// Rejection sampling -- a plain `value % n` is modulo-biased.
+function randomInt(n) {
+    var limit = Math.floor(4294967296 / n) * n;
+    var buf = new Uint32Array(1);
+    do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+    return buf[0] % n;
+}
+
+function pickChar(alphabet) {
+    return alphabet.charAt(randomInt(alphabet.length));
+}
+
+function generatePassword(length) {
+    if (!window.crypto || !window.crypto.getRandomValues) return null;
+    var all = PW_UPPER + PW_LOWER + PW_DIGIT;
+    // Guarantee one of each class, then fill and Fisher-Yates shuffle so they
+    // aren't pinned to the first three positions.
+    var chars = [pickChar(PW_UPPER), pickChar(PW_LOWER), pickChar(PW_DIGIT)];
+    while (chars.length < length) chars.push(pickChar(all));
+    for (var i = chars.length - 1; i > 0; i--) {
+        var j = randomInt(i + 1);
+        var t = chars[i]; chars[i] = chars[j]; chars[j] = t;
+    }
+    return chars.join('');
+}
+
+function fillGeneratedPassword(id) {
+    var input = document.getElementById('pw-input-' + id);
+    var pw = generatePassword(12);
+    if (!pw) {
+        alert('Este navegador no permite generar contraseñas seguras. Escriba una manualmente.');
+        return;
+    }
+    input.value = pw;
+    // Always reveal what was generated -- a password the admin can't see is useless.
+    input.type = 'text';
+    var btn = input.parentElement.querySelector('.input-toggle-btn');
+    if (btn) {
+        btn.setAttribute('aria-pressed', 'true');
+        btn.setAttribute('aria-label', 'Ocultar contraseña');
+        var icon = btn.querySelector('i');
+        if (icon) icon.className = 'fas fa-eye-slash';
+    }
+}
+
+function confirmPwReset(username) {
+    return confirm('¿Restablecer la contraseña de ' + username + '?');
+}
+
+function copyRevealedPassword(id, btn) {
+    var el = document.getElementById('pw-reveal-' + id);
+    if (!el) return;
+    var text = el.textContent;
+    var done = function (ok) {
+        var orig = btn.innerHTML;
+        btn.innerHTML = ok ? '<i class="fas fa-check"></i> Copiado'
+                           : '<i class="fas fa-times"></i> Copie manualmente';
+        setTimeout(function () { btn.innerHTML = orig; }, 2000);
+    };
+    // execCommand fallback: the clipboard API needs a secure context, and this
+    // page gets demoed over plain http on a LAN IP.
+    var legacy = function () {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        document.body.removeChild(ta);
+        return ok;
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(function () { done(true); },
+                                                 function () { done(legacy()); });
+    } else {
+        done(legacy());
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var reveal = document.querySelector('.pw-reveal');
+    if (reveal) reveal.scrollIntoView({ block: 'center' });
+});
 </script>
 {% endblock %}

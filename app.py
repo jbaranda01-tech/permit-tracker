@@ -12,7 +12,7 @@ from functools import wraps
 from io import BytesIO
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, send_file, jsonify, abort, session
+    flash, send_file, jsonify, abort, session, make_response
 )
 from flask_login import (
     LoginManager, login_user, logout_user,
@@ -2721,11 +2721,30 @@ def export_excel():
 
 # ── USER MANAGEMENT ────────────────────────────────────────────────────
 
+# Minimum length for a password set through the admin screen. Matches the
+# create form's existing minlength="6" -- keep the three in sync.
+MIN_PASSWORD_LENGTH = 6
+
+
+def _render_admin_users(**extra):
+    """Single render point for the admin users screen.
+
+    The reset-password POST re-renders through here instead of redirecting:
+    flash messages auto-dismiss on a timer and the Flask session cookie is
+    signed but NOT encrypted, so neither can safely carry the one-time
+    plaintext password back to the page.
+    """
+    users = User.query.order_by(User.role, User.username).all()
+    extra.setdefault('reveal_user_id', None)
+    extra.setdefault('reveal_password', None)
+    extra.setdefault('open_user_id', None)
+    return render_template('admin_users.html', users=users, **extra)
+
+
 @app.route('/admin/users')
 @admin_required
 def admin_users():
-    users = User.query.order_by(User.role, User.username).all()
-    return render_template('admin_users.html', users=users)
+    return _render_admin_users()
 
 
 @app.route('/admin/users/new', methods=['POST'])
@@ -2768,6 +2787,34 @@ def admin_user_edit(id):
     db.session.commit()
     flash(f'Usuario {user.username} actualizado.', 'success')
     return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/users/<int:id>/reset-password', methods=['POST'])
+@admin_required
+def admin_user_reset_password(id):
+    """Set a new password for a user and show it once so the admin can hand
+    it over. Nothing is stored in plaintext -- the value exists only in this
+    request body and the response rendered from it."""
+    user = User.query.get_or_404(id)
+    # Deliberately NOT stripped before storing: a password may contain spaces.
+    password = request.form.get('new_password', '')
+    if not password.strip():
+        flash('Debe indicar una contraseña.', 'danger')
+        return _render_admin_users(open_user_id=user.id), 422
+    if len(password) < MIN_PASSWORD_LENGTH:
+        flash(f'La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres.', 'danger')
+        return _render_admin_users(open_user_id=user.id), 422
+
+    user.set_password(password)
+    db.session.commit()
+    # Record that a reset happened -- never the value itself.
+    app.logger.info('Password reset for user id=%s by admin id=%s', user.id, current_user.id)
+
+    flash(f'Contraseña de {user.username} restablecida. Anótela ahora — no se volverá a mostrar.', 'success')
+    resp = make_response(_render_admin_users(reveal_user_id=user.id,
+                                             reveal_password=password))
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @app.route('/admin/users/<int:id>/delete', methods=['POST'])
