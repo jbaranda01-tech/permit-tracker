@@ -200,3 +200,5 @@ Truck issue reporting for drivers (report) and shop staff (triage/resolve).
 ## Deployment
 
 Deployed on Railway using Dockerfile. WeasyPrint requires system-level libraries (pango, cairo, gdk-pixbuf) installed in the Docker image via `apt-get`. Gunicorn runs with `--preload` for single-instance APScheduler.
+
+**SQLAlchemy is pinned to 2.0.x in `requirements.txt`** (added 2026-10-13 after a boot crash): `flask-sqlalchemy` only requires `sqlalchemy>=2.0.16`, and an unpinned build pulled 2.1, which switched the default driver for plain `postgresql://` URLs from psycopg2 to psycopg 3 — not installed in the image, so `db.init_app()` died with `ModuleNotFoundError: No module named 'psycopg'`. Moving to 2.1 means either adding `psycopg[binary]` or rewriting the URL to `postgresql+psycopg2://` in `config.py` (and updating its `startswith('postgresql://')` engine-options check).
