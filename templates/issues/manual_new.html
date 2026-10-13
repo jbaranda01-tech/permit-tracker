@@ -28,6 +28,8 @@
 
     <form method="POST" action="{{ url_for('issues.create') }}" class="report-form" id="manual-report-form">
         <input type="hidden" name="created" value="{{ created_csv }}">
+        {# Return URL from the truck profile's quick-add panel; survives a 422 re-render. #}
+        <input type="hidden" name="next" value="{{ form_data.get('next', '') }}">
         <div class="form-section">
             <h3><i class="fas fa-truck"></i> Camión</h3>
             <div class="form-group">

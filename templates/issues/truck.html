@@ -24,9 +24,10 @@
             {% if current_user.is_shop_manager %}
             <div class="detail-actions">
                 {% if not equipment.is_archived %}
-                <a href="{{ url_for('issues.new', equipment_id=equipment.id) }}" class="btn btn-primary">
+                <button type="button" class="btn btn-primary" onclick="toggleQuickReport()"
+                        aria-expanded="{{ 'true' if quick_open else 'false' }}" aria-controls="quick-report-panel">
                     <i class="fas fa-plus-circle"></i> Agregar reporte
-                </a>
+                </button>
                 {% endif %}
                 {% if current_user.is_admin %}
                 <a href="{{ url_for('equipment_detail', id=equipment.id) }}" class="btn btn-secondary">
@@ -36,6 +37,60 @@
             </div>
             {% endif %}
         </div>
+
+        {% if current_user.is_shop_manager and not equipment.is_archived %}
+        {# Inline quick-add: posts to the same issues.create route as the full
+           manual form, with the two submit buttons choosing the return URL via
+           their own name="next" value — "Guardar y agregar otro" comes back
+           with ?add=1 so the panel renders open for the next entry. #}
+        <div id="quick-report-panel" class="quick-report-panel" {% if not quick_open %}style="display:none"{% endif %}>
+            <form method="POST" action="{{ url_for('issues.create') }}" id="quick-report-form">
+                <input type="hidden" name="equipment_id" value="{{ equipment.id }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="qr-category">Categoría *</label>
+                        <select name="category" id="qr-category" required>
+                            <option value="">— Seleccionar —</option>
+                            {% for code, label in categories %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="qr-severity">Severidad *</label>
+                        <select name="severity" id="qr-severity" required>
+                            {% for code, label in severities %}
+                            <option value="{{ code }}" {% if code == 'media' %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="qr-description">Descripción del problema *</label>
+                    <textarea name="description" id="qr-description" rows="3" required autocapitalize="sentences"
+                              placeholder="Describa el problema con el mayor detalle posible..."></textarea>
+                </div>
+                <div class="quick-report-actions">
+                    <button type="submit" name="next" value="{{ url_for('issues.truck_profile', equipment_id=equipment.id) }}"
+                            class="btn btn-primary" id="qr-save-btn">
+                        <i class="fas fa-save"></i> Guardar
+                    </button>
+                    <button type="submit" name="next" value="{{ url_for('issues.truck_profile', equipment_id=equipment.id, add=1) }}"
+                            class="btn btn-secondary" id="qr-save-and-new-btn">
+                        <i class="fas fa-plus"></i> Guardar y agregar otro
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleQuickReport()">Cancelar</button>
+                    <span class="form-help">
+                        <a href="{{ url_for('issues.new', equipment_id=equipment.id) }}">Formulario completo</a>{% if current_user.is_admin %} (fechas, estado){% endif %}
+                    </span>
+                </div>
+                <p class="form-help form-shortcut-hint">
+                    <kbd>Ctrl</kbd>+<kbd>Enter</kbd> guarda &middot;
+                    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> guarda y agrega otro
+                </p>
+            </form>
+        </div>
+        {% endif %}
 
         {% if equipment.is_archived %}
         <div class="archived-banner">
@@ -146,6 +201,30 @@ function toggleSection(code) {
     chevron.classList.toggle('fa-chevron-down', !open);
     header.setAttribute('aria-expanded', open);
 }
+function toggleQuickReport() {
+    var panel = document.getElementById('quick-report-panel');
+    var btn = document.querySelector('[aria-controls="quick-report-panel"]');
+    if (!panel) return;
+    var open = panel.style.display === 'none';
+    panel.style.display = open ? '' : 'none';
+    if (btn) btn.setAttribute('aria-expanded', open);
+    if (open) { var sel = document.getElementById('qr-category'); if (sel) sel.focus(); }
+}
+(function () {
+    var form = document.getElementById('quick-report-form');
+    if (!form) return;
+    // Ctrl/Cmd+Enter saves, +Shift saves and reopens. Buttons are .click()ed
+    // (not form.submit()) so the clicked button's name="next" value is posted.
+    form.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        var btn = document.getElementById(e.shiftKey ? 'qr-save-and-new-btn' : 'qr-save-btn');
+        if (btn) btn.click();
+    });
+    {% if quick_open %}
+    var sel = document.getElementById('qr-category'); if (sel) sel.focus();
+    {% endif %}
+})();
 document.querySelectorAll('.collapsible-card-header[role="button"]').forEach(function (el) {
     el.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }

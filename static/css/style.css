@@ -1143,7 +1143,8 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
 .archived-banner i { margin-top: 2px; }
 .archived-note { margin-top: 2px; font-style: italic; opacity: 0.85; }
 
-.archive-panel {
+.archive-panel,
+.quick-report-panel {
     margin-top: var(--space-md);
     padding: var(--space-md);
     background: var(--bg-secondary);
@@ -1151,6 +1152,14 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     border: 1px solid var(--border);
 }
 .archive-panel-submit { align-self: flex-end; }
+/* Button row of the truck profile's inline quick-add report panel */
+.quick-report-actions {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: var(--space-sm);
+}
 
 .entity-card--archived .entity-name { opacity: 0.8; }
 

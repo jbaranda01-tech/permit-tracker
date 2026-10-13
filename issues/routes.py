@@ -596,6 +596,10 @@ def truck_profile(equipment_id):
                            sections=sections,
                            statuses=ISSUE_STATUSES,
                            severities=ISSUE_SEVERITIES,
+                           categories=ISSUE_CATEGORIES,
+                           # ?add=1 renders the inline quick-add panel open
+                           # (the "Guardar y agregar otro" loop lands here).
+                           quick_open=request.args.get('add') == '1',
                            resolved_statuses=RESOLVED_STATUSES,
                            open_count=len(open_issues),
                            worst_severity=worst_severity,
@@ -605,6 +609,16 @@ def truck_profile(equipment_id):
                            # queue slice; the back-link lands on the queue
                            # filtered to the same unit.
                            nav_args={'equipment_id': equipment.id})
+
+
+def _safe_next(raw, fallback):
+    """Return ``raw`` only when it is a relative path (no open redirects);
+    otherwise ``fallback``. Shared by update_status and create, which both
+    accept a POSTed ``next`` return URL."""
+    raw = raw or ''
+    if raw.startswith('/') and not raw.startswith('//'):
+        return raw
+    return fallback
 
 
 # ── ISSUE DETAIL ──────────────────────────────────────────────────────
@@ -631,9 +645,8 @@ def update_status(issue_id):
 
     # Optional return target (the queue's inline per-row form sends its own
     # filtered URL). Relative paths only — no open redirects.
-    next_url = request.form.get('next', '')
-    if not (next_url.startswith('/') and not next_url.startswith('//')):
-        next_url = url_for('issues.detail', issue_id=issue.id)
+    next_url = _safe_next(request.form.get('next', ''),
+                          url_for('issues.detail', issue_id=issue.id))
 
     valid_statuses = [s[0] for s in ISSUE_STATUSES]
     if new_status not in valid_statuses:
@@ -876,7 +889,10 @@ def create():
                                 status=status if current_user.is_admin else None,
                                 created=','.join(str(i) for i in created[-RECENT_CREATED_LIMIT:])))
 
-    return redirect(url_for('issues.detail', issue_id=issue.id))
+    # The truck profile's inline quick-add panel posts its own URL as ``next``
+    # so the user lands back on the unit with the new report in Reportados.
+    return redirect(_safe_next(request.form.get('next', ''),
+                               url_for('issues.detail', issue_id=issue.id)))
 
 
 # ── ADMIN: QUICK-ADD REPORTABLE VEHICLE ──────────────────────────────
