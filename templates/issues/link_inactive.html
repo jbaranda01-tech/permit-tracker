@@ -13,6 +13,7 @@ if ('serviceWorker' in navigator) {
 
 {% block content %}
 <div class="report-container">
+    {% if employee %}{% include 'issues/_report_logo.html' %}{% endif %}
     <div class="report-success">
         <div class="success-icon">
             <i class="fas fa-link-slash"></i>

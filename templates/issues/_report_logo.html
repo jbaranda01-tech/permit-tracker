@@ -1,0 +1,9 @@
+{# Driver-facing pages render no sidebar/topbar (unauthenticated), so each one
+   shows the driver's own company logo centered at the top via this include. #}
+<div class="report-logo">
+    {% if employee.company == 'PLI' %}
+    <img src="{{ url_for('static', filename='img/logo-pli.png') }}" alt="Professional Logistics" class="report-company-logo">
+    {% else %}
+    <img src="{{ url_for('static', filename='img/logo-lb.png') }}" alt="LB Caribe Services" class="report-company-logo">
+    {% endif %}
+</div>

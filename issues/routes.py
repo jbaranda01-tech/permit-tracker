@@ -152,7 +152,7 @@ def synthesize_status_history(issue, final_status, reported_at, resolved_at=None
 def report(token):
     employee = Employee.query.filter_by(access_token=token).first_or_404()
     if employee.is_archived:
-        return render_template('issues/link_inactive.html'), 410
+        return render_template('issues/link_inactive.html', employee=employee), 410
     trucks = reportable_equipment_list(company=employee.company)
     return render_template('issues/report.html',
                            employee=employee,
@@ -166,7 +166,7 @@ def report(token):
 def report_submit(token):
     employee = Employee.query.filter_by(access_token=token).first_or_404()
     if employee.is_archived:
-        return render_template('issues/link_inactive.html'), 410
+        return render_template('issues/link_inactive.html', employee=employee), 410
 
     equipment_id = request.form.get('equipment_id', type=int)
 
@@ -250,10 +250,11 @@ def report_submit(token):
 def report_success(token):
     employee = Employee.query.filter_by(access_token=token).first_or_404()
     if employee.is_archived:
-        return render_template('issues/link_inactive.html'), 410
+        return render_template('issues/link_inactive.html', employee=employee), 410
     issue_ids = [int(part) for part in request.args.get('issue_ids', '').split(',')
                  if part.strip().isdigit()]
-    return render_template('issues/report_success.html', token=token, issue_ids=issue_ids)
+    return render_template('issues/report_success.html', token=token, issue_ids=issue_ids,
+                           employee=employee)
 
 
 # ── SHOP QUEUE ────────────────────────────────────────────────────────
