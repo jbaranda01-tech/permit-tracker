@@ -2524,14 +2524,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
    not a forked tile style. */
 .profile-grid--overview {
     grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
+    align-items: stretch;   /* tile block and both cards share one row height */
 }
 .stat-tiles--compact {
     grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: 1fr;    /* the 2x2 tiles split the stretched height evenly */
     gap: var(--space-sm);
     margin-bottom: 0;
 }
-.stat-tiles--compact .stat-tile { padding: var(--space-sm) var(--space-md); }
+.stat-tiles--compact .stat-tile {
+    padding: var(--space-sm) var(--space-md);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
 .stat-tiles--compact .stat-tile__num { font-size: 1.35rem; }
 .stat-tiles--compact .stat-tile__label { margin-top: var(--space-xs); }
 @media (max-width: 1024px) {
