@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import company_logo %}
 {% block title %}{{ employee.name }}{% endblock %}
 {% block content %}
 <div class="detail-page">
@@ -10,9 +11,11 @@
         <div class="detail-title-row">
             <div>
                 <span class="page-kicker">Empleado</span>
-                <h1>{{ employee.name }}</h1>
+                <div class="detail-title">
+                    {{ company_logo(employee.company, employee.company_full) }}
+                    <h1>{{ employee.name }}</h1>
+                </div>
                 <div class="detail-meta">
-                    <span class="company-tag tag-{{ employee.company|lower }}">{{ employee.company_full }}</span>
                     <span class="area-tag">{{ employee.area or '—' }}</span>
                     {% if employee.is_archived %}
                     <span class="status-tag status-archivado">Archivado</span>

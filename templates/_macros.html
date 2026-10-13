@@ -1,0 +1,12 @@
+{# Shared permits-side macros. Imported with `{% from '_macros.html' import company_logo %}` — no `with context` needed, only url_for is used. #}
+
+{# Company logo for detail-page headers: LB/PLI render their logo image; anything else (Personal — equipment only) gets a neutral user icon tile. `label` (company_full) becomes the accessible name, since the header no longer shows the company as text. #}
+{% macro company_logo(company, label) -%}
+{%- if company == 'LB' -%}
+<img src="{{ url_for('static', filename='img/logo-lb.png') }}" alt="{{ label }}" class="detail-company-logo">
+{%- elif company == 'PLI' -%}
+<img src="{{ url_for('static', filename='img/logo-pli.png') }}" alt="{{ label }}" class="detail-company-logo">
+{%- else -%}
+<span class="detail-company-logo detail-company-logo--icon" role="img" aria-label="{{ label }}" title="{{ label }}"><i class="fas fa-user" aria-hidden="true"></i></span>
+{%- endif -%}
+{%- endmacro %}

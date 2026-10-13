@@ -1089,6 +1089,32 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     word-break: break-word;
 }
 
+/* Company logo beside the profile name (employee / equipment / truck profile) */
+.detail-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-xs);
+}
+.detail-title h1 { margin-bottom: 0; min-width: 0; }
+.detail-company-logo {
+    height: 40px;
+    width: auto;
+    max-width: 120px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+.detail-company-logo--icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+}
+
 .detail-meta {
     display: flex;
     gap: var(--space-sm);
@@ -1097,18 +1123,6 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
 }
 
 .detail-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
-
-.company-tag {
-    padding: 2px 10px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.tag-lb { background: var(--color-lb-light); color: var(--color-lb); }
-.tag-pli { background: var(--color-pli-light); color: var(--color-pli); }
-.tag-personal { background: var(--color-personal-light); color: var(--color-personal); }
 
 .area-tag {
     font-size: 0.85rem;
@@ -1901,7 +1915,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     .badge, .permit-badge, .col-tag, .manage-badge,
     .issue-severity, .issue-status-badge, .role-badge { font-size: 0.8rem; }
 
-    .user-role, .company-tag, .status-tag,
+    .user-role, .status-tag,
     .issue-date-compact { font-size: 0.85rem; }
 
     .entity-meta, .permit-field label, .profile-field label,
@@ -2634,6 +2648,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 
     /* Headings */
     .detail-title-row h1 { font-size: 1.3rem; }
+    .detail-title { gap: var(--space-sm); }
+    .detail-company-logo { height: 28px; }
+    .detail-company-logo--icon { width: 28px; font-size: 0.85rem; }
     .detail-actions .btn { flex: 1; min-width: 0; justify-content: center; }
 
     /* Login card */
