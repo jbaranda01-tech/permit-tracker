@@ -2519,6 +2519,34 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .stat-tile--en_proceso .stat-tile__num { color: var(--color-sev-alta); }
 .stat-tile--cerrado { border-left-color: var(--color-valid); }
 .stat-tile--cerrado .stat-tile__num { color: var(--color-valid); }
+/* Overview row: compact 2x2 tile block · Unidad · Resumen. The compact sizes
+   reuse the 480px phone-tile values so this is the one sanctioned size variant,
+   not a forked tile style. */
+.profile-grid--overview {
+    grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+}
+.stat-tiles--compact {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm);
+    margin-bottom: 0;
+}
+.stat-tiles--compact .stat-tile { padding: var(--space-sm) var(--space-md); }
+.stat-tiles--compact .stat-tile__num { font-size: 1.35rem; }
+.stat-tiles--compact .stat-tile__label { margin-top: var(--space-xs); }
+@media (max-width: 1024px) {
+    .profile-grid--overview { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .profile-grid--overview .stat-tiles--compact {
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+/* Must follow the 1024px rule: the generic 768px `.profile-grid { 1fr }` has
+   the same specificity and lives earlier in the file, so it would lose. */
+@media (max-width: 768px) {
+    .profile-grid--overview { grid-template-columns: 1fr; }
+    .profile-grid--overview .stat-tiles--compact { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
+}
 .card-body--flush { padding: 0; }
 .status-section { scroll-margin-top: calc(56px + var(--space-md)); }
 .resolved-more-note {

@@ -103,21 +103,22 @@
         {% endif %}
     </div>
 
-    {# One tile per status (anchors to the matching section) + a neutral total. #}
-    <div class="stat-tiles">
-        {% for code, label, items in sections %}
-        <a href="#sec-{{ code }}" class="stat-tile stat-tile--{{ code }}">
-            <div class="stat-tile__num">{{ items|length }}</div>
-            <div class="stat-tile__label">{{ label }}</div>
-        </a>
-        {% endfor %}
-        <div class="stat-tile">
-            <div class="stat-tile__num">{{ issues|length }}</div>
-            <div class="stat-tile__label">Total</div>
+    {# Overview row: a compact 2x2 block of status tiles (anchors to the
+       matching section + a neutral total) beside the Unidad and Resumen cards. #}
+    <div class="profile-grid profile-grid--overview">
+        <div class="stat-tiles stat-tiles--compact">
+            {% for code, label, items in sections %}
+            <a href="#sec-{{ code }}" class="stat-tile stat-tile--{{ code }}">
+                <div class="stat-tile__num">{{ items|length }}</div>
+                <div class="stat-tile__label">{{ label }}</div>
+            </a>
+            {% endfor %}
+            <div class="stat-tile">
+                <div class="stat-tile__num">{{ issues|length }}</div>
+                <div class="stat-tile__label">Total</div>
+            </div>
         </div>
-    </div>
 
-    <div class="profile-grid">
         <div class="profile-card">
             <div class="card-header"><i class="fas fa-truck"></i> Unidad</div>
             <div class="card-body">
