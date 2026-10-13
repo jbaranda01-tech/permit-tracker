@@ -1896,7 +1896,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     .issue-date-compact { font-size: 0.85rem; }
 
     .entity-meta, .permit-field label, .profile-field label,
-    .form-help, .timeline-meta, .issue-card-footer { font-size: 0.85rem; }
+    .form-help, .timeline-by, .timeline-when, .issue-card-footer { font-size: 0.85rem; }
 }
 
 
@@ -2127,7 +2127,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .timeline-entry {
     display: flex;
     gap: var(--space-md);
-    padding-bottom: var(--space-md);
+    padding-bottom: var(--space-sm);
     position: relative;
 }
 .timeline-entry:not(:last-child)::before {
@@ -2151,21 +2151,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .timeline-dot.status-en_proceso { background: var(--color-sev-alta); }
 .timeline-dot.status-cerrado { background: var(--color-valid); }
 .timeline-content { flex: 1; min-width: 0; }
-.timeline-header {
+/* One line per entry: new-status badge, then who / when in muted text.
+   The previous status is implied by the row above, so no from → to pair. */
+.timeline-line {
     display: flex;
     align-items: center;
-    gap: var(--space-xs);
     flex-wrap: wrap;
-    margin-bottom: 2px;
+    gap: var(--space-xs) var(--space-md);
 }
-.timeline-header i { color: var(--text-tertiary); font-size: 0.7rem; }
-.timeline-meta {
-    display: flex;
-    gap: var(--space-md);
+.timeline-by, .timeline-when {
     font-size: 0.8rem;
     color: var(--text-tertiary);
 }
-.timeline-meta i { margin-right: 2px; }
+.timeline-by i, .timeline-when i { margin-right: 2px; }
 .timeline-notes {
     margin-top: var(--space-xs);
     font-size: 0.85rem;
@@ -2477,6 +2475,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     color: var(--text-tertiary);
 }
 .issue-hero-meta i { margin-right: 4px; }
+.issue-hero-meta--closed { color: var(--color-valid-text); }
 
 /* Recent issues section */
 .recent-issues-section { margin-top: var(--space-xl); }
@@ -2618,8 +2617,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 
     /* Timeline */
     .timeline-entry { gap: var(--space-sm); }
-    .timeline-header { flex-direction: column; align-items: flex-start; gap: 4px; }
-    .timeline-meta { flex-direction: column; gap: 2px; }
+    .timeline-line { gap: 2px var(--space-sm); }
 
     /* Status change form */
     .status-change-form .form-row { flex-direction: column; }
