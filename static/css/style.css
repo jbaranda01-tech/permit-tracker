@@ -2501,6 +2501,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     color: var(--text-secondary);
     margin-left: var(--space-xs);
 }
+
+/* Truck profile page (issues/truck.html) — per-status tiles mirror the
+   timeline-dot colours; sections are anchor targets below the mobile top bar. */
+.stat-tile--reportado { border-left-color: var(--color-sev-baja); }
+.stat-tile--reportado .stat-tile__num { color: var(--color-sev-baja); }
+.stat-tile--en_proceso { border-left-color: var(--color-sev-alta); }
+.stat-tile--en_proceso .stat-tile__num { color: var(--color-sev-alta); }
+.stat-tile--cerrado { border-left-color: var(--color-valid); }
+.stat-tile--cerrado .stat-tile__num { color: var(--color-valid); }
+.card-body--flush { padding: 0; }
+.status-section { scroll-margin-top: calc(56px + var(--space-md)); }
 .resolved-more-note {
     padding: var(--space-sm) var(--space-md);
     font-size: 0.8rem;

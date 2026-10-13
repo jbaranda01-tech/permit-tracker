@@ -551,6 +551,62 @@ def queue():
     return render_template('issues/queue.html', **context)
 
 
+# ── TRUCK PROFILE ─────────────────────────────────────────────────────
+
+@issues_bp.route('/truck/<int:equipment_id>', methods=['GET'])
+@shop_required
+def truck_profile(equipment_id):
+    """Per-vehicle view of every report the unit has ever had, segregated by
+    status (one section per ``ISSUE_STATUSES`` entry, in that order).
+
+    Deliberately NOT restricted to ``reportable_equipment_query()``: an
+    archived or reclassified unit keeps its history reachable here, the same
+    way issue detail pages on archived equipment stay reachable.
+    """
+    equipment = Equipment.query.get_or_404(equipment_id)
+    issues = (Issue.query
+              .filter_by(equipment_id=equipment.id)
+              .options(joinedload(Issue.reporter))
+              .order_by(Issue.reported_at.desc(), Issue.id.desc())
+              .all())
+
+    by_status = {code: [] for code, _ in ISSUE_STATUSES}
+    for issue in issues:
+        # The boot migration rewrites retired codes, but normalize anyway so a
+        # stray legacy row lands in a real section instead of vanishing.
+        code = LEGACY_ISSUE_STATUSES.get(issue.current_status, issue.current_status)
+        by_status.setdefault(code, []).append(issue)
+    for code in RESOLVED_STATUSES:
+        by_status[code].sort(
+            key=lambda i: i.resolved_at or i.reported_at or datetime.min, reverse=True)
+
+    labels = dict(ISSUE_STATUSES)
+    sections = [(code, labels.get(code, code), items) for code, items in by_status.items()]
+
+    open_issues = [i for i in issues
+                   if LEGACY_ISSUE_STATUSES.get(i.current_status, i.current_status) in OPEN_STATUSES]
+    worst_severity = None
+    if open_issues:
+        worst_severity = max(open_issues, key=lambda i: SEVERITY_RANK.get(i.severity, 0)).severity
+    closed = by_status.get('cerrado', [])
+
+    return render_template('issues/truck.html',
+                           equipment=equipment,
+                           issues=issues,
+                           sections=sections,
+                           statuses=ISSUE_STATUSES,
+                           severities=ISSUE_SEVERITIES,
+                           resolved_statuses=RESOLVED_STATUSES,
+                           open_count=len(open_issues),
+                           worst_severity=worst_severity,
+                           last_reported=issues[0].reported_at if issues else None,
+                           last_closed=closed[0].resolved_at if closed else None,
+                           # Detail-page prev/next arrows walk this truck's
+                           # queue slice; the back-link lands on the queue
+                           # filtered to the same unit.
+                           nav_args={'equipment_id': equipment.id})
+
+
 # ── ISSUE DETAIL ──────────────────────────────────────────────────────
 
 @issues_bp.route('/<int:issue_id>', methods=['GET'])

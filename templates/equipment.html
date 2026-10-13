@@ -341,6 +341,9 @@
     <div class="permits-section">
         <div class="permits-header">
             <h2><i class="fas fa-wrench"></i> Reportes / Averías</h2>
+            <a href="{{ url_for('issues.truck_profile', equipment_id=equipment.id) }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-id-card"></i> Ver perfil en Taller
+            </a>
         </div>
         {% if issues %}
         <div class="issue-history-list">

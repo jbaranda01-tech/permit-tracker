@@ -43,6 +43,11 @@
             <label>Placa</label>
             <span>{{ issue.equipment.plate_number or '—' }}</span>
         </div>
+        <div class="permit-field">
+            <a href="{{ url_for('issues.truck_profile', equipment_id=issue.equipment.id) }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-id-card"></i> Ver perfil de la unidad
+            </a>
+        </div>
         {% if current_user.is_admin %}
         <div class="permit-field">
             <a href="{{ url_for('equipment_detail', id=issue.equipment.id) }}" class="btn btn-secondary btn-sm">

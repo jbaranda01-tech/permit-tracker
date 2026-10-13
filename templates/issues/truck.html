@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% from 'issues/_macros.html' import issue_row %}
+{% block title %}{{ equipment.display_name }} — Taller{% endblock %}
+
+{% block content %}
+{% set section_icons = {'reportado': 'fa-flag', 'en_proceso': 'fa-wrench', 'cerrado': 'fa-check-circle'} %}
+<div class="detail-page">
+    <div class="detail-header">
+        <div class="detail-topbar">
+            <a href="{{ url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Volver a Reportes</a>
+        </div>
+        <div class="detail-title-row">
+            <div>
+                <span class="page-kicker">Taller · Unidad</span>
+                <h1><i class="fas fa-truck"></i> {{ equipment.display_name }}</h1>
+                <div class="detail-meta">
+                    <span class="company-tag tag-{{ equipment.company|lower }}">{{ equipment.company_full }}</span>
+                    <span class="area-tag">{{ equipment.equipment_class_label }}</span>
+                    {% if equipment.is_archived %}
+                    <span class="status-tag status-archivado">Archivado</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% if current_user.is_shop_manager %}
+            <div class="detail-actions">
+                {% if not equipment.is_archived %}
+                <a href="{{ url_for('issues.new', equipment_id=equipment.id) }}" class="btn btn-primary">
+                    <i class="fas fa-plus-circle"></i> Agregar reporte
+                </a>
+                {% endif %}
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('equipment_detail', id=equipment.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-edit"></i> Ver ficha / editar camión
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if equipment.is_archived %}
+        <div class="archived-banner">
+            <i class="fas fa-box-archive"></i>
+            <div>
+                <strong>Equipo archivado</strong> — {{ equipment.archive_reason_label }} · {{ equipment.archived_at.strftime('%m/%d/%Y') }}
+                {% if equipment.archive_note %}<div class="archived-note">{{ equipment.archive_note }}</div>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# One tile per status (anchors to the matching section) + a neutral total. #}
+    <div class="stat-tiles">
+        {% for code, label, items in sections %}
+        <a href="#sec-{{ code }}" class="stat-tile stat-tile--{{ code }}">
+            <div class="stat-tile__num">{{ items|length }}</div>
+            <div class="stat-tile__label">{{ label }}</div>
+        </a>
+        {% endfor %}
+        <div class="stat-tile">
+            <div class="stat-tile__num">{{ issues|length }}</div>
+            <div class="stat-tile__label">Total</div>
+        </div>
+    </div>
+
+    <div class="profile-grid">
+        <div class="profile-card">
+            <div class="card-header"><i class="fas fa-truck"></i> Unidad</div>
+            <div class="card-body">
+                <div class="permit-field">
+                    <label>Compañía</label>
+                    <span>{{ equipment.company_full }}</span>
+                </div>
+                <div class="permit-field">
+                    <label>Marca / Modelo</label>
+                    <span>{{ equipment.make or '' }} {{ equipment.model or '' }}{% if not equipment.make and not equipment.model %}—{% endif %}</span>
+                </div>
+                <div class="permit-field">
+                    <label>Año</label>
+                    <span>{{ equipment.year or '—' }}</span>
+                </div>
+                <div class="permit-field">
+                    <label>Placa</label>
+                    <span>{{ equipment.plate_number or '—' }}</span>
+                </div>
+                <div class="permit-field">
+                    <label>VIN / Serie</label>
+                    <span>{{ equipment.vin_serial or '—' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="profile-card">
+            <div class="card-header"><i class="fas fa-chart-simple"></i> Resumen</div>
+            <div class="card-body">
+                <div class="permit-field">
+                    <label>Reportes abiertos</label>
+                    <span>{{ open_count }}</span>
+                </div>
+                <div class="permit-field">
+                    <label>Severidad máxima abierta</label>
+                    <span>
+                        {% if worst_severity %}
+                        <span class="issue-severity severity-{{ worst_severity }}">{{ dict(severities).get(worst_severity, worst_severity) }}</span>
+                        {% else %}—{% endif %}
+                    </span>
+                </div>
+                <div class="permit-field">
+                    <label>Último reporte</label>
+                    <span>{{ last_reported|time_ago if last_reported else '—' }}</span>
+                </div>
+                <div class="permit-field">
+                    <label>Último cierre</label>
+                    <span>{{ last_closed|time_ago if last_closed else '—' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# One collapsible section per status, in ISSUE_STATUSES order, all expanded. #}
+    {% for code, label, items in sections %}
+    <div class="profile-card card-stack status-section" id="sec-{{ code }}">
+        <div class="card-header collapsible-card-header" role="button" tabindex="0"
+             aria-expanded="true" aria-controls="sec-body-{{ code }}" onclick="toggleSection('{{ code }}')">
+            <span><i class="fas {{ section_icons.get(code, 'fa-circle') }}"></i> {{ label }} <span class="badge">{{ items|length }}</span></span>
+            <i class="fas fa-chevron-up truck-chevron" id="chevron-{{ code }}"></i>
+        </div>
+        <div class="card-body card-body--flush" id="sec-body-{{ code }}">
+            {% for issue in items %}
+            {{ issue_row(issue, statuses, nav_args, show_resolved=(code in resolved_statuses)) }}
+            {% else %}
+            <div class="truck-no-issues">Sin reportes en este estado</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function toggleSection(code) {
+    var body = document.getElementById('sec-body-' + code);
+    var chevron = document.getElementById('chevron-' + code);
+    var header = document.querySelector('[aria-controls="sec-body-' + code + '"]');
+    var open = body.style.display === 'none';
+    body.style.display = open ? '' : 'none';
+    chevron.classList.toggle('fa-chevron-up', open);
+    chevron.classList.toggle('fa-chevron-down', !open);
+    header.setAttribute('aria-expanded', open);
+}
+document.querySelectorAll('.collapsible-card-header[role="button"]').forEach(function (el) {
+    el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+    });
+});
+</script>
+{% endblock %}

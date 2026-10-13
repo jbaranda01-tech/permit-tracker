@@ -1,0 +1,38 @@
+{# Shared issue-row macro — imported by queue.html (truck cards, Sin-unidad,
+   Cerrados) and truck.html (per-vehicle profile). One source so the row
+   markup can't drift between pages. #}
+{% macro issue_row(issue, statuses, nav_args, show_truck=false, show_resolved=false) %}
+{# Stretched-link row: the whole card is clickable via .issue-row-link::after,
+   while the inline status form sits above the overlay (z-index) — a nested
+   form inside a whole-row <a> would be invalid HTML. #}
+<div class="issue-row issue-row--{{ issue.severity }}">
+    <div class="issue-row-top">
+        <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
+        <span class="category-tag">{{ issue.category_label }}</span>
+        {% if show_truck %}
+        <span class="issue-truck-tag"><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
+        {% endif %}
+        <span class="issue-id">#{{ issue.id }}</span>
+    </div>
+    <a href="{{ url_for('issues.detail', issue_id=issue.id, **nav_args) }}" class="issue-row-link" aria-label="Ver reporte #{{ issue.id }}">
+        <p class="issue-row-desc">{{ issue.description }}</p>
+    </a>
+    <div class="issue-row-meta">
+        <span class="issue-status-badge status-{{ issue.current_status }}">{{ issue.status_label }}</span>
+        {% if issue.reporter %}<span><i class="fas fa-user"></i> {{ issue.reporter.name }}</span>{% endif %}
+        {% if show_resolved and issue.resolved_at %}
+        <span><i class="fas fa-check"></i> Cerrado {{ issue.resolved_at|time_ago }}</span>
+        {% elif issue.reported_at %}
+        <span><i class="fas fa-clock"></i> {{ issue.reported_at|time_ago }}</span>
+        {% endif %}
+        <form method="POST" action="{{ url_for('issues.update_status', issue_id=issue.id) }}" class="issue-row-status-form">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <select name="new_status" onchange="this.form.submit()" aria-label="Cambiar estado del reporte #{{ issue.id }}">
+                {% for code, label in statuses %}
+                <option value="{{ code }}" {% if issue.current_status == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+</div>
+{% endmacro %}
