@@ -1105,6 +1105,16 @@ def employee_license_delete_form(id):
     return redirect(url_for('employee_detail', id=emp.id))
 
 
+def _parse_form_date(val):
+    """ISO date from an <input type="date">; None when blank or malformed."""
+    if not val:
+        return None
+    try:
+        return datetime.strptime(val, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
 @app.route('/employee/<int:emp_id>/permit/new', methods=['POST'])
 @manager_required
 def employee_permit_new(emp_id):
@@ -1114,22 +1124,25 @@ def employee_permit_new(emp_id):
     ptype = request.form.get('permit_type', 'OTHER')
     if ptype not in {code for code, _label in EMPLOYEE_PERMIT_TYPES}:
         ptype = 'OTHER'
-    permit = EmployeePermit(
-        employee_id=emp.id,
-        permit_type=ptype,
-        permit_name=request.form.get('permit_name', ''),
-        applicability='YES',
-    )
-    val = request.form.get('expiration_date', '')
-    if val:
-        try:
-            permit.expiration_date = datetime.strptime(val, '%Y-%m-%d').date()
-        except ValueError:
-            pass
+    # One row per (employee, type) — uq_employee_permit_type — and the detail
+    # page's backfill already created a hidden N/A slot for every type, so a
+    # plain INSERT would collide. Reactivate the existing slot instead.
+    existing = EmployeePermit.query.filter_by(
+        employee_id=emp.id, permit_type=ptype).first()
+    if existing is not None and existing.applicability != 'N/A':
+        flash(f'{emp.name} ya tiene el permiso {existing.display_name}. '
+              'Edítelo desde su tarjeta.', 'warning')
+        return redirect(url_for('employee_detail', id=emp_id))
 
-    db.session.add(permit)
+    permit = existing or EmployeePermit(employee_id=emp.id, permit_type=ptype)
+    permit.applicability = 'YES'
+    permit.permit_name = request.form.get('permit_name', '')
+    permit.expiration_date = _parse_form_date(request.form.get('expiration_date', ''))
+
+    if existing is None:
+        db.session.add(permit)
     db.session.commit()
-    flash(f'Nuevo permiso agregado.', 'success')
+    flash(f'Permiso {permit.display_name} agregado.', 'success')
     return redirect(url_for('employee_detail', id=emp_id))
 
 
@@ -1691,21 +1704,30 @@ def equipment_permit_new(eq_id):
     permit_type = request.form.get('permit_type', 'OTHER')
     if permit_type not in {code for code, _ in EQUIPMENT_PERMIT_TYPES}:
         permit_type = 'OTHER'
-    permit = EquipmentPermit(
-        equipment_id=equip.id,
-        permit_type=permit_type,
-        permit_name=request.form.get('permit_name', ''),
-        applicability='YES',
-    )
-    val = request.form.get('expiration_date', '')
-    if val:
-        try:
-            permit.expiration_date = datetime.strptime(val, '%Y-%m-%d').date()
-        except ValueError:
-            pass
-    db.session.add(permit)
+    # One row per (equipment, type) — uq_equipment_permit_type — and the
+    # default slots (plus the SEGURO row sync_vehicle_insurance_permit keeps)
+    # already exist, so a plain INSERT would collide. Reactivate instead.
+    existing = EquipmentPermit.query.filter_by(
+        equipment_id=equip.id, permit_type=permit_type).first()
+    if existing is not None and existing.applicability != 'N/A':
+        flash(f'{equip.display_name} ya tiene el permiso {existing.display_name}. '
+              'Edítelo desde su tarjeta.', 'warning')
+        return redirect(url_for('equipment_detail', id=eq_id))
+    if permit_type == 'SEGURO' and equip.insurance_permit_type:
+        flash('Este equipo está cubierto por una póliza de empresa; cambie la '
+              '"Póliza de Seguro" en el formulario del equipo para usar un seguro propio.',
+              'warning')
+        return redirect(url_for('equipment_detail', id=eq_id))
+
+    permit = existing or EquipmentPermit(equipment_id=equip.id, permit_type=permit_type)
+    permit.applicability = 'YES'
+    permit.permit_name = request.form.get('permit_name', '')
+    permit.expiration_date = _parse_form_date(request.form.get('expiration_date', ''))
+
+    if existing is None:
+        db.session.add(permit)
     db.session.commit()
-    flash(f'Nuevo permiso agregado.', 'success')
+    flash(f'Permiso {permit.display_name} agregado.', 'success')
     return redirect(url_for('equipment_detail', id=eq_id))
 
 
