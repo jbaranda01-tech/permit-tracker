@@ -379,7 +379,6 @@ def _queue_context(args, with_counts=True):
                 'issue_count': len(issues),
                 'worst_severity': worst_sev,
                 'worst_severity_rank': worst_rank,
-                'auto_expand': len(issues) > 0,
             })
         # Default ('unit') sorts trucks in natural unit-number order,
         # matching the truck dropdown order. The other sorts reorder cards by
