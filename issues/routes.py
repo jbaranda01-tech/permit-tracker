@@ -306,7 +306,10 @@ def _queue_context(args, with_counts=True):
     # Translate retired codes first so old bookmarks (?status=resuelto) still
     # land on the right tab instead of silently resetting to the open view.
     status_filter = LEGACY_ISSUE_STATUSES.get(status_filter, status_filter)
-    if status_filter not in {code for code, _ in ISSUE_STATUSES}:
+    # The queue is open-only: closed issues live on the truck profile page.
+    # A ?status=cerrado (old bookmark / stale sticky pref) resets to the
+    # open view like any other unknown value.
+    if status_filter not in OPEN_STATUSES:
         status_filter = ''
     severity_filter = args.get('severity', '')
     if severity_filter not in {code for code, _ in ISSUE_SEVERITIES}:
@@ -409,11 +412,16 @@ def _queue_context(args, with_counts=True):
     lb_trucks = build_truck_profiles('LB')
     pli_trucks = build_truck_profiles('PLI')
 
+    # Tabs only for the open statuses; the full ISSUE_STATUSES list still goes
+    # to the issue_row macro so a row's inline select can close an issue.
+    open_statuses = [(code, label) for code, label in ISSUE_STATUSES
+                     if code in OPEN_STATUSES]
+
     status_counts = {}
     severity_counts = {}
     open_count = 0
     if with_counts:
-        for code, _label in ISSUE_STATUSES:
+        for code, _label in open_statuses:
             status_counts[code] = (scoped_query(exclude='status')
                                    .filter(Issue.current_status == code)
                                    .count())
@@ -430,30 +438,6 @@ def _queue_context(args, with_counts=True):
     # Issues with no linked equipment appear in no truck panel — surface them
     # in their own section so they stay reachable.
     unlinked_issues = [i for i in all_issues if not i.equipment_id]
-
-    resolved_issues = []
-    resolved_count = 0
-    if not status_filter:
-        resolved_query = (scoped_query(exclude='status')
-                          .filter(Issue.current_status.in_(RESOLVED_STATUSES)))
-        resolved_count = resolved_query.count()
-        # SQL-side (not Python) because of the .limit(20) — sorting after the
-        # limit would only reorder the 20 newest
-        if sort_by == 'oldest':
-            resolved_order = (Issue.resolved_at.asc().nullslast(),
-                              Issue.reported_at.asc())
-        elif sort_by == 'severity':
-            sev_rank = db.case(SEVERITY_RANK, value=Issue.severity, else_=0)
-            resolved_order = (sev_rank.desc(),
-                              Issue.resolved_at.desc().nullslast())
-        else:  # 'unit' and 'recent': resolved most recently first
-            resolved_order = (Issue.resolved_at.desc().nullslast(),
-                              Issue.reported_at.desc())
-        resolved_issues = (resolved_query
-                           .options(joinedload(Issue.reporter),
-                                    joinedload(Issue.equipment))
-                           .order_by(*resolved_order)
-                           .limit(20).all())
 
     # The params that identify "which queue am I browsing": they ride into
     # every issue link so the detail page can rebuild this exact sequence for
@@ -475,9 +459,8 @@ def _queue_context(args, with_counts=True):
         'lb_issue_count': sum(t['issue_count'] for t in lb_trucks),
         'pli_issue_count': sum(t['issue_count'] for t in pli_trucks),
         'unlinked_issues': unlinked_issues,
-        'resolved_issues': resolved_issues,
-        'resolved_count': resolved_count,
         'statuses': ISSUE_STATUSES,
+        'open_statuses': open_statuses,
         'severities': ISSUE_SEVERITIES,
         'categories': ISSUE_CATEGORIES,
         'trucks': trucks,
@@ -503,9 +486,9 @@ def _issue_sibling_nav(issue_id, args):
     """Prev/next links for an issue detail page.
 
     Walks the queue's rendered order — LB truck cards, then PLI, then the
-    unlinked section, then Resueltos — so the arrows follow exactly what was
-    on screen. Returns None when the issue isn't in that list (filtered out,
-    or on archived equipment).
+    unlinked section — so the arrows follow exactly what was on screen.
+    Returns None when the issue isn't in that list (closed, filtered out, or
+    on archived equipment).
     """
     ctx = _queue_context(args, with_counts=False)
     sequence = []
@@ -513,7 +496,6 @@ def _issue_sibling_nav(issue_id, args):
         for profile in profiles:
             sequence.extend(profile['issues'])
     sequence.extend(ctx['unlinked_issues'])
-    sequence.extend(ctx['resolved_issues'])
 
     ids = [i.id for i in sequence]
     if issue_id not in ids:

@@ -2571,13 +2571,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 }
 .card-body--flush { padding: 0; }
 .status-section { scroll-margin-top: calc(56px + var(--space-md)); }
-.resolved-more-note {
-    padding: var(--space-sm) var(--space-md);
-    font-size: 0.8rem;
-    color: var(--text-tertiary);
-    border-top: 1px solid var(--border-color);
-}
-.resolved-more-note a { color: var(--accent); font-weight: 600; }
 
 @media (max-width: 768px) {
     .report-container { padding: var(--space-md); }
