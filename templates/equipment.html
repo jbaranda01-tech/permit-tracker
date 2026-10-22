@@ -159,7 +159,7 @@
         {% if current_user.is_manager %}
         <div id="manage-permits-panel" class="manage-permits-panel" style="display:none">
             <h3>Permisos Activos e Inactivos</h3>
-            <p class="text-muted-sm">Active los permisos que aplican a este equipo.</p>
+            <p class="text-muted-sm">Active los permisos que aplican a este equipo. Al desactivar uno, su fecha, datos y documento se conservan y vuelven al activarlo.</p>
             <div class="manage-permits-list">
                 {% for permit in permits %}
                 <div class="manage-permit-item">
@@ -174,7 +174,15 @@
                 {% endfor %}
                 {% for permit in hidden_permits %}
                 <div class="manage-permit-item manage-permit-hidden">
-                    <span>{{ permit.display_name }}</span>
+                    <span>
+                        {{ permit.display_name }}
+                        {% if permit.expiration_date or permit.file_path %}
+                        <small class="manage-permit-meta">
+                            {% if permit.expiration_date %}<i class="fas fa-calendar-alt"></i> {{ permit.expiration_date.strftime('%m/%d/%Y') }}{% endif %}
+                            {% if permit.file_path %}<a href="{{ url_for('uploaded_file', filename=permit.file_path) }}" target="_blank" title="Ver documento"><i class="fas fa-paperclip"></i> Documento</a>{% endif %}
+                        </small>
+                        {% endif %}
+                    </span>
                     <form method="POST" action="{{ url_for('equipment_permit_toggle', eq_id=equipment.id, permit_id=permit.id) }}" style="display:inline">
                         <input type="hidden" name="applicability" value="YES">
                         <button type="submit" class="btn-toggle" title="Activar">

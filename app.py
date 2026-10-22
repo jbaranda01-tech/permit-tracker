@@ -1042,18 +1042,33 @@ def employee_permit_edit(emp_id, permit_id):
     return redirect(url_for('employee_detail', id=emp_id))
 
 
+def _toggle_flash(permit, new_value):
+    """Flash text for the manage-panel toggle. Deactivating says out loud that the
+    data survives, since the card disappears from the profile the moment it posts."""
+    if new_value == 'YES':
+        return f'Permiso {permit.display_name} activado.'
+    kept = []
+    if permit.expiration_date:
+        kept.append('fecha')
+    if permit.file_path:
+        kept.append('documento')
+    tail = f' Se conservan {" y ".join(kept)}; actívelo de nuevo para restaurarlo.' if kept else ''
+    return f'Permiso {permit.display_name} desactivado.{tail}'
+
+
 @app.route('/employee/<int:emp_id>/permit/<int:permit_id>/toggle', methods=['POST'])
 @manager_required
 def employee_permit_toggle(emp_id, permit_id):
     permit = EmployeePermit.query.get_or_404(permit_id)
     if permit.employee_id != emp_id:
         abort(403)
-    new_value = request.form.get('applicability', 'YES')
+    new_value = 'N/A' if request.form.get('applicability', 'YES') == 'N/A' else 'YES'
     permit.applicability = new_value
-    if new_value == 'N/A':
-        permit.expiration_date = None
+    # Deactivating only hides the slot. The expiration date, number, authority,
+    # notes, cost and attached document all stay on the row, so a toggle made
+    # by mistake is undone by toggling back — nothing has to be re-entered.
     db.session.commit()
-    flash(f'Permiso {permit.display_name} {"activado" if new_value == "YES" else "desactivado"}.', 'success')
+    flash(_toggle_flash(permit, new_value), 'success')
     return redirect(url_for('employee_detail', id=emp_id))
 
 
@@ -1217,8 +1232,11 @@ def employee_permit_new(emp_id):
     if ptype == 'OTHER':
         permit.permit_name = name
     # A reactivated slot deliberately keeps its number/authority/notes/file,
-    # exactly like the manage-panel toggle does.
-    permit.expiration_date = _parse_form_date(request.form.get('expiration_date', ''))
+    # exactly like the manage-panel toggle does — and its stored date too,
+    # unless the form supplies a new one.
+    posted_date = _parse_form_date(request.form.get('expiration_date', ''))
+    if posted_date is not None or existing is None:
+        permit.expiration_date = posted_date
 
     if existing is None:
         db.session.add(permit)
@@ -1727,12 +1745,11 @@ def equipment_permit_toggle(eq_id, permit_id):
     permit = EquipmentPermit.query.get_or_404(permit_id)
     if permit.equipment_id != eq_id:
         abort(403)
-    new_value = request.form.get('applicability', 'YES')
+    new_value = 'N/A' if request.form.get('applicability', 'YES') == 'N/A' else 'YES'
     permit.applicability = new_value
-    if new_value == 'N/A':
-        permit.expiration_date = None
+    # Same as the employee toggle: hide only, keep every field and the document.
     db.session.commit()
-    flash(f'Permiso {permit.display_name} {"activado" if new_value == "YES" else "desactivado"}.', 'success')
+    flash(_toggle_flash(permit, new_value), 'success')
     return redirect(url_for('equipment_detail', id=eq_id))
 
 
@@ -1812,7 +1829,10 @@ def equipment_permit_new(eq_id):
     permit.applicability = 'YES'
     if permit_type == 'OTHER':
         permit.permit_name = name
-    permit.expiration_date = _parse_form_date(request.form.get('expiration_date', ''))
+    # Reactivation keeps the stored date unless the form supplies a new one.
+    posted_date = _parse_form_date(request.form.get('expiration_date', ''))
+    if posted_date is not None or existing is None:
+        permit.expiration_date = posted_date
 
     if existing is None:
         db.session.add(permit)

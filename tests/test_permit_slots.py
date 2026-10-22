@@ -459,3 +459,93 @@ def test_q_dedup_cli_runs_and_matches_other_by_name(client):
             r = CliRunner().invoke(app.cli, args)
             assert r.exit_code == 0, r.output or r.exception
             assert 'Dedup complete' in r.output
+
+
+# ── Deactivating keeps the data (2026-10-22) ───────────────────────────
+
+def test_r_toggle_off_keeps_date_file_and_fields(client):
+    """A toggle made by mistake is undone by toggling back: date, number,
+    authority, notes, cost and the attached document all survive N/A."""
+    emp_id = new_emp('PLI')
+    client.get(u('employee_detail', id=emp_id))
+    (ntsp,) = emp_rows(emp_id, 'NTSP')
+    add_emp_permit(client, emp_id, 'NTSP', '', '2026-11-01')
+    with app.app_context():
+        row = EmployeePermit.query.get(ntsp.id)
+        db.session.add(FileStorage(filename='keep_me.pdf', original_filename='k.pdf', data=b'%PDF-1.4'))
+        row.file_path = 'keep_me.pdf'
+        row.permit_number = 'N-77'
+        row.issuing_authority = 'DTOP'
+        row.notes = 'nota'
+        row.renewal_cost = 12.5
+        db.session.commit()
+
+    r = toggle_emp(client, emp_id, ntsp.id, 'N/A')
+    assert 'desactivado' in text(r) and 'Se conservan fecha y documento' in text(r)
+    # hidden row still shows what it keeps, and the dashboard/notifications ignore it
+    page = text(client.get(u('employee_detail', id=emp_id)))
+    assert '11/01/2026' in page and 'keep_me.pdf' in page
+    with app.app_context():
+        row = EmployeePermit.query.get(ntsp.id)
+        assert row.applicability == 'N/A'
+        assert row.expiration_date == date(2026, 11, 1)
+        assert row.file_path == 'keep_me.pdf' and row.permit_number == 'N-77'
+        assert row.issuing_authority == 'DTOP' and row.notes == 'nota' and row.renewal_cost == 12.5
+        assert row.status == 'na'
+        emp = Employee.query.get(emp_id)
+        assert appmod._permit_type_status(emp, 'NTSP', 'employees') == 'na'
+        assert emp.next_expiration is None
+        emp.email = 'keep@example.com'
+        db.session.commit()
+        assert f'employee_permit:{ntsp.id}' not in str(appmod._gather_expiring_items(employee_id=emp_id))
+    # Excel shows N/A rather than the stored date while hidden
+    xlsx = client.get(u('export_excel') + '?type=employees&company=PLI')
+    assert xlsx.status_code == 200
+    from openpyxl import load_workbook
+    import io as _io
+    ws = load_workbook(_io.BytesIO(xlsx.data))['Empleados']
+    header = [c.value for c in ws[1]]
+    col = header.index(next(h for h in header if h and 'NTSP' in str(h)))
+    with app.app_context():
+        name = Employee.query.get(emp_id).name
+    rowvals = next(r for r in ws.iter_rows(min_row=2, values_only=True) if name in r)
+    assert rowvals[col] == 'N/A'
+
+    # toggling back restores the card with the same date and document
+    r = toggle_emp(client, emp_id, ntsp.id, 'YES')
+    assert 'activado' in text(r)
+    with app.app_context():
+        row = EmployeePermit.query.get(ntsp.id)
+        assert row.applicability == 'YES' and row.expiration_date == date(2026, 11, 1)
+        assert row.file_path == 'keep_me.pdf'
+        assert FileStorage.query.filter_by(filename='keep_me.pdf').first() is not None
+
+
+def test_s_readd_without_date_keeps_stored_date(client):
+    emp_id = new_emp('LB')
+    client.get(u('employee_detail', id=emp_id))
+    (twic,) = emp_rows(emp_id, 'TWIC')
+    add_emp_permit(client, emp_id, 'TWIC', '', '2027-06-30')
+    toggle_emp(client, emp_id, twic.id, 'N/A')
+    r = add_emp_permit(client, emp_id, 'TWIC', '', '')          # blank date → keep stored
+    assert 'agregado' in text(r)
+    (twic,) = emp_rows(emp_id, 'TWIC')
+    assert twic.applicability == 'YES' and twic.expiration_date == date(2027, 6, 30)
+    toggle_emp(client, emp_id, twic.id, 'N/A')
+    add_emp_permit(client, emp_id, 'TWIC', '', '2028-01-01')    # new date → replaces
+    (twic,) = emp_rows(emp_id, 'TWIC')
+    assert twic.expiration_date == date(2028, 1, 1)
+    # equipment side, same rule
+    eq_id = new_equipment('LB')
+    (marb,) = eq_rows(eq_id, 'MARBETE')
+    with app.app_context():
+        row = EquipmentPermit.query.get(marb.id)
+        row.expiration_date = date(2027, 2, 2)
+        db.session.commit()
+    toggle_eq(client, eq_id, marb.id, 'N/A')
+    assert eq_rows(eq_id, 'MARBETE')[0].expiration_date == date(2027, 2, 2)
+    page = text(client.get(u('equipment_detail', id=eq_id)))
+    assert '02/02/2027' in page
+    add_eq_permit(client, eq_id, 'MARBETE', '', '')
+    (marb,) = eq_rows(eq_id, 'MARBETE')
+    assert marb.applicability == 'YES' and marb.expiration_date == date(2027, 2, 2)
