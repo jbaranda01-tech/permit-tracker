@@ -192,9 +192,14 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Tipo de Permiso</label>
+                        {# Types already active on this record are shown but disabled, so the
+                           first enabled option — not NTSP/MARBETE — is what gets submitted. #}
+                        {% set active_codes = permits|map(attribute='permit_type')|list %}
+                        {% set ns = namespace(picked=false) %}
                         <select name="permit_type" onchange="toggleCustomName(this)">
                             {% for code, name in permit_types %}
-                            <option value="{{ code }}">{{ name }}</option>
+                            {% set taken = code != 'OTHER' and (code in active_codes or (code == 'SEGURO' and equipment.insurance_permit_type)) %}
+                            <option value="{{ code }}"{% if taken %} disabled{% elif not ns.picked %} selected{% set ns.picked = true %}{% endif %}>{{ name }}{% if taken %}{% if code == 'SEGURO' and equipment.insurance_permit_type %} (póliza de empresa){% else %} (activo){% endif %}{% endif %}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -387,8 +392,14 @@ function toggleEditPermit(id) {
 }
 function toggleCustomName(select) {
     const group = document.getElementById('custom-name-group');
-    group.style.display = select.value === 'OTHER' ? 'block' : 'none';
+    const isOther = select.value === 'OTHER';
+    group.style.display = isOther ? 'block' : 'none';
+    group.querySelector('input').required = isOther;   // server enforces too
 }
+document.addEventListener('DOMContentLoaded', function () {
+    const select = document.querySelector('#add-permit-form select[name="permit_type"]');
+    if (select) toggleCustomName(select);
+});
 function toggleArchivePanel() {
     const panel = document.getElementById('archive-panel');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';

@@ -107,13 +107,9 @@
                     <th>Licencia</th>
                     <th>Exp. Lic.</th>
                     <th>HAZMAT</th>
-                    <th>NTSP</th>
-                    <th>TWIC</th>
-                    <th>Cert. Méd.</th>
-                    <th>Antec.</th>
-                    <th>Rec. Chof.</th>
-                    <th>HM-126/232</th>
-                    <th>P. Auxilios</th>
+                    {# Header and cells both come from lb_types (built-ins + this
+                       company's blanket types), so the counts can't drift. #}
+                    {% for ptype, label in lb_types %}<th>{{ label }}</th>{% endfor %}
                 </tr>
             </thead>
             <tbody>
@@ -132,8 +128,8 @@
                             <span class="status-cell st-na">N/A</span>
                         {% endif %}
                     </td>
-                    {% for ptype in ['NTSP', 'TWIC', 'CERT_MEDICO', 'ANTECEDENTES', 'RECORD_CHOFERIL', 'HM126', 'PRIMEROS_AUXILIOS'] %}
-                        {% set permit = emp.permits.filter_by(permit_type=ptype).first() %}
+                    {% for ptype, label in lb_types %}
+                        {% set permit = emp_permits[emp.id].get(ptype) %}
                         {% if permit %}
                             {{ status_cell(permit.expiration_date, permit.applicability) }}
                         {% else %}
@@ -160,13 +156,9 @@
                     <th>Licencia</th>
                     <th>Exp. Lic.</th>
                     <th>HAZMAT</th>
-                    <th>NTSP</th>
-                    <th>TWIC</th>
-                    <th>Cert. Méd.</th>
-                    <th>Antec.</th>
-                    <th>Rec. Chof.</th>
-                    <th>HM-126/232</th>
-                    <th>P. Auxilios</th>
+                    {# Header and cells both come from pli_types (built-ins + this
+                       company's blanket types), so the counts can't drift. #}
+                    {% for ptype, label in pli_types %}<th>{{ label }}</th>{% endfor %}
                 </tr>
             </thead>
             <tbody>
@@ -185,8 +177,8 @@
                             <span class="status-cell st-na">N/A</span>
                         {% endif %}
                     </td>
-                    {% for ptype in ['NTSP', 'TWIC', 'CERT_MEDICO', 'ANTECEDENTES', 'RECORD_CHOFERIL', 'HM126', 'PRIMEROS_AUXILIOS'] %}
-                        {% set permit = emp.permits.filter_by(permit_type=ptype).first() %}
+                    {% for ptype, label in pli_types %}
+                        {% set permit = emp_permits[emp.id].get(ptype) %}
                         {% if permit %}
                             {{ status_cell(permit.expiration_date, permit.applicability) }}
                         {% else %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Tipos de Permiso{% endblock %}
+{% block content %}
+<div class="detail-page">
+    <div class="detail-header">
+        <a href="{{ url_for('dashboard') }}" class="back-link"><i class="fas fa-arrow-left"></i> Dashboard</a>
+        <div class="page-titlebar">
+            <div class="page-title">Administración<strong>Tipos de Permiso</strong></div>
+        </div>
+    </div>
+
+    <!-- New blanket type -->
+    <div class="form-section">
+        <h3>Crear Permiso para Toda la Empresa</h3>
+        <p class="text-muted-sm">
+            El nuevo permiso se agrega de inmediato a todos los empleados activos de la empresa
+            seleccionada, como <strong>activo sin fecha</strong> («Incompleto») hasta que se registre
+            su vencimiento en cada ficha. Los empleados nuevos lo reciben automáticamente.
+        </p>
+        <form method="POST" action="{{ url_for('admin_permit_type_new') }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="label">Nombre del Permiso</label>
+                    <input type="text" id="label" name="label" required maxlength="200"
+                           placeholder="p. ej. Manejo de extintor de incendios"
+                           value="{{ form_label or '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="company">Empresa</label>
+                    <select id="company" name="company">
+                        {% for code, name in company_choices %}
+                        <option value="{{ code }}" {% if (form_company or 'ALL') == code %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="align-self:flex-end">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Crear</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Existing blanket types -->
+    <div class="users-table-container">
+        {% if type_rows %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th data-sort="label">Permiso <span class="sort-arrow">↕</span></th>
+                    <th data-sort="code">Código <span class="sort-arrow">↕</span></th>
+                    <th data-sort="company">Empresa <span class="sort-arrow">↕</span></th>
+                    <th data-sort="count">Empleados <span class="sort-arrow">↕</span></th>
+                    <th data-sort="created" data-sort-type="date">Creado <span class="sort-arrow">↕</span></th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t, row_count, doc_count in type_rows %}
+                <tr>
+                    <td><strong>{{ t.label }}</strong></td>
+                    <td><code>{{ t.code }}</code></td>
+                    <td><span class="role-badge role-issue">{{ t.company_label }}</span></td>
+                    <td>{{ row_count }}{% if doc_count %} <span class="text-muted-sm">· {{ doc_count }} doc.</span>{% endif %}</td>
+                    <td>{{ t.created_at.strftime('%m/%d/%Y') if t.created_at else '—' }}</td>
+                    <td>
+                        <div class="table-actions">
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditType({{ t.id }})">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            <form method="POST" action="{{ url_for('admin_permit_type_delete', id=t.id) }}" style="display:inline"
+                                  onsubmit="return confirm('¿Eliminar el permiso «{{ t.label|e }}»?\n\nSe eliminarán {{ row_count }} permiso(s) de empleados y {{ doc_count }} documento(s) adjunto(s). Esta acción no se puede deshacer.')">
+                                <button type="submit" class="btn btn-ghost btn-sm btn-danger-text"><i class="fas fa-trash"></i> Eliminar</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="6" class="inline-edit-cell">
+                        <div id="edit-type-{{ t.id }}" class="inline-edit-form" style="display:none">
+                            <form method="POST" action="{{ url_for('admin_permit_type_edit', id=t.id) }}">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Nombre</label>
+                                        <input type="text" name="label" value="{{ t.label }}" required maxlength="200">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Empresa</label>
+                                        <select name="company">
+                                            {% for code, name in company_choices %}
+                                            <option value="{{ code }}" {% if t.company == code %}selected{% endif %}>{{ name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="align-self:flex-end">
+                                        <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                                    </div>
+                                </div>
+                                <p class="text-muted-sm">Al ampliar la empresa se crean los permisos faltantes; al
+                                   reducirla, los permisos de la empresa excluida pasan a N/A (se conservan sus datos).</p>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-id-badge"></i>
+            <p>No hay permisos personalizados de empresa. Los permisos estándar
+               ({{ builtin_labels|join(', ') }}) existen siempre.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function toggleEditType(id) {
+    var panel = document.getElementById('edit-type-' + id);
+    if (!panel) return;
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    if (panel.style.display === 'block') {
+        var input = panel.querySelector('input');
+        if (input) input.focus();
+    }
+}
+</script>
+{% endblock %}

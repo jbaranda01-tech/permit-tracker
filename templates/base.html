@@ -79,6 +79,10 @@
                 <i class="fas fa-user-cog"></i>
                 <span>Usuarios</span>
             </a>
+            <a href="{{ url_for('admin_permit_types') }}" class="nav-link {% if request.endpoint == 'admin_permit_types' %}active{% endif %}">
+                <i class="fas fa-id-badge"></i>
+                <span>Tipos de Permiso</span>
+            </a>
             {% endif %}
         </div>
         {% endif %}

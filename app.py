@@ -37,6 +37,10 @@ from models import (
     EQUIPMENT_CLASSES, classify_equipment,
     INSURANCE_TYPE_BY_CLASS,
     INSURANCE_OWN, LEGACY_INSURANCE_POLICY_TYPES, INSURANCE_POLICY_CHOICES,
+    EmployeePermitType, employee_permit_types, custom_employee_permit_types,
+    custom_employee_permit_index, invalidate_custom_permit_labels,
+    slugify_permit_code, CUSTOM_PERMIT_CODE_PREFIX, RESERVED_EMPLOYEE_PERMIT_CODES,
+    PERMIT_TYPE_COMPANY_CHOICES,
     sync_vehicle_insurance_permit,
 )
 from list_prefs import (
@@ -462,6 +466,12 @@ def _permit_type_status(item, permit_type, view):
     permit = next((p for p in item.permits if p.permit_type == permit_type), None)
     if permit:
         return permit.status
+    # A blanket (company-scoped) type only applies to its own company: an LB
+    # employee has no row for a PLI-only permit, and that is N/A, not missing.
+    if permit_type.startswith(CUSTOM_PERMIT_CODE_PREFIX):
+        custom = custom_employee_permit_index().get(permit_type)
+        if custom is None or not custom.applies_to(item.company):
+            return 'na'
     # An absent row normally means the permit is pending. Not so for a retired
     # code (HM232): almost nobody has one, and reporting the whole roster as
     # "missing HM-232" is backwards — the filter exists to find the few rows
@@ -555,9 +565,17 @@ def _dashboard_context(args, view=None, with_counts=True):
     if view == 'equipment':
         permit_types = list(EQUIPMENT_PERMIT_TYPES)
     else:
-        permit_types = ([('LICENCIA', 'Licencia de Conducir')]
-                        + list(EMPLOYEE_PERMIT_TYPES)
-                        + _legacy_employee_permit_types())
+        # Blanket types for the selected company only (all of them when the
+        # company select is on "Todas", tagged with their company).
+        scoped = employee_permit_types(company_filter or None)
+        custom_index = custom_employee_permit_index()
+        permit_types = [('LICENCIA', 'Licencia de Conducir')]
+        for code, label in scoped:
+            custom = custom_index.get(code)
+            if custom and not company_filter and custom.company != 'ALL':
+                label = f'{label} ({custom.company})'
+            permit_types.append((code, label))
+        permit_types += _legacy_employee_permit_types()
     permit_type = args.get('permit_type', '')
     if permit_type not in {code for code, _label in permit_types}:
         permit_type = ''
@@ -783,42 +801,57 @@ def archive_view():
 
 # ── EMPLOYEE ROUTES ────────────────────────────────────────────────────
 
+def ensure_employee_permit_slots(emp):
+    """Create the missing permit rows for every type in this employee's
+    vocabulary — the built-ins plus the blanket types for emp.company (OTHER is
+    never pre-created). Built-ins start N/A except Primeros Auxilios; blanket
+    types start ACTIVE with no date, so the whole company reads "Incompleto"
+    until each date is filled in (the agreed behaviour). Existing rows are never
+    touched — deactivating a permit must stick. Returns True when rows were
+    added; the caller commits."""
+    existing = {p.permit_type for p in emp.permits.all()}
+    added = False
+    for code, _label in employee_permit_types(emp.company):
+        if code == 'OTHER' or code in existing:
+            continue
+        active = code == 'PRIMEROS_AUXILIOS' or code.startswith(CUSTOM_PERMIT_CODE_PREFIX)
+        db.session.add(EmployeePermit(employee_id=emp.id, permit_type=code,
+                                      applicability='YES' if active else 'N/A'))
+        added = True
+    return added
+
+
+def _retarget_custom_permits(emp):
+    """After an employee changes company: blanket-type rows that no longer apply
+    go N/A (data kept, never deleted), and the new company's slots are created."""
+    index = custom_employee_permit_index()
+    for p in emp.permits.all():
+        if not p.permit_type.startswith(CUSTOM_PERMIT_CODE_PREFIX):
+            continue
+        custom = index.get(p.permit_type)
+        if (custom is None or not custom.applies_to(emp.company)) and p.applicability != 'N/A':
+            p.applicability = 'N/A'
+    ensure_employee_permit_slots(emp)
+
+
 @app.route('/employee/<int:id>')
 @login_required
 def employee_detail(id):
     emp = Employee.query.get_or_404(id)
 
     # Backfill missing permit slots for existing employees (skip archived —
-    # frozen records shouldn't gain permit rows on a GET)
-    if not emp.is_archived:
-        existing_types = {}
-        for p in emp.permits.all():
-            existing_types[p.permit_type] = p
-        changed = False
-        for code, name in EMPLOYEE_PERMIT_TYPES:
-            if code == 'OTHER':
-                continue
-            if code not in existing_types:
-                db.session.add(EmployeePermit(
-                    employee_id=emp.id,
-                    permit_type=code,
-                    applicability='YES' if code == 'PRIMEROS_AUXILIOS' else 'N/A'
-                ))
-                changed = True
-            elif code == 'PRIMEROS_AUXILIOS':
-                permit = existing_types[code]
-                if permit.applicability == 'N/A' and permit.expiration_date is None:
-                    permit.applicability = 'YES'
-                    changed = True
-        if changed:
-            db.session.commit()
+    # frozen records shouldn't gain permit rows on a GET). Only ADDS rows: an
+    # earlier version also flipped an N/A Primeros Auxilios back to YES here,
+    # which silently undid every attempt to deactivate it.
+    if not emp.is_archived and ensure_employee_permit_slots(emp):
+        db.session.commit()
 
-    all_permits = emp.permits.order_by(EmployeePermit.permit_type).all()
+    all_permits = emp.permits.order_by(EmployeePermit.permit_type, EmployeePermit.permit_name).all()
     active_permits = [p for p in all_permits if p.applicability != 'N/A']
     hidden_permits = [p for p in all_permits if p.applicability == 'N/A']
     return render_template('employee.html', employee=emp,
                            permits=active_permits, hidden_permits=hidden_permits,
-                           permit_types=EMPLOYEE_PERMIT_TYPES,
+                           permit_types=employee_permit_types(emp.company),
                            nav=_sibling_nav('employees', emp.id, request.args))
 
 
@@ -860,15 +893,8 @@ def employee_new():
         db.session.add(emp)
         db.session.flush()  # Get ID
 
-        # Create default permit slots
-        for code, name in EMPLOYEE_PERMIT_TYPES:
-            if code != 'OTHER':
-                permit = EmployeePermit(
-                    employee_id=emp.id,
-                    permit_type=code,
-                    applicability='YES' if code == 'PRIMEROS_AUXILIOS' else 'N/A'
-                )
-                db.session.add(permit)
+        # Default permit slots: built-ins + this company's blanket types
+        ensure_employee_permit_slots(emp)
 
         db.session.commit()
         flash(f'Empleado {emp.name} creado.', 'success')
@@ -882,11 +908,14 @@ def employee_new():
 def employee_edit(id):
     emp = Employee.query.get_or_404(id)
     if request.method == 'POST':
+        old_company = emp.company
         emp.name = request.form['name']
         emp.company = request.form['company']
         emp.area = request.form.get('area', '')
         if not emp.is_archived:
             emp.status = request.form.get('status', 'activo')
+        if emp.company != old_company and not emp.is_archived:
+            _retarget_custom_permits(emp)
         emp.license_number = request.form.get('license_number', '')
         emp.puesto = request.form.get('puesto', '')
         emp.telefono = request.form.get('telefono', '')
@@ -1115,20 +1144,69 @@ def _parse_form_date(val):
         return None
 
 
+def _norm_permit_name(name):
+    """Key under which two 'Otro' permits count as the same one."""
+    return (name or '').strip().lower()
+
+
+# One permit row per (owner, type) for every type except OTHER, which is
+# repeatable (several custom permits per employee/vehicle). Enforced by a
+# PARTIAL unique index. The old full UNIQUE constraint (uq_*_permit_type) is
+# what made a second "Otro" 500 — these statements migrate a Postgres DB off it,
+# create-first so the table is never unprotected, and are idempotent. Run at
+# boot and by `flask dedup`; never re-add the full constraint anywhere.
+PERMIT_UNIQUENESS_DDL = [
+    ('uq_employee_permit_type_partial',
+     "CREATE UNIQUE INDEX IF NOT EXISTS uq_employee_permit_type_partial "
+     "ON employee_permits (employee_id, permit_type) WHERE permit_type <> 'OTHER'"),
+    ('drop uq_employee_permit_type',
+     "ALTER TABLE employee_permits DROP CONSTRAINT IF EXISTS uq_employee_permit_type"),
+    ('uq_equipment_permit_type_partial',
+     "CREATE UNIQUE INDEX IF NOT EXISTS uq_equipment_permit_type_partial "
+     "ON equipment_permits (equipment_id, permit_type) WHERE permit_type <> 'OTHER'"),
+    ('drop uq_equipment_permit_type',
+     "ALTER TABLE equipment_permits DROP CONSTRAINT IF EXISTS uq_equipment_permit_type"),
+]
+
+
+def _apply_permit_uniqueness_ddl(log=print):
+    """Postgres only. Each statement commits on its own; a failure is logged and
+    skipped so boot never dies on it."""
+    if db.engine.dialect.name != 'postgresql':
+        return
+    for label, sql in PERMIT_UNIQUENESS_DDL:
+        try:
+            db.session.execute(db.text(sql))
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            log(f'[WARN] Permit uniqueness skipped {label}: {exc}')
+
+
 @app.route('/employee/<int:emp_id>/permit/new', methods=['POST'])
 @manager_required
 def employee_permit_new(emp_id):
     emp = Employee.query.get_or_404(emp_id)
-    # Validate against the current vocabulary so a stale open tab can't mint a
-    # retired code (e.g. HM232 after the HM-126/HM-232 merge).
+    # Validate against this employee's vocabulary (built-ins + the blanket
+    # types for their company) so a stale open tab can't mint a retired code
+    # (e.g. HM232 after the HM-126/HM-232 merge) or another company's type.
     ptype = request.form.get('permit_type', 'OTHER')
-    if ptype not in {code for code, _label in EMPLOYEE_PERMIT_TYPES}:
+    if ptype not in {code for code, _label in employee_permit_types(emp.company)}:
         ptype = 'OTHER'
-    # One row per (employee, type) — uq_employee_permit_type — and the detail
-    # page's backfill already created a hidden N/A slot for every type, so a
-    # plain INSERT would collide. Reactivate the existing slot instead.
-    existing = EmployeePermit.query.filter_by(
-        employee_id=emp.id, permit_type=ptype).first()
+    name = (request.form.get('permit_name') or '').strip()
+
+    # Every type but OTHER has exactly one slot per employee (the detail page's
+    # backfill pre-creates it hidden as N/A), so "add" means reactivate that
+    # slot. OTHER is repeatable: the slot is the row with the same name, if any.
+    if ptype == 'OTHER':
+        if not name:
+            flash('Indique el nombre del permiso personalizado.', 'error')
+            return redirect(url_for('employee_detail', id=emp_id))
+        existing = next((p for p in emp.permits.filter_by(permit_type='OTHER')
+                         if _norm_permit_name(p.permit_name) == _norm_permit_name(name)), None)
+    else:
+        existing = EmployeePermit.query.filter_by(
+            employee_id=emp.id, permit_type=ptype).first()
     if existing is not None and existing.applicability != 'N/A':
         flash(f'{emp.name} ya tiene el permiso {existing.display_name}. '
               'Edítelo desde su tarjeta.', 'warning')
@@ -1136,7 +1214,10 @@ def employee_permit_new(emp_id):
 
     permit = existing or EmployeePermit(employee_id=emp.id, permit_type=ptype)
     permit.applicability = 'YES'
-    permit.permit_name = request.form.get('permit_name', '')
+    if ptype == 'OTHER':
+        permit.permit_name = name
+    # A reactivated slot deliberately keeps its number/authority/notes/file,
+    # exactly like the manage-panel toggle does.
     permit.expiration_date = _parse_form_date(request.form.get('expiration_date', ''))
 
     if existing is None:
@@ -1704,11 +1785,19 @@ def equipment_permit_new(eq_id):
     permit_type = request.form.get('permit_type', 'OTHER')
     if permit_type not in {code for code, _ in EQUIPMENT_PERMIT_TYPES}:
         permit_type = 'OTHER'
-    # One row per (equipment, type) — uq_equipment_permit_type — and the
-    # default slots (plus the SEGURO row sync_vehicle_insurance_permit keeps)
-    # already exist, so a plain INSERT would collide. Reactivate instead.
-    existing = EquipmentPermit.query.filter_by(
-        equipment_id=equip.id, permit_type=permit_type).first()
+    name = (request.form.get('permit_name') or '').strip()
+    # Every type but OTHER has one slot per vehicle (the default slots, plus the
+    # SEGURO row sync_vehicle_insurance_permit keeps), so "add" reactivates it.
+    # OTHER is repeatable: the slot is the row with the same name, if any.
+    if permit_type == 'OTHER':
+        if not name:
+            flash('Indique el nombre del permiso personalizado.', 'error')
+            return redirect(url_for('equipment_detail', id=eq_id))
+        existing = next((p for p in equip.permits.filter_by(permit_type='OTHER')
+                         if _norm_permit_name(p.permit_name) == _norm_permit_name(name)), None)
+    else:
+        existing = EquipmentPermit.query.filter_by(
+            equipment_id=equip.id, permit_type=permit_type).first()
     if existing is not None and existing.applicability != 'N/A':
         flash(f'{equip.display_name} ya tiene el permiso {existing.display_name}. '
               'Edítelo desde su tarjeta.', 'warning')
@@ -1721,7 +1810,8 @@ def equipment_permit_new(eq_id):
 
     permit = existing or EquipmentPermit(equipment_id=equip.id, permit_type=permit_type)
     permit.applicability = 'YES'
-    permit.permit_name = request.form.get('permit_name', '')
+    if permit_type == 'OTHER':
+        permit.permit_name = name
     permit.expiration_date = _parse_form_date(request.form.get('expiration_date', ''))
 
     if existing is None:
@@ -1869,7 +1959,7 @@ def run_dedup():
             if keeper.endoso_hazmat == 'N/A' and dup.endoso_hazmat != 'N/A':
                 keeper.endoso_hazmat = dup.endoso_hazmat
             for dup_permit in dup.permits.all():
-                keeper_permit = keeper.permits.filter_by(permit_type=dup_permit.permit_type).first()
+                keeper_permit = _matching_keeper_permit(keeper, dup_permit)
                 if keeper_permit:
                     if keeper_permit.expiration_date is None and dup_permit.expiration_date is not None:
                         keeper_permit.expiration_date = dup_permit.expiration_date
@@ -1878,6 +1968,11 @@ def run_dedup():
                     for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
                         if getattr(keeper_permit, field) is None and getattr(dup_permit, field) is not None:
                             setattr(keeper_permit, field, getattr(dup_permit, field))
+                else:
+                    # Keeper lacks this permit (e.g. a second OTHER): move it over
+                    # instead of letting the cascade delete it with dup.
+                    dup_permit.employee_id = keeper.id
+            db.session.flush()
             db.session.delete(dup)
             emp_deleted += 1
 
@@ -1927,18 +2022,18 @@ def run_dedup():
 
     db.session.commit()
 
-    # Apply unique constraints
+    # Apply unique constraints. Permit uniqueness is the PARTIAL index (OTHER is
+    # repeatable) — the old full uq_*_permit_type constraint must never come back.
     if db.engine.dialect.name == 'postgresql':
         for sql in [
             "ALTER TABLE employees ADD CONSTRAINT uq_employee_name_company UNIQUE (name, company)",
-            "ALTER TABLE employee_permits ADD CONSTRAINT uq_employee_permit_type UNIQUE (employee_id, permit_type)",
-            "ALTER TABLE equipment_permits ADD CONSTRAINT uq_equipment_permit_type UNIQUE (equipment_id, permit_type)",
         ]:
             try:
                 db.session.execute(db.text(sql))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
+        _apply_permit_uniqueness_ddl(log=app.logger.warning)
 
     return {
         'status': 'ok',
@@ -2108,6 +2203,9 @@ def import_data():
                         expiration_date=exp_date,
                     )
                     db.session.add(permit)
+                # ...and the rest of the vocabulary (incl. blanket types), so the
+                # employee doesn't wait for a profile view to get them.
+                ensure_employee_permit_slots(emp)
 
                 imported += 1
 
@@ -2526,6 +2624,22 @@ def _insurance_permits_by_equipment(equipment_list):
     return resolved
 
 
+# Short column headings for the PDF's narrow employee tables; types not listed
+# here (incl. blanket types) use their full label.
+PDF_PERMIT_SHORT_LABELS = {
+    'CERT_MEDICO': 'Cert. Méd.',
+    'ANTECEDENTES': 'Antec.',
+    'RECORD_CHOFERIL': 'Rec. Chof.',
+    'HM126': 'HM-126/232',
+    'PRIMEROS_AUXILIOS': 'P. Auxilios',
+}
+
+
+def _pdf_employee_permit_types(company):
+    return [(code, PDF_PERMIT_SHORT_LABELS.get(code, label))
+            for code, label in employee_permit_types(company) if code != 'OTHER']
+
+
 @app.route('/report/pdf')
 @login_required
 def generate_pdf():
@@ -2537,6 +2651,11 @@ def generate_pdf():
 
     html = render_template('report_pdf.html',
         employees=employees,
+        # Header + cells of each company's employee table are generated from
+        # these (built-ins + that company's blanket types) so they can't drift.
+        lb_types=_pdf_employee_permit_types('LB'),
+        pli_types=_pdf_employee_permit_types('PLI'),
+        emp_permits={emp.id: {p.permit_type: p for p in emp.permits} for emp in employees},
         equipment_list=equipment_list,
         insurance_by_eq=_insurance_permits_by_equipment(equipment_list),
         issues=issues,
@@ -2655,8 +2774,10 @@ def export_excel():
     if employees:
         # Legacy codes get a column only while rows still carry them, so the
         # sheet doesn't grow a permanently empty HM-232 column after the merge.
-        emp_permit_types = [(c, l) for c, l in EMPLOYEE_PERMIT_TYPES if c != 'OTHER'] \
-                           + _legacy_employee_permit_types()
+        # Blanket types: the selected company's, or all of them when unscoped.
+        emp_permit_types = [(c, l) for c, l in employee_permit_types(company_filter or None)
+                            if c != 'OTHER'] + _legacy_employee_permit_types()
+        custom_index = custom_employee_permit_index()
         emp_headers = ['Empresa', 'Nombre', 'Área', 'Puesto', 'Licencia'] + \
                       [label for _code, label in emp_permit_types]
         ws = new_sheet(wb, 'Empleados', emp_headers,
@@ -2670,7 +2791,12 @@ def export_excel():
             permits_by_type = {p.permit_type: p for p in emp.permits}
             col = 6
             for code, _label in emp_permit_types:
-                write_permit_cell(ws, r, col, permits_by_type.get(code))
+                permit = permits_by_type.get(code)
+                custom = custom_index.get(code)
+                if permit is None and custom is not None and not custom.applies_to(emp.company):
+                    ws.cell(row=r, column=col, value='N/A')   # other company's blanket type
+                else:
+                    write_permit_cell(ws, r, col, permit)
                 col += 1
 
     if equipment_list:
@@ -2852,6 +2978,150 @@ def admin_user_delete(id):
     return redirect(url_for('admin_users'))
 
 
+# ── ADMIN: BLANKET (COMPANY-WIDE) EMPLOYEE PERMIT TYPES ──────────────
+
+def _render_admin_permit_types(**extra):
+    types = EmployeePermitType.query.order_by(EmployeePermitType.label).all()
+    type_rows = []
+    for t in types:
+        q = EmployeePermit.query.filter_by(permit_type=t.code)
+        type_rows.append((t, q.count(), q.filter(EmployeePermit.file_path.isnot(None)).count()))
+    extra.setdefault('form_label', '')
+    extra.setdefault('form_company', 'ALL')
+    return render_template('admin_permit_types.html', type_rows=type_rows,
+                           company_choices=PERMIT_TYPE_COMPANY_CHOICES,
+                           builtin_labels=[l for c, l in EMPLOYEE_PERMIT_TYPES if c != 'OTHER'],
+                           **extra)
+
+
+def _validate_permit_type_label(label, code, exclude_id=None):
+    """Spanish error message, or None when the label/code are acceptable."""
+    if not label:
+        return 'Indique el nombre del permiso.'
+    if not code:
+        return 'El nombre debe contener letras o números.'
+    bare = code[len(CUSTOM_PERMIT_CODE_PREFIX):]
+    builtin_labels = {l.strip().lower() for _c, l in EMPLOYEE_PERMIT_TYPES}
+    if bare in RESERVED_EMPLOYEE_PERMIT_CODES or label.strip().lower() in builtin_labels:
+        return f'«{label}» es un tipo de permiso reservado (ya existe como permiso estándar).'
+    clash = EmployeePermitType.query.filter_by(code=code).first()
+    if clash is not None and clash.id != exclude_id:
+        return f'El permiso «{clash.label}» ya existe con ese nombre.'
+    return None
+
+
+def _apply_permit_type_slots(ptype):
+    """Give every non-archived employee of the type's company(ies) its slot —
+    active, no date. Returns how many employees got a new row."""
+    employees = Employee.query.filter(Employee.archived_at.is_(None),
+                                      Employee.company.in_(ptype.companies)).all()
+    have = {row.employee_id for row in EmployeePermit.query.filter_by(permit_type=ptype.code)}
+    added = 0
+    for emp in employees:
+        if emp.id in have:
+            continue
+        db.session.add(EmployeePermit(employee_id=emp.id, permit_type=ptype.code, applicability='YES'))
+        added += 1
+    return added
+
+
+def _retire_permit_type_slots(ptype):
+    """After a scope change: rows on employees the type no longer covers go N/A
+    (data kept). Returns how many rows changed."""
+    rows = (EmployeePermit.query.join(Employee)
+            .filter(EmployeePermit.permit_type == ptype.code,
+                    EmployeePermit.applicability != 'N/A',
+                    Employee.company.notin_(ptype.companies)).all())
+    for row in rows:
+        row.applicability = 'N/A'
+    return len(rows)
+
+
+def _resolve_permit_type_company(raw):
+    return raw if raw in {c for c, _l in PERMIT_TYPE_COMPANY_CHOICES} else 'ALL'
+
+
+@app.route('/admin/permit-types')
+@admin_required
+def admin_permit_types():
+    return _render_admin_permit_types()
+
+
+@app.route('/admin/permit-types/new', methods=['POST'])
+@admin_required
+def admin_permit_type_new():
+    label = (request.form.get('label') or '').strip()
+    company = _resolve_permit_type_company(request.form.get('company', 'ALL'))
+    code = slugify_permit_code(label)
+    error = _validate_permit_type_label(label, code)
+    if error:
+        flash(error, 'danger')
+        return _render_admin_permit_types(form_label=label, form_company=company), 422
+
+    ptype = EmployeePermitType(code=code, label=label, company=company)
+    db.session.add(ptype)
+    db.session.flush()
+    invalidate_custom_permit_labels()
+    added = _apply_permit_type_slots(ptype)
+    db.session.commit()
+    app.logger.info('Permit type %s created by admin id=%s (%s employees)', code, current_user.id, added)
+    flash(f'Permiso «{label}» creado y asignado a {added} empleado(s) de {ptype.company_label}. '
+          'Aparece como «Incompleto» en cada ficha hasta que se registre su fecha de vencimiento.',
+          'success')
+    return redirect(url_for('admin_permit_types'))
+
+
+@app.route('/admin/permit-types/<int:id>/edit', methods=['POST'])
+@admin_required
+def admin_permit_type_edit(id):
+    ptype = EmployeePermitType.query.get_or_404(id)
+    label = (request.form.get('label') or '').strip()
+    company = _resolve_permit_type_company(request.form.get('company', ptype.company))
+    # The code stays as created (rows key on it); only the label and scope move.
+    error = _validate_permit_type_label(label, ptype.code, exclude_id=ptype.id)
+    if error:
+        flash(error, 'danger')
+        return _render_admin_permit_types(), 422
+    ptype.label = label
+    ptype.company = company
+    invalidate_custom_permit_labels()
+    added = _apply_permit_type_slots(ptype)
+    retired = _retire_permit_type_slots(ptype)
+    db.session.commit()
+    msg = f'Permiso «{label}» actualizado.'
+    if added:
+        msg += f' {added} empleado(s) lo recibieron.'
+    if retired:
+        msg += f' {retired} permiso(s) pasaron a N/A por el cambio de empresa.'
+    flash(msg, 'success')
+    return redirect(url_for('admin_permit_types'))
+
+
+@app.route('/admin/permit-types/<int:id>/delete', methods=['POST'])
+@admin_required
+def admin_permit_type_delete(id):
+    """Hard-deletes the type AND its permit rows (with their attached documents):
+    orphaned rows would keep rendering as a bare code and counting toward the
+    alert tiles, with no filter able to reach them. Deliberately not guarded by
+    protect_uploaded_files — this is a manual admin action, like `flask dedup`."""
+    ptype = EmployeePermitType.query.get_or_404(id)
+    rows = EmployeePermit.query.filter_by(permit_type=ptype.code).all()
+    docs = 0
+    for row in rows:
+        if row.file_path:
+            delete_stored_file(row.file_path)
+            docs += 1
+        db.session.delete(row)
+    label = ptype.label
+    db.session.delete(ptype)
+    invalidate_custom_permit_labels()
+    db.session.commit()
+    app.logger.info('Permit type %s deleted by admin id=%s (%s rows, %s docs)',
+                    ptype.code, current_user.id, len(rows), docs)
+    flash(f'Permiso «{label}» eliminado: {len(rows)} permiso(s) de empleados y {docs} documento(s).', 'warning')
+    return redirect(url_for('admin_permit_types'))
+
+
 # ── HEALTH CHECK ──────────────────────────────────────────────────────
 
 @app.route('/health')
@@ -2878,6 +3148,16 @@ def init_db():
         print('Database initialized. Admin user created (admin / admin123)')
     else:
         print('Database already initialized.')
+
+
+def _matching_keeper_permit(keeper, dup_permit):
+    """The keeper's counterpart of a duplicate record's permit: same type, and
+    for OTHER (repeatable) also the same normalized name. None when absent."""
+    candidates = keeper.permits.filter_by(permit_type=dup_permit.permit_type).all()
+    if dup_permit.permit_type != 'OTHER':
+        return candidates[0] if candidates else None
+    want = _norm_permit_name(dup_permit.permit_name)
+    return next((p for p in candidates if _norm_permit_name(p.permit_name) == want), None)
 
 
 @app.cli.command('dedup')
@@ -2909,7 +3189,7 @@ def dedup_data(dry_run):
 
             # Merge permit data: if keeper's permit is missing data that dup's has, copy it
             for dup_permit in dup.permits.all():
-                keeper_permit = keeper.permits.filter_by(permit_type=dup_permit.permit_type).first()
+                keeper_permit = _matching_keeper_permit(keeper, dup_permit)
                 if keeper_permit:
                     if keeper_permit.expiration_date is None and dup_permit.expiration_date is not None:
                         keeper_permit.expiration_date = dup_permit.expiration_date
@@ -2918,9 +3198,14 @@ def dedup_data(dry_run):
                     for field in ['permit_number', 'issuing_authority', 'file_path', 'renewal_cost', 'notes']:
                         if getattr(keeper_permit, field) is None and getattr(dup_permit, field) is not None:
                             setattr(keeper_permit, field, getattr(dup_permit, field))
+                elif not dry_run:
+                    # Keeper lacks this permit (e.g. a second OTHER): move it over
+                    # instead of letting the cascade delete it with dup.
+                    dup_permit.employee_id = keeper.id
 
             print(f'  {"[DRY RUN] " if dry_run else ""}Delete duplicate employee: {dup.name} ({dup.company}) id={dup.id}, keeping id={keeper.id}')
             if not dry_run:
+                db.session.flush()
                 db.session.delete(dup)
             emp_deleted += 1
 
@@ -3048,7 +3333,7 @@ def dedup_data(dry_run):
             # Merge child permits: fill keeper's gaps, or re-point dup's permit to
             # keeper when keeper lacks that type (avoids cascade-deleting real data).
             for dup_permit in dup.permits.all():
-                keeper_permit = keeper.permits.filter_by(permit_type=dup_permit.permit_type).first()
+                keeper_permit = _matching_keeper_permit(keeper, dup_permit)
                 if keeper_permit:
                     if keeper_permit.expiration_date is None and dup_permit.expiration_date is not None:
                         keeper_permit.expiration_date = dup_permit.expiration_date
@@ -3105,13 +3390,13 @@ def dedup_data(dry_run):
     if not dry_run:
         db.session.commit()
 
-        # Apply unique constraints (db.create_all() won't add them to existing tables)
+        # Apply unique constraints (db.create_all() won't add them to existing
+        # tables). Permit uniqueness is the PARTIAL index below (OTHER is
+        # repeatable) — never re-add the old full uq_*_permit_type constraint.
         dialect = db.engine.dialect.name
         if dialect == 'postgresql':
             constraints = [
                 "ALTER TABLE employees ADD CONSTRAINT uq_employee_name_company UNIQUE (name, company)",
-                "ALTER TABLE employee_permits ADD CONSTRAINT uq_employee_permit_type UNIQUE (employee_id, permit_type)",
-                "ALTER TABLE equipment_permits ADD CONSTRAINT uq_equipment_permit_type UNIQUE (equipment_id, permit_type)",
             ]
             for sql in constraints:
                 try:
@@ -3125,7 +3410,7 @@ def dedup_data(dry_run):
             # Permanent backstop against duplicate vehicles: partial unique indexes
             # on non-blank keys (blanks excluded so unidentified rows can coexist).
             # VIN/plate global, unit# per-company — mirrors find_duplicate_equipment.
-            equip_indexes = [
+            equip_indexes = list(PERMIT_UNIQUENESS_DDL) + [
                 ("uq_equipment_vin",
                  "CREATE UNIQUE INDEX IF NOT EXISTS uq_equipment_vin ON equipment (lower(vin_serial)) "
                  "WHERE vin_serial IS NOT NULL AND vin_serial <> ''"),
@@ -3500,6 +3785,22 @@ with app.app_context():
         # Rename CPR → PRIMEROS_AUXILIOS in existing records
         db.session.execute(db.text("UPDATE employee_permits SET permit_type = 'PRIMEROS_AUXILIOS' WHERE permit_type = 'CPR'"))
         db.session.commit()
+
+        # Permit uniqueness: swap the old full UNIQUE (owner, type) constraint
+        # for the partial index that lets OTHER repeat (see PERMIT_UNIQUENESS_DDL).
+        # Create-first, idempotent; runs once in the gunicorn master (--preload).
+        if db.engine.dialect.name == 'postgresql':
+            _apply_permit_uniqueness_ddl()
+            print("[INFO] Permit uniqueness: partial indexes ensured, full constraints dropped")
+        else:
+            # Local SQLite keeps whatever constraint it was created with; a
+            # pre-change DB still refuses a second 'Otro' until recreated.
+            from sqlalchemy import inspect as _sa_inspect
+            stale = [c for c in _sa_inspect(db.engine).get_unique_constraints('employee_permits')
+                     if set(c.get('column_names') or []) == {'employee_id', 'permit_type'}]
+            if stale:
+                print("[WARN] Local DB still has the old full uq_employee_permit_type constraint — "
+                      "recreate instance/permits.db to allow several 'Otro' permits per employee")
 
         # Fold the retired per-vehicle insurance codes onto their replacement.
         # 'Compulsorio' shipped briefly as its own code before it was merged into

@@ -1,8 +1,10 @@
 import logging
 import re
 import threading
+import unicodedata
 from contextlib import contextmanager
 
+from flask import g, has_app_context
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from sqlalchemy import event as sa_event, inspect as sa_inspect
@@ -200,16 +202,118 @@ LEGACY_EMPLOYEE_PERMIT_TYPES = [
     ('HM232', 'HM-232 (legado)'),
 ]
 
+# Codes a DB-defined (blanket) permit type may never shadow: the built-ins, the
+# retired ones, and the dashboard's LICENCIA pseudo-type. Custom codes always
+# carry CUSTOM_PERMIT_CODE_PREFIX, so a collision is impossible by construction;
+# the admin form additionally refuses a label that spells one of these so a type
+# like "NTSP" isn't created twice under two names.
+CUSTOM_PERMIT_CODE_PREFIX = 'CUSTOM_'
+RESERVED_EMPLOYEE_PERMIT_CODES = (
+    {code for code, _label in EMPLOYEE_PERMIT_TYPES}
+    | {code for code, _label in LEGACY_EMPLOYEE_PERMIT_TYPES}
+    | {'LICENCIA'}
+)
+PERMIT_TYPE_COMPANY_CHOICES = [
+    ('LB', 'LB Caribe Services'),
+    ('PLI', 'Professional Logistics'),
+    ('ALL', 'Ambas empresas'),
+]
+
+
+def slugify_permit_code(label):
+    """'Manejo de extintor' -> 'CUSTOM_MANEJO_DE_EXTINTOR' (accent-stripped, <= 50 chars)."""
+    base = unicodedata.normalize('NFKD', label or '').encode('ascii', 'ignore').decode('ascii')
+    base = re.sub(r'[^A-Za-z0-9]+', '_', base).strip('_').upper()
+    if not base:
+        return ''
+    code = (CUSTOM_PERMIT_CODE_PREFIX + base)[:50].rstrip('_')
+    return code
+
+
+class EmployeePermitType(db.Model):
+    """An admin-defined employee permit that applies to every employee of a
+    company (LB, PLI or both) — a "blanket" type. Rows live in the same
+    employee_permits table as the built-ins, keyed by this type's code, so every
+    status/report/notification path sees them without special-casing."""
+    __tablename__ = 'employee_permit_types'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(50), unique=True, nullable=False)
+    label = db.Column(db.String(200), nullable=False)
+    company = db.Column(db.String(10), nullable=False, default='ALL')  # LB | PLI | ALL
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def companies(self):
+        return ['LB', 'PLI'] if self.company == 'ALL' else [self.company]
+
+    def applies_to(self, company):
+        return company in self.companies
+
+    @property
+    def company_label(self):
+        for code, label in PERMIT_TYPE_COMPANY_CHOICES:
+            if code == self.company:
+                return label
+        return self.company
+
+
+def custom_employee_permit_types(company=None):
+    """DB-defined types applying to `company` (all of them when None), by label."""
+    types = EmployeePermitType.query.order_by(EmployeePermitType.label).all()
+    if company is None:
+        return types
+    return [t for t in types if t.applies_to(company)]
+
+
+def employee_permit_types(company=None):
+    """The employee permit vocabulary as (code, label) pairs: built-ins, then the
+    blanket types for `company`, with OTHER last. This is the single accessor
+    every consumer should use instead of EMPLOYEE_PERMIT_TYPES directly, so a
+    type added from the admin page shows up everywhere at once."""
+    builtins = [(code, label) for code, label in EMPLOYEE_PERMIT_TYPES if code != 'OTHER']
+    custom = [(t.code, t.label) for t in custom_employee_permit_types(company)]
+    return builtins + custom + [('OTHER', 'Otro')]
+
+
+def custom_employee_permit_index():
+    """{code: EmployeePermitType} for every blanket type, cached on flask.g for
+    the request so display_name / _permit_type_status (called once per row in
+    emails, Excel, the dashboard) don't query per call."""
+    if not has_app_context():
+        return {}   # no session to query from (detached object in a script/test)
+    if '_custom_permit_index' in g:
+        return g._custom_permit_index
+    index = {t.code: t for t in EmployeePermitType.query.all()}
+    g._custom_permit_index = index
+    return index
+
+
+def custom_employee_permit_labels():
+    return {code: t.label for code, t in custom_employee_permit_index().items()}
+
+
+def invalidate_custom_permit_labels():
+    """Call after creating/editing/deleting a type inside a request."""
+    if has_app_context():
+        g.pop('_custom_permit_index', None)
+
 
 class EmployeePermit(db.Model):
     __tablename__ = 'employee_permits'
+    # One row per (employee, type) for every type EXCEPT 'OTHER': custom one-off
+    # permits are repeatable per employee (uniqueness among them is by name,
+    # enforced in employee_permit_new). A partial index, not a UNIQUE constraint,
+    # on both dialects; see PERMIT_UNIQUENESS_DDL in app.py for the Postgres
+    # migration off the old full constraint.
     __table_args__ = (
-        db.UniqueConstraint('employee_id', 'permit_type', name='uq_employee_permit_type'),
+        db.Index('uq_employee_permit_type_partial', 'employee_id', 'permit_type', unique=True,
+                 postgresql_where=db.text("permit_type <> 'OTHER'"),
+                 sqlite_where=db.text("permit_type <> 'OTHER'")),
     )
     id = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(db.Integer, db.ForeignKey('employees.id', ondelete='CASCADE'), nullable=False)
     permit_type = db.Column(db.String(50), nullable=False)
-    permit_name = db.Column(db.String(200))  # For OTHER type
+    permit_name = db.Column(db.String(200))  # For OTHER type (several OTHER rows per employee, distinct names)
     applicability = db.Column(db.String(10), default='YES')  # YES, N/A
     expiration_date = db.Column(db.Date)
     issuing_authority = db.Column(db.String(200))
@@ -230,6 +334,9 @@ class EmployeePermit(db.Model):
         for code, name in LEGACY_EMPLOYEE_PERMIT_TYPES:
             if code == self.permit_type:
                 return name
+        custom = custom_employee_permit_labels().get(self.permit_type)
+        if custom:
+            return custom
         return self.permit_type
 
     @property
@@ -431,7 +538,10 @@ EQUIPMENT_PERMIT_TYPES = [
 class EquipmentPermit(db.Model):
     __tablename__ = 'equipment_permits'
     __table_args__ = (
-        db.UniqueConstraint('equipment_id', 'permit_type', name='uq_equipment_permit_type'),
+        # Partial: OTHER is repeatable per vehicle (see EmployeePermit).
+        db.Index('uq_equipment_permit_type_partial', 'equipment_id', 'permit_type', unique=True,
+                 postgresql_where=db.text("permit_type <> 'OTHER'"),
+                 sqlite_where=db.text("permit_type <> 'OTHER'")),
     )
     id = db.Column(db.Integer, primary_key=True)
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id', ondelete='CASCADE'), nullable=False)
