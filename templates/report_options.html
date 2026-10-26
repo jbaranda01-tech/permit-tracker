@@ -14,27 +14,36 @@
         <div class="form-section">
             <h3><i class="fas fa-list-check"></i> Propósito</h3>
             <div class="form-group">
-                <label for="type">¿Qué desea incluir en el reporte?</label>
-                <select name="type" id="type">
-                    <option value="all">Todos</option>
-                    <option value="employees">Empleados</option>
-                    <option value="equipment">Equipos</option>
-                    <option value="issues">Averías</option>
-                    <option value="company">Empresa</option>
-                </select>
+                <span class="form-label">¿Qué desea incluir en el reporte?</span>
+                <div class="choice-group" role="radiogroup" aria-label="Tipo de reporte">
+                    <input type="radio" name="type" id="type-all" value="all" checked>
+                    <label for="type-all" class="choice-btn"><i class="fas fa-layer-group"></i> Todos</label>
+                    <input type="radio" name="type" id="type-employees" value="employees">
+                    <label for="type-employees" class="choice-btn"><i class="fas fa-users"></i> Empleados</label>
+                    <input type="radio" name="type" id="type-equipment" value="equipment">
+                    <label for="type-equipment" class="choice-btn"><i class="fas fa-truck"></i> Equipos</label>
+                    <input type="radio" name="type" id="type-issues" value="issues">
+                    <label for="type-issues" class="choice-btn"><i class="fas fa-wrench"></i> Averías</label>
+                    <input type="radio" name="type" id="type-company" value="company">
+                    <label for="type-company" class="choice-btn"><i class="fas fa-building"></i> Empresa</label>
+                </div>
             </div>
         </div>
 
         <div class="form-section">
             <h3><i class="fas fa-building"></i> Empresa</h3>
             <div class="form-group">
-                <label for="company">¿Para cuál compañía?</label>
-                <select name="company" id="company">
-                    <option value="">Todas</option>
-                    <option value="LB">LB Caribe Services</option>
-                    <option value="PLI">Professional Logistics (PLI)</option>
-                    <option value="Personal">Personal</option>
-                </select>
+                <span class="form-label">¿Para cuál compañía?</span>
+                <div class="choice-group" role="radiogroup" aria-label="Compañía">
+                    <input type="radio" name="company" id="company-all" value="" checked>
+                    <label for="company-all" class="choice-btn"><i class="fas fa-globe"></i> Todas</label>
+                    <input type="radio" name="company" id="company-lb" value="LB">
+                    <label for="company-lb" class="choice-btn">LB Caribe Services</label>
+                    <input type="radio" name="company" id="company-pli" value="PLI">
+                    <label for="company-pli" class="choice-btn">Professional Logistics (PLI)</label>
+                    <input type="radio" name="company" id="company-personal" value="Personal">
+                    <label for="company-personal" class="choice-btn"><i class="fas fa-user"></i> Personal</label>
+                </div>
             </div>
             <p class="form-help">
                 <i class="fas fa-info-circle"></i>

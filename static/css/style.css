@@ -1935,6 +1935,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 
 /* ── Touch Feedback (touch devices only) ──────────────────────────── */
 @media (hover: none) and (pointer: coarse) {
+    .choice-btn { min-height: 44px; }
     .btn:active { opacity: 0.7; transform: scale(0.98); }
     .nav-link:active { background: var(--bg-sidebar-hover); }
     .entity-card:active { background: var(--bg-hover); }
@@ -1993,6 +1994,56 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     width: 100%;
     padding: var(--space-md) var(--space-lg);
     font-size: 1.1rem;
+}
+
+/* Report picker: single-select button groups (hidden radios + labels) */
+.form-label {
+    display: block;
+    margin-bottom: var(--space-sm);
+}
+.choice-group {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+.choice-group input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+    pointer-events: none;
+}
+.choice-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    min-height: 36px;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    user-select: none;
+    transition: all var(--transition);
+}
+.choice-btn i { color: var(--text-secondary); }
+.choice-btn:hover { background: var(--bg-hover); }
+.choice-group input[type="radio"]:checked + .choice-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 20px var(--glow);
+}
+.choice-group input[type="radio"]:checked + .choice-btn i { color: #fff; }
+.choice-group input[type="radio"]:focus-visible + .choice-btn {
+    box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 /* Repeatable problem rows (multi-issue driver report) */
@@ -2669,6 +2720,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
         border-radius: var(--radius-md);
     }
     .report-form textarea { min-height: 120px; }
+    .choice-btn { flex: 1 1 calc(50% - var(--space-sm)); }
     .report-form .form-actions {
         position: sticky;
         bottom: 0;
