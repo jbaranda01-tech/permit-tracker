@@ -776,6 +776,13 @@ def dashboard():
     return render_template('dashboard.html', **context)
 
 
+ARCHIVE_COMPANY_PANELS = (
+    ('LB', 'LB Caribe Services', 'panel-lb', 'img/logo-lb.png'),
+    ('PLI', 'Professional Logistics', 'panel-pli', 'img/logo-pli.png'),
+    ('Personal', 'Personal', 'panel-personal', None),
+)
+
+
 @app.route('/archive')
 @login_required
 def archive_view():
@@ -791,11 +798,27 @@ def archive_view():
             Equipment.make.ilike(f'%{search}%'),
             Equipment.model.ilike(f'%{search}%'),
         ))
+    company_filter = request.args.get('company', '').strip()
+    if company_filter not in ('LB', 'PLI', 'Personal'):
+        company_filter = ''
+    if company_filter:
+        emp_q = emp_q.filter(Employee.company == company_filter)
+        eq_q = eq_q.filter(Equipment.company == company_filter)
     archived_employees = emp_q.order_by(Employee.archived_at.desc()).all()
     archived_equipment = eq_q.order_by(Equipment.archived_at.desc()).all()
+    # One panel per company, LB -> PLI -> Personal (Personal holds equipment only).
+    panels = []
+    for code, name, panel_class, logo in ARCHIVE_COMPANY_PANELS:
+        if company_filter and code != company_filter:
+            continue
+        panels.append({
+            'code': code, 'name': name, 'panel_class': panel_class, 'logo': logo,
+            'employees': [e for e in archived_employees if e.company == code],
+            'equipment': [q for q in archived_equipment if q.company == code],
+        })
     return render_template('archive.html',
-                           archived_employees=archived_employees,
-                           archived_equipment=archived_equipment,
+                           panels=panels,
+                           company_filter=company_filter,
                            search=search)
 
 

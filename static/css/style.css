@@ -921,6 +921,36 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     padding: var(--space-sm);
 }
 
+/* In-panel group headings (archive: Empleados / Equipos inside one company panel) */
+.panel-group-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin: var(--space-sm) calc(-1 * var(--space-sm)) var(--space-xs);
+    padding: var(--space-sm) var(--space-lg);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+.panel-group-title:first-child { margin-top: calc(-1 * var(--space-sm)); border-top: 0; }
+.panel-group-title i { opacity: 0.7; }
+.panel-group-count {
+    margin-left: auto;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+.panel-group-empty {
+    padding: var(--space-md) var(--space-md);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
 
 /* ── Entity Cards (list items) ─────────────────────────────────────── */
 .entity-card {

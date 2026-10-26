@@ -8,64 +8,79 @@
 
     <div class="toolbar">
         <form class="search-wrap" method="GET" action="{{ url_for('archive_view') }}">
+            {% if company_filter %}<input type="hidden" name="company" value="{{ company_filter }}">{% endif %}
             <i class="fas fa-search"></i>
             <input type="text" name="search" value="{{ search }}" placeholder="Buscar en archivo...">
+        </form>
+        <form class="filter-form" method="GET" action="{{ url_for('archive_view') }}">
+            {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
+            <select name="company" onchange="this.form.submit()" aria-label="Empresa">
+                <option value="">Todas las empresas</option>
+                <option value="LB" {% if company_filter == 'LB' %}selected{% endif %}>LB Caribe Services</option>
+                <option value="PLI" {% if company_filter == 'PLI' %}selected{% endif %}>Professional Logistics</option>
+                <option value="Personal" {% if company_filter == 'Personal' %}selected{% endif %}>Personal</option>
+            </select>
+            {% if search or company_filter %}
+            <a href="{{ url_for('archive_view') }}" class="clear-filters-link"><i class="fas fa-times"></i> Limpiar filtros</a>
+            {% endif %}
         </form>
         <div class="spacer"></div>
     </div>
 
-    <div class="company-panels">
+    <div class="company-panels{% if not company_filter %} three-columns{% endif %}">
+        {% for p in panels %}
         <div class="company-panel">
-            <div class="panel-header panel-lb">
-                <h2><i class="fas fa-users"></i> Empleados Archivados</h2>
-                <span class="panel-count">{{ archived_employees|length }}</span>
+            <div class="panel-header {{ p.panel_class }}">
+                <h2>
+                    {% if p.logo %}<img src="{{ url_for('static', filename=p.logo) }}" alt="{{ p.name }}" class="company-logo">{% else %}<i class="fas fa-user"></i>{% endif %}
+                    {{ p.name }}
+                </h2>
+                <span class="panel-count">{{ p.employees|length + p.equipment|length }}</span>
             </div>
             <div class="panel-body">
-                {% for emp in archived_employees %}
-                <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card entity-card--archived">
-                    <div class="entity-info">
-                        <div class="entity-name">{{ emp.name }}</div>
-                        <div class="entity-meta">{{ emp.company_full }} · {{ emp.archive_reason_label }} · {{ emp.archived_at.strftime('%m/%d/%Y') }}</div>
-                    </div>
-                    <div class="entity-status">
-                        <span class="status-tag status-archivado">Archivado</span>
-                    </div>
-                </a>
-                {% endfor %}
-                {% if not archived_employees %}
+                {% if not p.employees and not p.equipment %}
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <p>{% if search %}No hay resultados con estos filtros{% else %}No hay empleados archivados{% endif %}</p>
+                    <p>{% if search %}No hay resultados con estos filtros{% else %}No hay registros archivados{% endif %}</p>
                 </div>
-                {% endif %}
-            </div>
-        </div>
+                {% else %}
+                    {% if p.code != 'Personal' %}
+                    <div class="panel-group-title"><i class="fas fa-users"></i> Empleados <span class="panel-group-count">{{ p.employees|length }}</span></div>
+                    {% for emp in p.employees %}
+                    <a href="{{ url_for('employee_detail', id=emp.id) }}" class="entity-card entity-card--archived">
+                        <div class="entity-info">
+                            <div class="entity-name">{{ emp.name }}</div>
+                            <div class="entity-meta">{{ emp.archive_reason_label }} · {{ emp.archived_at.strftime('%m/%d/%Y') }}</div>
+                        </div>
+                        <div class="entity-status">
+                            <span class="status-tag status-archivado">Archivado</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                    {% if not p.employees %}
+                    <div class="panel-group-empty">Sin empleados archivados</div>
+                    {% endif %}
+                    {% endif %}
 
-        <div class="company-panel">
-            <div class="panel-header panel-pli">
-                <h2><i class="fas fa-truck"></i> Equipos Archivados</h2>
-                <span class="panel-count">{{ archived_equipment|length }}</span>
-            </div>
-            <div class="panel-body">
-                {% for eq in archived_equipment %}
-                <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card entity-card--archived">
-                    <div class="entity-info">
-                        <div class="entity-name">{{ eq.display_name }}</div>
-                        <div class="entity-meta">{{ eq.company_full }} · {{ eq.archive_reason_label }} · {{ eq.archived_at.strftime('%m/%d/%Y') }}</div>
-                    </div>
-                    <div class="entity-status">
-                        <span class="status-tag status-archivado">Archivado</span>
-                    </div>
-                </a>
-                {% endfor %}
-                {% if not archived_equipment %}
-                <div class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>{% if search %}No hay resultados con estos filtros{% else %}No hay equipos archivados{% endif %}</p>
-                </div>
+                    <div class="panel-group-title"><i class="fas fa-truck"></i> Equipos <span class="panel-group-count">{{ p.equipment|length }}</span></div>
+                    {% for eq in p.equipment %}
+                    <a href="{{ url_for('equipment_detail', id=eq.id) }}" class="entity-card entity-card--archived">
+                        <div class="entity-info">
+                            <div class="entity-name">{{ eq.display_name }}</div>
+                            <div class="entity-meta">{{ eq.archive_reason_label }} · {{ eq.archived_at.strftime('%m/%d/%Y') }}</div>
+                        </div>
+                        <div class="entity-status">
+                            <span class="status-tag status-archivado">Archivado</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                    {% if not p.equipment %}
+                    <div class="panel-group-empty">Sin equipos archivados</div>
+                    {% endif %}
                 {% endif %}
             </div>
         </div>
+        {% endfor %}
     </div>
 </div>
 {% endblock %}
