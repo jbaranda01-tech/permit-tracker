@@ -27,6 +27,37 @@ from list_prefs import (
 SEVERITY_RANK = {'critica': 4, 'alta': 3, 'media': 2, 'baja': 1}
 QUEUE_SORTS = ('unit', 'recent', 'oldest', 'severity')
 
+# Which slice of the fleet a reportable-equipment list covers. The shop queue
+# is a toggle between the two; `trucks` is the default everywhere, so every
+# pre-existing URL keeps meaning what it meant. `all` is only for validation
+# and for the unit <select>s on the report forms, which list both groups.
+QUEUE_KINDS = ('trucks', 'other')
+TRUCK_CLASSES = ('truck',)
+OTHER_CLASSES = ('chassis', 'tank', 'generator')
+KIND_LABELS = {'trucks': 'Camiones', 'other': 'Otros equipos'}
+
+
+def _normalize_kind(raw):
+    """Unknown values silently reset to the default (the queue's pattern)."""
+    return raw if raw in QUEUE_KINDS else 'trucks'
+
+
+def _kind_of(eq):
+    """The queue kind an equipment row belongs to (NULL class ⇒ trucks,
+    matching reportable_equipment_query's NULL guard)."""
+    return 'other' if eq.equipment_class in OTHER_CLASSES else 'trucks'
+
+
+def _kind_class_clause(kind):
+    """SQL predicate on Equipment.equipment_class for a kind (None for `all`)."""
+    if kind == 'trucks':
+        # NULL guard: rows that predate the classifier backfill count as trucks
+        return db.or_(Equipment.equipment_class.in_(TRUCK_CLASSES),
+                      Equipment.equipment_class.is_(None))
+    if kind == 'other':
+        return Equipment.equipment_class.in_(OTHER_CLASSES)
+    return None
+
 
 def _normalize_unit(raw):
     """Normalize a unit identifier for matching: handle numeric Excel cells,
@@ -41,46 +72,71 @@ def _normalize_unit(raw):
 
 
 def _unreportable_reason(eq):
-    """If equipment exists but won't appear in the driver report form, explain why.
-    Returns a Spanish reason string, or None if the equipment is reportable."""
+    """If equipment exists but won't appear in any report form, explain why.
+    Returns a Spanish reason string, or None if the equipment is reportable
+    (as a truck or as "other equipment" — both kinds are reportable now)."""
     if eq.archived_at is not None:
         return 'equipo archivado'
     if eq.company not in ('LB', 'PLI'):
         return f'empresa "{eq.company}"'
-    if eq.equipment_class and eq.equipment_class != 'truck':
+    if eq.equipment_class and eq.equipment_class not in TRUCK_CLASSES + OTHER_CLASSES:
         return f'clase "{eq.equipment_class_label}"'
     if eq.status != 'activo':
         return f'estado "{eq.status}"'
     # NULL-class fallback (rows that predate the classifier backfill)
-    if eq.model and eq.model.strip().lower() in EXCLUDED_EQUIPMENT_MODELS:
+    if (not eq.equipment_class and eq.model
+            and eq.model.strip().lower() in EXCLUDED_EQUIPMENT_MODELS):
         return f'modelo "{eq.model}" excluido'
     return None
 
 
-def reportable_equipment_query(company=None):
+def reportable_equipment_query(company=None, kind='trucks'):
+    """Active LB/PLI equipment of one queue kind: `trucks` (the default —
+    equipment_class truck, plus NULL-class rows), `other` (chassis / tank /
+    generator), or `all` (both; validation and the report-form selects)."""
     query = Equipment.query.filter(
         Equipment.status == 'activo',
         Equipment.archived_at.is_(None),
-        db.or_(Equipment.equipment_class == 'truck',
-               Equipment.equipment_class.is_(None)),
         Equipment.company.in_(['LB', 'PLI']),
     )
-    # NULL-class fallback: excluded-model loop only bites rows the backfill missed
-    for model_name in EXCLUDED_EQUIPMENT_MODELS:
+    clause = _kind_class_clause(kind)
+    if clause is not None:
+        query = query.filter(clause)
+    else:
         query = query.filter(db.or_(
-            Equipment.model == None,
-            func.lower(Equipment.model) != model_name,
-        ))
+            Equipment.equipment_class.in_(TRUCK_CLASSES + OTHER_CLASSES),
+            Equipment.equipment_class.is_(None)))
+    if kind != 'other':
+        # NULL-class fallback: the excluded-model loop only bites rows the
+        # backfill missed (a classified chassis is reportable under `other`).
+        for model_name in EXCLUDED_EQUIPMENT_MODELS:
+            query = query.filter(db.or_(
+                Equipment.equipment_class.isnot(None),
+                Equipment.model == None,
+                func.lower(Equipment.model) != model_name,
+            ))
     if company:
         query = query.filter_by(company=company)
     return query.order_by(Equipment.unit_number)
 
 
-def reportable_equipment_list(company=None):
-    """Reportable trucks in natural unit-number order — the shared order for
-    every shop-side truck list (dropdowns + queue cards)."""
-    return sorted(reportable_equipment_query(company=company).all(),
+def reportable_equipment_list(company=None, kind='trucks'):
+    """Reportable units of one kind in natural unit-number order — the shared
+    order for every shop-side unit list (dropdowns + queue cards)."""
+    return sorted(reportable_equipment_query(company=company, kind=kind).all(),
                   key=lambda eq: eq.unit_sort_key)
+
+
+def reportable_unit_groups(company=None):
+    """The report forms' <select> contents: trucks first (the default group),
+    then the other equipment, as (kind label, units) pairs with empty groups
+    dropped."""
+    groups = []
+    for kind in QUEUE_KINDS:
+        units = reportable_equipment_list(company=company, kind=kind)
+        if units:
+            groups.append((KIND_LABELS[kind], units))
+    return groups
 
 
 def update_issue_status(issue, new_status, changed_by_user_id=None,
@@ -207,10 +263,9 @@ def report(token):
     employee, inactive = _employee_for_token(token)
     if inactive:
         return inactive
-    trucks = reportable_equipment_list(company=employee.company)
     return render_template('issues/report.html',
                            employee=employee,
-                           trucks=trucks,
+                           unit_groups=reportable_unit_groups(company=employee.company),
                            categories=ISSUE_CATEGORIES,
                            severities=ISSUE_SEVERITIES,
                            problem_rows=[{}],
@@ -249,9 +304,10 @@ def report_submit(token):
 
     errors = []
     if not equipment_id:
-        errors.append('Debe seleccionar un camión.')
-    elif not reportable_equipment_query(company=employee.company).filter_by(id=equipment_id).first():
-        errors.append('Camión no válido.')
+        errors.append('Debe seleccionar una unidad.')
+    elif not (reportable_equipment_query(company=employee.company, kind='all')
+              .filter_by(id=equipment_id).first()):
+        errors.append('Unidad no válida.')
 
     if not problem_rows:
         errors.append('Debe incluir al menos un problema.')
@@ -265,12 +321,11 @@ def report_submit(token):
             errors.append(f'Problema {idx}: debe incluir una descripción.')
 
     if errors:
-        trucks = reportable_equipment_list(company=employee.company)
         for error in errors:
             flash(error, 'danger')
         return render_template('issues/report.html',
                                employee=employee,
-                               trucks=trucks,
+                               unit_groups=reportable_unit_groups(company=employee.company),
                                categories=ISSUE_CATEGORIES,
                                severities=ISSUE_SEVERITIES,
                                problem_rows=problem_rows or [{}],
@@ -371,6 +426,12 @@ def _search_clause(search):
     return db.or_(*clauses)
 
 
+def _queue_pref_key(kind):
+    """Sticky-pref bucket per queue kind: the trucks queue keeps the
+    historical key, so remembered filters survive this change."""
+    return 'issues:queue' if kind == 'trucks' else f'issues:queue:{kind}'
+
+
 def _queue_context(args, with_counts=True):
     """Everything the queue renders, for a set of GET args.
 
@@ -385,7 +446,12 @@ def _queue_context(args, with_counts=True):
 
     # A request with no queue state of its own (sidebar click, a detail-page
     # redirect with no `next`) picks up this user's remembered filters/sort.
-    args = restore_list_args('issues:queue', args, QUEUE_PREF_PARAMS)
+    # Camiones vs. otros equipos: the toggle picks which slice of the fleet
+    # the queue shows. It is NOT a sticky pref param (like the dashboard's
+    # `view`): each kind remembers its own filters under its own pref key, and
+    # the bare sidebar link always lands on trucks.
+    kind = _normalize_kind(args.get('kind'))
+    args = restore_list_args(_queue_pref_key(kind), args, QUEUE_PREF_PARAMS)
 
     # Unknown filter values silently reset to defaults (dashboard pattern)
     status_filter = args.get('status', '')
@@ -409,12 +475,19 @@ def _queue_context(args, with_counts=True):
     if sort_by not in QUEUE_SORTS:
         sort_by = 'unit'
 
+    # Issues follow their unit's kind; unlinked issues (no unit) only ever
+    # show on the default trucks queue, so they stay reachable in one place.
+    if kind == 'other':
+        kind_clause = _kind_class_clause('other')
+    else:
+        kind_clause = db.or_(Issue.equipment_id.is_(None), _kind_class_clause('trucks'))
+
     def scoped_query(exclude=None):
         """Every active filter applied except the axis named by `exclude`, so
         each control's count equals what clicking it would show."""
         q = (Issue.query
              .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
-             .filter(not_archived))
+             .filter(not_archived, kind_clause))
         if search:
             q = (q.join(Employee, Issue.reported_by_employee_id == Employee.id,
                         isouter=True)
@@ -452,7 +525,7 @@ def _queue_context(args, with_counts=True):
                           or equipment_filter or category_filter)
 
     def build_truck_profiles(company):
-        all_trucks = reportable_equipment_list(company=company)
+        all_trucks = reportable_equipment_list(company=company, kind=kind)
         profiles = []
         for eq in all_trucks:
             issues = issues_by_equipment.get(eq.id, [])
@@ -520,7 +593,23 @@ def _queue_context(args, with_counts=True):
                                      .filter(Issue.severity == code)
                                      .count())
 
-    trucks = reportable_equipment_list() if with_counts else []
+    trucks = reportable_equipment_list(kind=kind) if with_counts else []
+
+    # Open-issue count of the *other* kind, for the toggle's badge: the shop
+    # should see from the trucks queue that something is waiting on the
+    # chassis/tanks side (and vice versa). Unfiltered on purpose.
+    kind_counts = {}
+    if with_counts:
+        for code in QUEUE_KINDS:
+            if code == 'other':
+                clause = _kind_class_clause('other')
+            else:
+                clause = db.or_(Issue.equipment_id.is_(None), _kind_class_clause('trucks'))
+            kind_counts[code] = (Issue.query
+                                 .join(Equipment, Issue.equipment_id == Equipment.id, isouter=True)
+                                 .filter(not_archived, clause,
+                                         Issue.current_status.notin_(RESOLVED_STATUSES))
+                                 .count())
     # Issues with no linked equipment appear in no truck panel — surface them
     # in their own section so they stay reachable.
     unlinked_issues = [i for i in all_issues if not i.equipment_id]
@@ -531,6 +620,7 @@ def _queue_context(args, with_counts=True):
     # clean (the `... or none` idiom, on the normalized values). A new filter
     # param belongs here, or the arrows walk an unfiltered queue.
     nav_args = {key: value for key, value in (
+        ('kind', kind if kind != 'trucks' else ''),
         ('status', status_filter),
         ('severity', severity_filter),
         ('equipment_id', equipment_filter),
@@ -540,6 +630,10 @@ def _queue_context(args, with_counts=True):
     ) if value}
 
     return {
+        'kind': kind,
+        'kind_label': KIND_LABELS[kind],
+        'kinds': [(code, KIND_LABELS[code]) for code in QUEUE_KINDS],
+        'kind_counts': kind_counts,
         'lb_trucks': lb_trucks,
         'pli_trucks': pli_trucks,
         'lb_issue_count': sum(t['issue_count'] for t in lb_trucks),
@@ -610,12 +704,13 @@ def _issue_sibling_nav(issue_id, args):
 def queue():
     # "Limpiar filtros" — forget the remembered choices, then land on a clean
     # URL (which restores nothing, the bucket having just been dropped).
+    kind = _normalize_kind(request.args.get('kind'))
     if request.args.get('reset'):
-        forget_list_args('issues:queue')
-        return redirect(url_for('issues.queue'))
+        forget_list_args(_queue_pref_key(kind))
+        return redirect(url_for('issues.queue', kind=kind if kind != 'trucks' else None))
 
     context = _queue_context(request.args)
-    remember_list_args('issues:queue', context['nav_args'], QUEUE_PREF_PARAMS)
+    remember_list_args(_queue_pref_key(kind), context['nav_args'], QUEUE_PREF_PARAMS)
     return render_template('issues/queue.html', **context)
 
 
@@ -676,7 +771,10 @@ def truck_profile(equipment_id):
                            # Detail-page prev/next arrows walk this truck's
                            # queue slice; the back-link lands on the queue
                            # filtered to the same unit.
-                           nav_args={'equipment_id': equipment.id})
+                           kind=_kind_of(equipment),
+                           nav_args={k: v for k, v in (
+                               ('kind', _kind_of(equipment) if _kind_of(equipment) != 'trucks' else ''),
+                               ('equipment_id', equipment.id)) if v})
 
 
 def _safe_next(raw, fallback):
@@ -869,7 +967,7 @@ def _render_manual_form(form_data, status_code=200):
         # newest first, following the CSV's append order
         created_issues = [found[i] for i in reversed(created_ids) if i in found]
     return render_template('issues/manual_new.html',
-                           trucks=reportable_equipment_list(),
+                           unit_groups=reportable_unit_groups(),
                            categories=ISSUE_CATEGORIES,
                            severities=ISSUE_SEVERITIES,
                            statuses=ISSUE_STATUSES,
@@ -896,9 +994,9 @@ def create():
 
     errors = []
     if not equipment_id:
-        errors.append('Debe seleccionar un camión.')
-    elif not reportable_equipment_query().filter_by(id=equipment_id).first():
-        errors.append('Camión no válido.')
+        errors.append('Debe seleccionar una unidad.')
+    elif not reportable_equipment_query(kind='all').filter_by(id=equipment_id).first():
+        errors.append('Unidad no válida.')
 
     if category not in [c[0] for c in ISSUE_CATEGORIES]:
         errors.append('Categoría no válida.')

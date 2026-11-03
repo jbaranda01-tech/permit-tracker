@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'issues/_macros.html' import unit_icon %}
 {% block title %}Reporte #{{ issue.id }}{% endblock %}
 
 {% block content %}
@@ -19,7 +20,7 @@
     </div>
     <p class="issue-hero-desc">{{ issue.description }}</p>
     <div class="issue-hero-meta">
-        <span><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
+        <span>{{ unit_icon(issue.equipment) }} {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
         <span><i class="fas fa-user"></i> {{ issue.reporter.name if issue.reporter else 'Desconocido' }}</span>
         {% if issue.reported_at %}<span><i class="fas fa-clock"></i> {{ issue.reported_at.strftime('%m/%d/%Y %H:%M') }}</span>{% endif %}
         {% if issue.resolved_at %}
@@ -32,7 +33,7 @@
 {% if issue.equipment %}
 <div class="profile-card card-stack">
     <div class="card-header">
-        <i class="fas fa-truck"></i> Unidad
+        {{ unit_icon(issue.equipment) }} Unidad
     </div>
     <div class="card-body">
         <div class="permit-field">
@@ -51,7 +52,7 @@
         {% if current_user.is_admin %}
         <div class="permit-field">
             <a href="{{ url_for('equipment_detail', id=issue.equipment.id) }}" class="btn btn-secondary btn-sm">
-                <i class="fas fa-edit"></i> Ver ficha / editar camión
+                <i class="fas fa-edit"></i> Ver ficha / editar {{ 'camión' if issue.equipment.equipment_class in (none, 'truck') else 'equipo' }}
             </a>
         </div>
         {% endif %}

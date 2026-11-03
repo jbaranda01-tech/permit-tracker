@@ -37,15 +37,21 @@ if ('serviceWorker' in navigator) {
     <section id="panel-report" role="tabpanel" aria-labelledby="tab-report" {% if view != 'report' %}hidden{% endif %}>
     <form method="POST" action="{{ url_for('issues.report_submit', token=employee.access_token) }}" class="report-form">
         <div class="form-section">
-            <h3><i class="fas fa-truck"></i> Camión</h3>
+            <h3><i class="fas fa-truck"></i> Unidad</h3>
             <div class="form-group">
                 <label for="equipment_id">Unidad *</label>
+                {# Camiones first (the default group), then chasis / tanques /
+                   generadores — one select so a driver can report either. #}
                 <select name="equipment_id" id="equipment_id" required>
                     <option value="">— Seleccionar unidad —</option>
-                    {% for truck in trucks %}
-                    <option value="{{ truck.id }}" {% if request.form.get('equipment_id')|int == truck.id %}selected{% endif %}>
-                        {{ truck.display_name }}{% if truck.make or truck.model %} — {{ truck.make }} {{ truck.model }}{% endif %}{% if truck.year %} ({{ truck.year }}){% endif %}
+                    {% for group_label, units in unit_groups %}
+                    <optgroup label="{{ group_label }}">
+                    {% for unit in units %}
+                    <option value="{{ unit.id }}" {% if request.form.get('equipment_id')|int == unit.id %}selected{% endif %}>
+                        {{ unit.display_name }}{% if unit.make or unit.model %} — {{ unit.make }} {{ unit.model }}{% endif %}{% if unit.year %} ({{ unit.year }}){% endif %}
                     </option>
+                    {% endfor %}
+                    </optgroup>
                     {% endfor %}
                 </select>
             </div>

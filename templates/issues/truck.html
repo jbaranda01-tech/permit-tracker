@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from '_macros.html' import company_logo %}
-{% from 'issues/_macros.html' import issue_row %}
+{% from 'issues/_macros.html' import issue_row, unit_icon %}
 {% block title %}{{ equipment.display_name }} — Taller{% endblock %}
 
 {% block content %}
@@ -8,7 +8,7 @@
 <div class="detail-page">
     <div class="detail-header">
         <div class="detail-topbar">
-            <a href="{{ url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Volver a Reportes</a>
+            <a href="{{ url_for('issues.queue', kind=kind if kind != 'trucks' else none) }}" class="back-link"><i class="fas fa-arrow-left"></i> Volver a Reportes</a>
         </div>
         <div class="detail-title-row">
             <div>
@@ -34,7 +34,7 @@
                 {% endif %}
                 {% if current_user.is_admin %}
                 <a href="{{ url_for('equipment_detail', id=equipment.id) }}" class="btn btn-secondary">
-                    <i class="fas fa-edit"></i> Ver ficha / editar camión
+                    <i class="fas fa-edit"></i> Ver ficha / editar {{ 'camión' if kind == 'trucks' else 'equipo' }}
                 </a>
                 {% endif %}
             </div>
@@ -123,7 +123,7 @@
         </div>
 
         <div class="profile-card">
-            <div class="card-header"><i class="fas fa-truck"></i> Unidad</div>
+            <div class="card-header">{{ unit_icon(equipment) }} Unidad</div>
             <div class="card-body">
                 <div class="permit-field">
                     <label>Compañía</label>

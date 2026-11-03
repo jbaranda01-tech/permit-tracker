@@ -202,7 +202,7 @@ def test_invalid_submit_rerenders_on_report_panel(ctx, client):
     html = resp.get_data(as_text=True)
     report_panel = html.split('id="panel-report"', 1)[1].split('>', 1)[0]
     assert 'hidden' not in report_panel
-    assert 'Debe seleccionar un camión' in html
+    assert 'Debe seleccionar una unidad' in html
 
 
 def test_success_page_links_to_permits_view(ctx, client):

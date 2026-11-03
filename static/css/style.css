@@ -2044,7 +2044,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     box-shadow: 0 0 20px var(--glow);
     transition: transform var(--transition);
 }
-.mode-switch[data-mode="permits"]::before { transform: translateX(100%); }
+.mode-switch[data-mode="permits"]::before,
+.mode-switch[data-mode="other"]::before { transform: translateX(100%); }   /* second segment: driver "Mis Permisos" / queue "Otros equipos" */
 .mode-switch-btn {
     position: relative;
     z-index: 1;
@@ -2066,6 +2067,30 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .mode-switch-btn[aria-selected="true"]:hover { color: #fff; }   /* same literal .choice-btn:checked uses on accent fills */
 .mode-switch-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
 @media (prefers-reduced-motion: reduce) { .mode-switch::before { transition: none; } }
+/* Queue variant: Camiones <-> Otros equipos, left-aligned above the tiles */
+.kind-switch { margin: 0 0 var(--space-md); max-width: 360px; }
+.kind-switch .mode-switch-btn { min-height: 38px; font-size: 0.85rem; }
+.kind-switch .mode-switch-btn .badge {
+    background: rgba(255, 255, 255, 0.22);
+    color: inherit;
+    font-size: 0.7rem;
+    padding: 1px 7px;
+    border-radius: 10px;
+}
+.kind-switch .mode-switch-btn[aria-selected="false"] .badge { background: var(--accent-bg); color: var(--accent); }
+.truck-class-tag {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1px 7px;
+    margin-left: var(--space-xs);
+    vertical-align: middle;
+}
 
 /* "Mis Permisos" panel (driver link) */
 .permits-panel[hidden], #panel-report[hidden] { display: none; }

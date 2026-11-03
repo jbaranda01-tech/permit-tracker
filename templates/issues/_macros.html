@@ -1,6 +1,13 @@
 {# Shared issue-row macro — imported by queue.html (truck cards, Sin-unidad,
    Cerrados) and truck.html (per-vehicle profile). One source so the row
    markup can't drift between pages. #}
+{# Class-aware icon for a unit: trucks keep fa-truck; chassis / tanks /
+   generators get their own glyph so the "Otros equipos" queue reads at a glance. #}
+{% macro unit_icon(equipment) -%}
+{%- set icons = {'chassis': 'fa-trailer', 'tank': 'fa-oil-can', 'generator': 'fa-plug'} -%}
+<i class="fas {{ icons.get(equipment.equipment_class if equipment else none, 'fa-truck') }}"></i>
+{%- endmacro %}
+
 {% macro issue_row(issue, statuses, nav_args, show_truck=false, show_resolved=false) %}
 {# Stretched-link row: the whole card is clickable via .issue-row-link::after,
    while the inline status form sits above the overlay (z-index) — a nested
@@ -10,7 +17,7 @@
         <span class="issue-severity severity-{{ issue.severity }}">{{ issue.severity_label }}</span>
         <span class="category-tag">{{ issue.category_label }}</span>
         {% if show_truck %}
-        <span class="issue-truck-tag"><i class="fas fa-truck"></i> {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
+        <span class="issue-truck-tag">{{ unit_icon(issue.equipment) }} {{ issue.equipment.display_name if issue.equipment else 'Sin unidad' }}</span>
         {% endif %}
         <span class="issue-id">#{{ issue.id }}</span>
     </div>

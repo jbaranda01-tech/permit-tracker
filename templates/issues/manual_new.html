@@ -31,15 +31,20 @@
         {# Return URL from the truck profile's quick-add panel; survives a 422 re-render. #}
         <input type="hidden" name="next" value="{{ form_data.get('next', '') }}">
         <div class="form-section">
-            <h3><i class="fas fa-truck"></i> Camión</h3>
+            <h3><i class="fas fa-truck"></i> Unidad</h3>
             <div class="form-group">
                 <label for="equipment_id">Unidad *</label>
+                {# Camiones first, then the other equipment (chasis / tanques / generadores). #}
                 <select name="equipment_id" id="equipment_id" required {% if not prefilled_truck %}autofocus{% endif %}>
                     <option value="">— Seleccionar unidad —</option>
-                    {% for truck in trucks %}
-                    <option value="{{ truck.id }}" {% if prefilled_truck == truck.id %}selected{% endif %}>
-                        {{ truck.display_name }} ({{ truck.company }}){% if truck.make or truck.model %} — {{ truck.make }} {{ truck.model }}{% endif %}{% if truck.year %} ({{ truck.year }}){% endif %}
+                    {% for group_label, units in unit_groups %}
+                    <optgroup label="{{ group_label }}">
+                    {% for unit in units %}
+                    <option value="{{ unit.id }}" {% if prefilled_truck == unit.id %}selected{% endif %}>
+                        {{ unit.display_name }} ({{ unit.company }}){% if unit.make or unit.model %} — {{ unit.make }} {{ unit.model }}{% endif %}{% if unit.year %} ({{ unit.year }}){% endif %}
                     </option>
+                    {% endfor %}
+                    </optgroup>
                     {% endfor %}
                 </select>
             </div>
