@@ -1,0 +1,100 @@
+{# Driver "Mis Permisos" panel — read-only view of the driver's own permits.
+   Rendered inside report.html behind the mode switch; `view` picks which
+   panel starts visible. Card markup mirrors employee.html (minus the
+   manager-only footer); document links go through the token-scoped
+   issues.report_document route because /uploads/ is login-only. #}
+<section id="panel-permits" class="permits-panel" role="tabpanel" aria-labelledby="tab-permits" {% if view != 'permits' %}hidden{% endif %}>
+    <div class="permits-summary">
+        {% if permit_counts.expired %}
+        <span class="status-pill status-pill--expired"><i class="fas fa-circle-xmark"></i> {{ permit_counts.expired }} vencido{{ 's' if permit_counts.expired != 1 }}</span>
+        {% endif %}
+        {% if permit_counts.expiring_soon %}
+        <span class="status-pill status-pill--expiring"><i class="fas fa-clock"></i> {{ permit_counts.expiring_soon }} por vencer</span>
+        {% endif %}
+        {% if permit_counts.missing %}
+        <span class="status-pill status-pill--missing"><i class="fas fa-circle-question"></i> {{ permit_counts.missing }} sin fecha</span>
+        {% endif %}
+        {% if permit_counts.valid %}
+        <span class="status-pill status-pill--valid"><i class="fas fa-check"></i> {{ permit_counts.valid }} vigente{{ 's' if permit_counts.valid != 1 }}</span>
+        {% endif %}
+    </div>
+
+    <div class="profile-card">
+        <div class="profile-card-header">
+            <i class="fas fa-car"></i> Licencia de Conducir
+        </div>
+        <div class="profile-field">
+            <label>Número</label>
+            <span>{{ employee.license_number or '—' }}</span>
+        </div>
+        <div class="profile-field">
+            <label>Expiración</label>
+            {% if employee.license_expiration %}
+                {% set license_labels = {'expired': 'Vencida', 'expiring_soon': 'Por vencer', 'valid': 'Vigente'} %}
+                <span class="data-highlight data-highlight--{{ license_status }}"><span class="dh-label">{{ license_labels.get(license_status, '') }}</span>{{ employee.license_expiration.strftime('%m/%d/%Y') }}</span>
+            {% else %}
+                <span class="data-highlight data-highlight--missing">—</span>
+            {% endif %}
+        </div>
+        {% if employee.license_file %}
+        <div class="profile-field">
+            <label>Copia</label>
+            <a href="{{ url_for('issues.report_document', token=employee.access_token, filename=employee.license_file) }}" target="_blank" class="file-link">
+                <i class="fas fa-file-image"></i> Ver documento
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if permits %}
+    <div class="permits-grid card-stack">
+        {% for permit in permits %}
+        <div class="permit-card permit-{{ permit.status }}">
+            <div class="permit-card-header">
+                <span class="permit-name">{{ permit.display_name }}</span>
+                <span class="permit-badge permit-badge-{{ permit.status }}">{{ permit.status_label }}</span>
+            </div>
+            <div class="permit-card-body">
+                <div class="permit-field permit-field--highlight">
+                    <span class="data-highlight data-highlight--{{ permit.status }}">
+                        <span class="dh-label">Expira</span>
+                        {{ permit.expiration_date.strftime('%m/%d/%Y') if permit.expiration_date else 'Sin fecha' }}
+                    </span>
+                </div>
+                {% if permit.permit_number %}
+                <div class="permit-field">
+                    <label>Número</label>
+                    <span>{{ permit.permit_number }}</span>
+                </div>
+                {% endif %}
+                {% if permit.issuing_authority %}
+                <div class="permit-field">
+                    <label>Autoridad</label>
+                    <span>{{ permit.issuing_authority }}</span>
+                </div>
+                {% endif %}
+                {% if permit.renewal_cost %}
+                <div class="permit-field">
+                    <label>Costo Renovación</label>
+                    <span>${{ "%.2f"|format(permit.renewal_cost) }}</span>
+                </div>
+                {% endif %}
+                {% if permit.file_path %}
+                <a href="{{ url_for('issues.report_document', token=employee.access_token, filename=permit.file_path) }}" target="_blank" class="file-link">
+                    <i class="fas fa-paperclip"></i> Ver documento
+                </a>
+                {% endif %}
+                {% if permit.notes %}
+                <div class="permit-notes">{{ permit.notes }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state card-stack">
+        <i class="fas fa-id-card"></i>
+        <p>No hay permisos registrados.</p>
+    </div>
+    {% endif %}
+</section>

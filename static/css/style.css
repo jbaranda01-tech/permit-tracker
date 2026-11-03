@@ -2019,6 +2019,67 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .report-header h1 { font-size: 1.5rem; margin-bottom: var(--space-xs); }
 .report-driver-name { color: var(--text-secondary); font-size: 0.95rem; }
 
+/* Driver link mode switch: Reportar <-> Mis Permisos (sliding pill, anchors) */
+.mode-switch {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 4px;
+    margin: 0 auto var(--space-xl);
+    max-width: 420px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-strong);
+    border-radius: 20px;
+}
+.mode-switch::before {
+    /* the sliding thumb */
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    border-radius: 16px;
+    background: var(--accent);
+    box-shadow: 0 0 20px var(--glow);
+    transition: transform var(--transition);
+}
+.mode-switch[data-mode="permits"]::before { transform: translateX(100%); }
+.mode-switch-btn {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    min-height: 44px;
+    padding: var(--space-sm) var(--space-md);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: 16px;
+    transition: color var(--transition);
+}
+.mode-switch-btn:hover { color: var(--text-primary); }
+.mode-switch-btn[aria-selected="true"],
+.mode-switch-btn[aria-selected="true"]:hover { color: #fff; }   /* same literal .choice-btn:checked uses on accent fills */
+.mode-switch-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+@media (prefers-reduced-motion: reduce) { .mode-switch::before { transition: none; } }
+
+/* "Mis Permisos" panel (driver link) */
+.permits-panel[hidden], #panel-report[hidden] { display: none; }
+.permits-summary {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-lg);
+}
+.permits-summary .status-pill { padding: 3px var(--space-md); font-size: 0.78rem; }
+.permits-summary .status-pill--valid { width: auto; height: auto; }   /* base --valid is a fixed 20px circle */
+.permits-panel .empty-state { padding: var(--space-xl) 0; }
+
 .report-form .form-section { margin-bottom: var(--space-lg); }
 .report-form .btn-lg {
     width: 100%;
@@ -2781,6 +2842,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     }
     .report-form textarea { min-height: 120px; }
     .choice-btn { flex: 1 1 calc(50% - var(--space-sm)); }
+    .report-success .form-actions { flex-direction: column; }
     .report-form .form-actions {
         position: sticky;
         bottom: 0;

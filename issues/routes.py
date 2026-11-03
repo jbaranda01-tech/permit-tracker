@@ -4,8 +4,9 @@ import secrets
 import tempfile
 import unicodedata
 from collections import defaultdict
-from datetime import datetime, date
-from flask import render_template, request, redirect, url_for, flash, abort, session
+from datetime import datetime, date, timedelta
+from io import BytesIO
+from flask import render_template, request, redirect, url_for, flash, abort, session, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -13,7 +14,7 @@ from sqlalchemy.orm import joinedload
 from issues import issues_bp
 from issues.decorators import shop_required, admin_required, shop_manager_required
 from models import (
-    db, Employee, Equipment, EquipmentPermit, Issue, IssueStatusHistory,
+    db, Employee, Equipment, EquipmentPermit, FileStorage, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     OPEN_STATUSES, RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES,
     EXCLUDED_EQUIPMENT_MODELS, EQUIPMENT_PERMIT_TYPES,
@@ -148,25 +149,80 @@ def synthesize_status_history(issue, final_status, reported_at, resolved_at=None
 
 # ── DRIVER REPORT FLOW ───────────────────────────────────────────────
 
-@issues_bp.route('/report/<token>', methods=['GET'])
-def report(token):
+REPORT_VIEWS = ('report', 'permits')
+_PERMIT_URGENCY = {'expired': 0, 'expiring_soon': 1, 'missing': 2, 'valid': 3}
+
+
+def _employee_for_token(token):
+    """Resolve the driver behind a report link.
+
+    404 on an unknown token. Returns ``(employee, inactive_response)`` where
+    ``inactive_response`` is the 410 "Enlace Inactivo" page for an archived
+    employee (the caller returns it as-is), else None.
+    """
     employee = Employee.query.filter_by(access_token=token).first_or_404()
     if employee.is_archived:
-        return render_template('issues/link_inactive.html', employee=employee), 410
+        return employee, (render_template('issues/link_inactive.html', employee=employee), 410)
+    return employee, None
+
+
+def _license_status(employee, today, alert_date):
+    """Same if-chain employee.html renders inline for the license card."""
+    exp = employee.license_expiration
+    if exp is None:
+        return 'missing'
+    if exp < today:
+        return 'expired'
+    if exp <= alert_date:
+        return 'expiring_soon'
+    return 'valid'
+
+
+def _driver_permits_context(employee):
+    """Read-only view model for the driver's "Mis Permisos" panel.
+
+    Deliberately does NOT call ensure_employee_permit_slots — an anonymous GET
+    must never write to the DB. N/A slots are hidden, like on employee.html.
+    """
+    today = date.today()
+    alert_date = today + timedelta(days=30)
+    permits = [p for p in employee.permits.all() if p.applicability != 'N/A']
+    permits.sort(key=lambda p: (_PERMIT_URGENCY.get(p.status, 9),
+                                p.expiration_date or date.max,
+                                (p.display_name or '').lower()))
+    license_status = _license_status(employee, today, alert_date)
+    counts = {'expired': 0, 'expiring_soon': 0, 'missing': 0, 'valid': 0}
+    for status in [p.status for p in permits] + [license_status]:
+        counts[status] = counts.get(status, 0) + 1
+    return {'permits': permits, 'license_status': license_status, 'permit_counts': counts}
+
+
+def _report_view(args):
+    view = args.get('view', 'report')
+    return view if view in REPORT_VIEWS else 'report'
+
+
+@issues_bp.route('/report/<token>', methods=['GET'])
+def report(token):
+    employee, inactive = _employee_for_token(token)
+    if inactive:
+        return inactive
     trucks = reportable_equipment_list(company=employee.company)
     return render_template('issues/report.html',
                            employee=employee,
                            trucks=trucks,
                            categories=ISSUE_CATEGORIES,
                            severities=ISSUE_SEVERITIES,
-                           problem_rows=[{}])
+                           problem_rows=[{}],
+                           view=_report_view(request.args),
+                           **_driver_permits_context(employee))
 
 
 @issues_bp.route('/report/<token>', methods=['POST'])
 def report_submit(token):
-    employee = Employee.query.filter_by(access_token=token).first_or_404()
-    if employee.is_archived:
-        return render_template('issues/link_inactive.html', employee=employee), 410
+    employee, inactive = _employee_for_token(token)
+    if inactive:
+        return inactive
 
     equipment_id = request.form.get('equipment_id', type=int)
 
@@ -217,7 +273,9 @@ def report_submit(token):
                                trucks=trucks,
                                categories=ISSUE_CATEGORIES,
                                severities=ISSUE_SEVERITIES,
-                               problem_rows=problem_rows or [{}]), 422
+                               problem_rows=problem_rows or [{}],
+                               view='report',   # the form must be visible to show the errors
+                               **_driver_permits_context(employee)), 422
 
     # reported_at is intentionally NOT sourced from the request: it defaults to
     # the model's datetime.utcnow (see models.py). The driver form has no date
@@ -248,13 +306,41 @@ def report_submit(token):
 
 @issues_bp.route('/report/<token>/success', methods=['GET'])
 def report_success(token):
-    employee = Employee.query.filter_by(access_token=token).first_or_404()
-    if employee.is_archived:
-        return render_template('issues/link_inactive.html', employee=employee), 410
+    employee, inactive = _employee_for_token(token)
+    if inactive:
+        return inactive
     issue_ids = [int(part) for part in request.args.get('issue_ids', '').split(',')
                  if part.strip().isdigit()]
     return render_template('issues/report_success.html', token=token, issue_ids=issue_ids,
                            employee=employee)
+
+
+@issues_bp.route('/report/<token>/document/<filename>', methods=['GET'])
+def report_document(token, filename):
+    """Serve one of the driver's OWN documents (permit scan or license copy).
+
+    /uploads/<filename> is login-only, so the driver link gets its own
+    token-scoped route. The filename must match a document column on a row
+    this employee owns (exact set membership, no path handling); anything
+    else is a 404 — not a 403, so the route never confirms a file exists.
+    """
+    employee, inactive = _employee_for_token(token)
+    if inactive:
+        return inactive
+    allowed = {p.file_path for p in employee.permits
+               if p.file_path and p.applicability != 'N/A'}
+    if employee.license_file:
+        allowed.add(employee.license_file)
+    if filename not in allowed:
+        abort(404)
+    stored = FileStorage.query.filter_by(filename=filename).first_or_404()
+    # Same blob-serving body as app.uploaded_file (issues/ cannot import app.py — circular).
+    return send_file(
+        BytesIO(stored.data),
+        mimetype=stored.mime_type,
+        as_attachment=False,
+        download_name=stored.original_filename or filename,
+    )
 
 
 # ── SHOP QUEUE ────────────────────────────────────────────────────────

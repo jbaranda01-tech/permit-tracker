@@ -29,6 +29,9 @@ if ('serviceWorker' in navigator) {
             <a href="{{ url_for('issues.report', token=token) }}" class="btn btn-primary btn-lg">
                 <i class="fas fa-plus"></i> Reportar Otro Problema
             </a>
+            <a href="{{ url_for('issues.report', token=token, view='permits') }}" class="btn btn-secondary btn-lg">
+                <i class="fas fa-id-card"></i> Ver mis permisos
+            </a>
         </div>
     </div>
 </div>
