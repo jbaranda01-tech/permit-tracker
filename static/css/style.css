@@ -1119,7 +1119,7 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     word-break: break-word;
 }
 
-/* Company logo beside the profile name (employee / equipment / truck profile) */
+/* Company logo to the right of the profile name (employee / equipment / truck profile) */
 .detail-title {
     display: flex;
     align-items: center;
@@ -1128,9 +1128,9 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
 }
 .detail-title h1 { margin-bottom: 0; min-width: 0; }
 .detail-company-logo {
-    height: 40px;
+    height: 28px;
     width: auto;
-    max-width: 120px;
+    max-width: 90px;
     object-fit: contain;
     flex-shrink: 0;
 }
@@ -1138,11 +1138,11 @@ a.stat-tile:hover, button.stat-tile:hover { box-shadow: var(--shadow-md); }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
+    width: 28px;
     border-radius: var(--radius-md);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
-    font-size: 1.1rem;
+    font-size: 0.85rem;
 }
 
 .detail-meta {
@@ -2904,8 +2904,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     /* Headings */
     .detail-title-row h1 { font-size: 1.3rem; }
     .detail-title { gap: var(--space-sm); }
-    .detail-company-logo { height: 28px; }
-    .detail-company-logo--icon { width: 28px; font-size: 0.85rem; }
+    .detail-company-logo { height: 22px; }
+    .detail-company-logo--icon { width: 22px; font-size: 0.7rem; }
     .detail-actions .btn { flex: 1; min-width: 0; justify-content: center; }
 
     /* Login card */
