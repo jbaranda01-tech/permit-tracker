@@ -790,6 +790,13 @@ LEGACY_ISSUE_STATUSES = {
     'resuelto': 'cerrado',
 }
 
+# Marker prefix on the IssueStatusHistory.notes of an *edit* audit row — an
+# entry with from_status == to_status that records what a shop manager changed
+# on the report (unit / category / severity / description). The boot migration
+# deletes redundant same-status transitions and must skip these — see
+# _migrate_issue_statuses in app.py and issues.routes.update.
+ISSUE_EDIT_NOTE = 'Reporte editado'
+
 
 class Issue(db.Model):
     __tablename__ = 'issues'

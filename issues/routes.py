@@ -16,7 +16,7 @@ from issues.decorators import shop_required, admin_required, shop_manager_requir
 from models import (
     db, Employee, Equipment, EquipmentPermit, FileStorage, Issue, IssueStatusHistory,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
-    OPEN_STATUSES, RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES,
+    OPEN_STATUSES, RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES, ISSUE_EDIT_NOTE,
     EXCLUDED_EQUIPMENT_MODELS, EQUIPMENT_PERMIT_TYPES,
     classify_equipment, protect_uploaded_files,
 )
@@ -956,22 +956,70 @@ def _created_ids(raw):
     return ids[-RECENT_CREATED_LIMIT:]
 
 
-def _render_manual_form(form_data, status_code=200):
+def _validate_issue_fields(form, current_equipment_id=None):
+    """The report fields shared by create() and update(): returns
+    ({equipment_id, category, severity, description}, errors).
+
+    An edited issue may KEEP its current unit even if that unit is no longer
+    reportable (archived / reclassified) — otherwise a typo on an archived
+    unit's report could never be fixed. Only a *change* of unit must land on a
+    reportable one.
+    """
+    fields = {
+        'equipment_id': form.get('equipment_id', type=int),
+        'category': form.get('category', ''),
+        'severity': form.get('severity', 'media'),
+        'description': form.get('description', '').strip(),
+    }
+    errors = []
+    eq_id = fields['equipment_id']
+    if not eq_id:
+        errors.append('Debe seleccionar una unidad.')
+    elif eq_id != current_equipment_id and \
+            not reportable_equipment_query(kind='all').filter_by(id=eq_id).first():
+        errors.append('Unidad no válida.')
+    if fields['category'] not in [c[0] for c in ISSUE_CATEGORIES]:
+        errors.append('Categoría no válida.')
+    if fields['severity'] not in [s[0] for s in ISSUE_SEVERITIES]:
+        errors.append('Severidad no válida.')
+    if not fields['description']:
+        errors.append('Debe incluir una descripción del problema.')
+    return fields, errors
+
+
+def _render_manual_form(form_data, status_code=200, issue=None):
     """Single render path for the manual entry form. form_data is the source of
     sticky values: request.args on GET (query-arg prefill from the queue link
-    and the save-and-add-another redirect), request.form on a 422 re-render."""
-    created_ids = _created_ids(form_data.get('created', ''))
+    and the save-and-add-another redirect), request.form on a 422 re-render.
+
+    With ``issue`` set the same template renders in edit mode (title, action
+    and buttons switch; the admin status/date section and the save-and-new
+    loop are hidden). ``extra_unit`` is the issue's current unit when it is no
+    longer in the reportable groups (archived / reclassified), so the select
+    can still show — and resubmit — it unchanged."""
+    unit_groups = reportable_unit_groups()
+    extra_unit = None
+    created_ids = []
     created_issues = []
-    if created_ids:
-        found = {i.id: i for i in Issue.query.filter(Issue.id.in_(created_ids)).all()}
-        # newest first, following the CSV's append order
-        created_issues = [found[i] for i in reversed(created_ids) if i in found]
+    if issue is not None:
+        if issue.equipment is not None:
+            listed = {u.id for _, units in unit_groups for u in units}
+            if issue.equipment_id not in listed:
+                extra_unit = issue.equipment
+    else:
+        created_ids = _created_ids(form_data.get('created', ''))
+        if created_ids:
+            found = {i.id: i for i in Issue.query.filter(Issue.id.in_(created_ids)).all()}
+            # newest first, following the CSV's append order
+            created_issues = [found[i] for i in reversed(created_ids) if i in found]
     return render_template('issues/manual_new.html',
-                           unit_groups=reportable_unit_groups(),
+                           unit_groups=unit_groups,
                            categories=ISSUE_CATEGORIES,
                            severities=ISSUE_SEVERITIES,
                            statuses=ISSUE_STATUSES,
                            form_data=form_data,
+                           issue=issue,
+                           extra_unit=extra_unit,
                            created_issues=created_issues,
                            created_csv=','.join(str(i) for i in created_ids)), status_code
 
@@ -985,27 +1033,13 @@ def new():
 @issues_bp.route('/new', methods=['POST'])
 @shop_manager_required
 def create():
-    equipment_id = request.form.get('equipment_id', type=int)
-    category = request.form.get('category', '')
-    severity = request.form.get('severity', 'media')
+    fields, errors = _validate_issue_fields(request.form)
+    equipment_id = fields['equipment_id']
     status = request.form.get('status', 'reportado') or 'reportado'
-    description = request.form.get('description', '').strip()
     notes = request.form.get('notes', '').strip()
 
-    errors = []
-    if not equipment_id:
-        errors.append('Debe seleccionar una unidad.')
-    elif not reportable_equipment_query(kind='all').filter_by(id=equipment_id).first():
-        errors.append('Unidad no válida.')
-
-    if category not in [c[0] for c in ISSUE_CATEGORIES]:
-        errors.append('Categoría no válida.')
-    if severity not in [s[0] for s in ISSUE_SEVERITIES]:
-        errors.append('Severidad no válida.')
     if status not in [s[0] for s in ISSUE_STATUSES]:
         errors.append('Estado no válido.')
-    if not description:
-        errors.append('Debe incluir una descripción del problema.')
 
     report_date = _coerce_date(request.form.get('fecha_reporte', ''))
     resolved_date = _coerce_date(request.form.get('fecha_resuelto', ''))
@@ -1022,12 +1056,7 @@ def create():
             flash(error, 'danger')
         return _render_manual_form(request.form, status_code=422)
 
-    issue = Issue(
-        equipment_id=equipment_id,
-        category=category,
-        severity=severity,
-        description=description,
-    )
+    issue = Issue(**fields)
     db.session.add(issue)
     db.session.flush()
 
@@ -1059,6 +1088,103 @@ def create():
     # so the user lands back on the unit with the new report in Reportados.
     return redirect(_safe_next(request.form.get('next', ''),
                                url_for('issues.detail', issue_id=issue.id)))
+
+
+# ── SHOP MANAGER: EDIT / ADMIN: DELETE A REPORT ─────────────────────
+#
+# Edits cover the report itself (unit, category, severity, description) — never
+# the status, dates or reporter; status changes keep going through
+# update_status so the timeline stays an honest transition log. Each edit
+# appends a same-status IssueStatusHistory row whose notes start with
+# ISSUE_EDIT_NOTE and list what changed; detail.html renders it as "Editado".
+
+@issues_bp.route('/<int:issue_id>/edit', methods=['GET'])
+@shop_manager_required
+def edit(issue_id):
+    issue = Issue.query.get_or_404(issue_id)
+    form_data = {
+        'equipment_id': issue.equipment_id or '',
+        'category': issue.category,
+        'severity': issue.severity,
+        'description': issue.description or '',
+        'next': request.args.get('next', ''),
+    }
+    return _render_manual_form(form_data, issue=issue)
+
+
+@issues_bp.route('/<int:issue_id>/edit', methods=['POST'])
+@shop_manager_required
+def update(issue_id):
+    issue = Issue.query.get_or_404(issue_id)
+    fields, errors = _validate_issue_fields(request.form,
+                                            current_equipment_id=issue.equipment_id)
+    if errors:
+        for error in errors:
+            flash(error, 'danger')
+        return _render_manual_form(request.form, status_code=422, issue=issue)
+
+    next_url = _safe_next(request.form.get('next', ''),
+                          url_for('issues.detail', issue_id=issue.id))
+
+    changes = []
+    if fields['equipment_id'] != issue.equipment_id:
+        old_unit = issue.equipment.display_name if issue.equipment else 'Sin unidad'
+        new_unit = Equipment.query.get(fields['equipment_id']).display_name
+        changes.append(f'Unidad: {old_unit} → {new_unit}')
+    if fields['category'] != issue.category:
+        labels = dict(ISSUE_CATEGORIES)
+        changes.append(f'Categoría: {labels.get(issue.category, issue.category)} '
+                       f'→ {labels[fields["category"]]}')
+    if fields['severity'] != issue.severity:
+        labels = dict(ISSUE_SEVERITIES)
+        changes.append(f'Severidad: {labels.get(issue.severity, issue.severity)} '
+                       f'→ {labels[fields["severity"]]}')
+    if fields['description'] != (issue.description or '').strip():
+        changes.append('Descripción actualizada')
+
+    if not changes:
+        flash('Sin cambios.', 'warning')
+        return redirect(next_url)
+
+    for key, value in fields.items():
+        setattr(issue, key, value)
+    db.session.add(IssueStatusHistory(
+        issue_id=issue.id,
+        from_status=issue.current_status,
+        to_status=issue.current_status,
+        changed_by_user_id=current_user.id,
+        notes=f'{ISSUE_EDIT_NOTE} — ' + '; '.join(changes),
+    ))
+    db.session.commit()
+
+    flash(f'Reporte #{issue.id} actualizado.', 'success')
+    return redirect(next_url)
+
+
+@issues_bp.route('/<int:issue_id>/delete', methods=['POST'])
+@admin_required
+def delete(issue_id):
+    issue = Issue.query.get_or_404(issue_id)
+    equipment_id = issue.equipment_id
+
+    # SQLite (local dev / tests) never enforces FKs, so the child issues'
+    # ON DELETE SET NULL is mirrored by hand (employee_delete idiom in app.py);
+    # status history and photos go through the ORM delete-orphan cascades.
+    Issue.query.filter_by(parent_issue_id=issue.id).update(
+        {'parent_issue_id': None}, synchronize_session=False)
+    photo_files = [p.storage_filename for p in issue.photos if p.storage_filename]
+    if photo_files:
+        # delete_stored_file lives in app.py, which this blueprint cannot import.
+        FileStorage.query.filter(FileStorage.filename.in_(photo_files)).delete(
+            synchronize_session=False)
+    db.session.delete(issue)
+    db.session.commit()
+
+    flash(f'Reporte #{issue_id} eliminado.', 'warning')
+    # No ``next`` here: the detail page the user came from no longer exists.
+    if equipment_id:
+        return redirect(url_for('issues.truck_profile', equipment_id=equipment_id))
+    return redirect(url_for('issues.queue'))
 
 
 # ── ADMIN: QUICK-ADD REPORTABLE VEHICLE ──────────────────────────────

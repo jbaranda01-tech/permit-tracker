@@ -32,7 +32,7 @@ def shop_manager_required(f):
     @login_required
     def decorated(*args, **kwargs):
         if not current_user.is_shop_manager:
-            flash('No tiene permisos para agregar reportes.', 'danger')
+            flash('No tiene permisos para esta acción.', 'danger')
             return redirect(url_for('issues.queue'))
         return f(*args, **kwargs)
     return decorated

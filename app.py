@@ -32,7 +32,7 @@ from models import (
     protect_uploaded_files, ProtectedFileError,
     Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
-    RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES,
+    RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES, ISSUE_EDIT_NOTE,
     EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
     EQUIPMENT_CLASSES, classify_equipment,
     INSURANCE_TYPE_BY_CLASS,
@@ -3487,7 +3487,9 @@ def _migrate_issue_statuses(dry_run=False):
     then drops transitions the merge made meaningless (a real
     en_revision → en_reparacion step becomes en_proceso → en_proceso, which reads
     as noise on the detail timeline). The ``from_status IS NULL`` creation rows
-    are never touched.
+    are never touched, and neither are edit audit rows (same status on both
+    sides by design, ``notes`` starting with ``ISSUE_EDIT_NOTE``) — those are
+    what the detail timeline renders as "Editado".
 
     Idempotent — a second run finds nothing. Returns {label: rows_affected}.
     """
@@ -3510,12 +3512,16 @@ def _migrate_issue_statuses(dry_run=False):
     # Counted after the updates land in the session (not committed yet) so a
     # --dry-run reports the redundant rows the merge *would* create, not just
     # any that already existed.
+    # The ``notes IS NULL OR`` half is load-bearing: NULL NOT LIKE x is NULL,
+    # which would exempt exactly the legacy rows this clause exists to drop.
     redundant = ('FROM issue_status_history '
-                 'WHERE from_status IS NOT NULL AND from_status = to_status')
-    n = db.session.execute(db.text(f'SELECT COUNT(*) {redundant}')).scalar() or 0
+                 'WHERE from_status IS NOT NULL AND from_status = to_status '
+                 'AND (notes IS NULL OR notes NOT LIKE :edit_pattern)')
+    params = {'edit_pattern': ISSUE_EDIT_NOTE + '%'}
+    n = db.session.execute(db.text(f'SELECT COUNT(*) {redundant}'), params).scalar() or 0
     if n:
         counts['issue_status_history transiciones redundantes eliminadas'] = n
-        db.session.execute(db.text(f'DELETE {redundant}'))
+        db.session.execute(db.text(f'DELETE {redundant}'), params)
 
     if dry_run:
         db.session.rollback()

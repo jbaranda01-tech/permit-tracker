@@ -2344,6 +2344,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .status-reportado { background: var(--color-sev-baja-bg); color: var(--color-sev-baja-text); }
 .status-en_proceso { background: var(--color-sev-alta-bg); color: var(--color-sev-alta-text); }
 .status-cerrado { background: var(--color-valid-bg); color: var(--color-valid-text); }
+/* "Editado" timeline entry (a same-status audit row, see issues.routes.update):
+   neutral zinc, the same family that backs .status-inactivo. */
+.issue-status-badge--edit { background: var(--color-missing-bg); color: var(--color-missing-text); }
+.issue-status-badge--edit i { margin-right: 2px; font-size: 0.7em; }
 
 /* Detail page */
 .header-meta {
@@ -2395,6 +2399,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .timeline-dot.status-reportado { background: var(--color-sev-baja); }
 .timeline-dot.status-en_proceso { background: var(--color-sev-alta); }
 .timeline-dot.status-cerrado { background: var(--color-valid); }
+.timeline-dot.timeline-dot--edit { background: var(--color-missing); }
 .timeline-content { flex: 1; min-width: 0; }
 /* One line per entry: new-status badge, then who / when in muted text.
    The previous status is implied by the row above, so no from → to pair. */

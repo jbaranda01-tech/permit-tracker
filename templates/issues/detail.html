@@ -8,8 +8,26 @@
         <a href="{{ nav.list_url if nav else url_for('issues.queue') }}" class="back-link"><i class="fas fa-arrow-left"></i> Volver a Reportes</a>
         {% include '_detail_nav.html' %}
     </div>
-    <span class="page-kicker">Taller</span>
-    <h1>Reporte #{{ issue.id }}</h1>
+    <div class="detail-title-row">
+        <div>
+            <span class="page-kicker">Taller</span>
+            <h1>Reporte #{{ issue.id }}</h1>
+        </div>
+        {% if current_user.is_shop_manager %}
+        <div class="detail-actions">
+            {# next = this page with its nav args, so the prev/next arrows survive the round trip. #}
+            <a href="{{ url_for('issues.edit', issue_id=issue.id, next=request.full_path) }}" class="btn btn-secondary">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+            {% if current_user.is_admin %}
+            <form method="POST" action="{{ url_for('issues.delete', issue_id=issue.id) }}" style="display:inline"
+                  onsubmit="return confirm('¿Eliminar el reporte #{{ issue.id }}? Se borrará junto con su historial. Esta acción no se puede deshacer.')">
+                <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Eliminar</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
 </div>
 
 <div class="issue-hero issue-hero--{{ issue.severity }}">
@@ -106,11 +124,18 @@
     <div class="card-body">
         <div class="status-timeline">
             {% for entry in history %}
+            {# A same-status row is an edit audit entry (issues.update); creation
+               rows have from_status none and still render as a status. #}
+            {% set edited = entry.from_status is not none and entry.from_status == entry.to_status %}
             <div class="timeline-entry">
-                <div class="timeline-dot status-{{ entry.to_status }}"></div>
+                <div class="timeline-dot {{ 'timeline-dot--edit' if edited else 'status-' ~ entry.to_status }}"></div>
                 <div class="timeline-content">
                     <div class="timeline-line">
+                        {% if edited %}
+                        <span class="issue-status-badge issue-status-badge--edit"><i class="fas fa-pen"></i> Editado</span>
+                        {% else %}
                         <span class="issue-status-badge status-{{ entry.to_status }}">{{ dict(statuses).get(entry.to_status, entry.to_status) }}</span>
+                        {% endif %}
                         {% if entry.changed_by_user %}
                         <span class="timeline-by"><i class="fas fa-user"></i> {{ entry.changed_by_user.username }}</span>
                         {% elif entry.changed_by_employee %}
@@ -119,7 +144,8 @@
                         <span class="timeline-when"><i class="fas fa-clock"></i> {{ entry.changed_at.strftime('%m/%d/%Y %H:%M') }}</span>
                     </div>
                     {% if entry.notes %}
-                    <p class="timeline-notes">{{ entry.notes }}</p>
+                    {# Edit rows: drop the "Reporte editado — " prefix the badge already says. #}
+                    <p class="timeline-notes">{{ entry.notes.split(' — ', 1)[-1] if edited else entry.notes }}</p>
                     {% endif %}
                 </div>
             </div>
