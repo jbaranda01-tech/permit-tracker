@@ -201,3 +201,128 @@ function initDetailNavKeys() {
 }
 
 document.addEventListener('DOMContentLoaded', initDetailNavKeys);
+
+// ── Type-to-search filter for long <select>s ───────────────────────────
+// Any <select data-filter-input="<input id>" [data-filter-count="<el id>"]>
+// is narrowed live by what is typed into that input. Options are REBUILT
+// from a snapshot taken at init, never hidden — iOS Safari ignores `hidden`
+// on <option>, and the native picker only shows options present in the DOM.
+// Matching is accent/case-insensitive over the option text plus its
+// `data-search` attribute (unit #, plate, make/model, class…); every typed
+// term must match. The selected option always survives a rebuild, and a
+// unique hit is auto-selected when nothing is chosen yet.
+function initSelectFilters() {
+    var selects = document.querySelectorAll('select[data-filter-input]');
+    if (!selects.length) return;
+
+    function normalize(s) {
+        return (s || '').toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[#\-_.\/]/g, '')
+            .replace(/\s+/g, ' ').trim();
+    }
+
+    function snapshotOption(opt) {
+        var text = (opt.textContent || '').replace(/\s+/g, ' ').trim();
+        return {
+            value: opt.value,
+            text: text,
+            disabled: opt.disabled,
+            haystack: normalize(text + ' ' + (opt.getAttribute('data-search') || ''))
+        };
+    }
+
+    function buildOption(item) {
+        var opt = document.createElement('option');
+        opt.value = item.value;
+        opt.textContent = item.text;
+        if (item.disabled) opt.disabled = true;
+        return opt;
+    }
+
+    selects.forEach(function (select) {
+        var input = document.getElementById(select.getAttribute('data-filter-input'));
+        if (!input) return;
+        var countEl = document.getElementById(select.getAttribute('data-filter-count') || '');
+
+        // Snapshot: placeholder (value "") + ungrouped options + optgroups, in DOM order.
+        var master = [];
+        Array.prototype.forEach.call(select.children, function (node) {
+            if (node.tagName === 'OPTGROUP') {
+                master.push({ label: node.label,
+                              options: Array.prototype.map.call(node.children, snapshotOption) });
+            } else if (node.tagName === 'OPTION') {
+                master.push({ label: null, options: [snapshotOption(node)] });
+            }
+        });
+
+        function rebuild() {
+            var terms = normalize(input.value).split(' ').filter(Boolean);
+            var current = select.value;
+            var matches = 0;
+            var only = null;
+
+            function keep(item) {
+                if (item.value === '') return true;               // placeholder always stays
+                if (item.value === current && current !== '') return true;
+                if (!terms.length) return true;
+                var hay = item.haystack;
+                return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+            }
+
+            var frag = document.createDocumentFragment();
+            master.forEach(function (group) {
+                var kept = group.options.filter(keep);
+                if (!kept.length) return;
+                var parent = frag;
+                if (group.label !== null) {
+                    parent = document.createElement('optgroup');
+                    parent.label = group.label;
+                    frag.appendChild(parent);
+                }
+                kept.forEach(function (item) {
+                    parent.appendChild(buildOption(item));
+                    if (item.value !== '' && !item.disabled) {
+                        matches += 1;
+                        only = item;
+                    }
+                });
+            });
+            if (!matches) {
+                var none = document.createElement('option');
+                none.disabled = true;
+                none.textContent = 'Sin resultados';
+                frag.appendChild(none);
+            }
+
+            select.innerHTML = '';
+            select.appendChild(frag);
+
+            if (current && select.querySelector('option[value="' + current + '"]')) {
+                select.value = current;
+            } else if (terms.length && matches === 1 && only) {
+                select.value = only.value;      // unique hit → pick it
+            } else {
+                select.value = '';
+            }
+
+            if (countEl) {
+                countEl.textContent = terms.length
+                    ? (matches === 1 ? '1 unidad' : matches + ' unidades')
+                    : '';
+            }
+        }
+
+        input.addEventListener('input', rebuild);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && input.value) {
+                e.preventDefault();
+                input.value = '';
+                rebuild();
+            }
+        });
+        rebuild();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initSelectFilters);

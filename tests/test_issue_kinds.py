@@ -176,6 +176,21 @@ def test_truck_profile_back_link_follows_kind(client, fleet):
         assert _kind_of(db.session.get(Equipment, u['tank'])) == 'other'
 
 
+def _assert_unit_search(html, fleet):
+    """The type-to-search box renders and each option carries a data-search
+    haystack (unit #, class label, …) for initSelectFilters() to match on."""
+    assert 'id="equipment_search"' in html
+    assert 'data-filter-input="equipment_search"' in html
+    with app.app_context():
+        chassis = db.session.get(Equipment, fleet['units']['chassis'])
+        unit_number = chassis.unit_number
+    option = html.split(f'<option value="{fleet["units"]["chassis"]}"', 1)[1].split('</option>', 1)[0]
+    assert 'data-search="' in option
+    search_attr = option.split('data-search="', 1)[1].split('"', 1)[0]
+    assert unit_number in search_attr
+    assert 'Chasis' in search_attr
+
+
 def test_driver_form_groups_units_and_accepts_a_chassis(fleet):
     anon = app.test_client()
     url = f'/issues/report/{fleet["token"]}'
@@ -183,6 +198,7 @@ def test_driver_form_groups_units_and_accepts_a_chassis(fleet):
     assert '<optgroup label="Camiones">' in html
     assert '<optgroup label="Otros equipos">' in html
     assert html.index('label="Camiones"') < html.index('label="Otros equipos"')
+    _assert_unit_search(html, fleet)
 
     r = anon.post(url, data={'equipment_id': fleet['units']['chassis'],
                              'category[]': 'llantas', 'severity[]': 'media',
@@ -196,6 +212,7 @@ def test_driver_form_groups_units_and_accepts_a_chassis(fleet):
 def test_manual_form_accepts_other_equipment(client, fleet):
     html = client.get('/issues/new').get_data(as_text=True)
     assert '<optgroup label="Otros equipos">' in html
+    _assert_unit_search(html, fleet)
     r = client.post('/issues/new', data={'equipment_id': fleet['units']['generator'],
                                          'category': 'electrico', 'severity': 'alta',
                                          'description': 'generador no arranca'})

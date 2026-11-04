@@ -40,14 +40,26 @@ if ('serviceWorker' in navigator) {
             <h3><i class="fas fa-truck"></i> Unidad</h3>
             <div class="form-group">
                 <label for="equipment_id">Unidad *</label>
+                {# Type-to-search box: initSelectFilters() (app.js) rebuilds the
+                   select's options from what is typed here (see data-filter-input). #}
+                <div class="select-filter">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="search" id="equipment_search" class="select-filter-input"
+                           placeholder="Buscar unidad (número, tablilla, modelo)…"
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                           aria-controls="equipment_id" aria-label="Buscar unidad">
+                    <span class="select-filter-count" id="equipment_search_count" aria-live="polite"></span>
+                </div>
                 {# Camiones first (the default group), then chasis / tanques /
                    generadores — one select so a driver can report either. #}
-                <select name="equipment_id" id="equipment_id" required>
+                <select name="equipment_id" id="equipment_id" required
+                        data-filter-input="equipment_search" data-filter-count="equipment_search_count">
                     <option value="">— Seleccionar unidad —</option>
                     {% for group_label, units in unit_groups %}
                     <optgroup label="{{ group_label }}">
                     {% for unit in units %}
-                    <option value="{{ unit.id }}" {% if request.form.get('equipment_id')|int == unit.id %}selected{% endif %}>
+                    <option value="{{ unit.id }}" {% if request.form.get('equipment_id')|int == unit.id %}selected{% endif %}
+                            data-search="{{ unit.unit_number or '' }} {{ unit.plate_number or '' }} {{ unit.make or '' }} {{ unit.model or '' }} {{ unit.equipment_class_label }}{% if unit.vin_serial %} {{ unit.vin_serial }}{% endif %}">
                         {{ unit.display_name }}{% if unit.make or unit.model %} — {{ unit.make }} {{ unit.model }}{% endif %}{% if unit.year %} ({{ unit.year }}){% endif %}
                     </option>
                     {% endfor %}

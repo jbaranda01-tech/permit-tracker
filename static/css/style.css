@@ -2224,6 +2224,43 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .problem-row-remove:hover { color: var(--color-expired-text); border-color: var(--color-expired-text); }
 #add-problem { width: 100%; }
 
+/* Type-to-search box above a long <select> (unit picker on report.html /
+   manual_new.html). Same icon-inside recipe as .search-wrap, but without its
+   340px toolbar max-width; the input inherits the .form-group input tokens.
+   font-size stays on the 768px / coarse-pointer 16px rules — no rem here. */
+.select-filter { position: relative; }
+.select-filter i {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.35;
+    pointer-events: none;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+.form-group .select-filter-input {
+    width: 100%;
+    padding-left: 2.2rem;
+    padding-right: 6.5rem;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.select-filter-input::-webkit-search-decoration { -webkit-appearance: none; }
+.select-filter-count {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
 /* Success page */
 .report-success { text-align: center; padding: var(--space-2xl) 0; }
 .success-icon { font-size: 4rem; color: #22c55e; margin-bottom: var(--space-md); }

@@ -43,21 +43,35 @@
             <h3><i class="fas fa-truck"></i> Unidad</h3>
             <div class="form-group">
                 <label for="equipment_id">Unidad *</label>
+                {# Type-to-search box: initSelectFilters() (app.js) rebuilds the
+                   select's options from what is typed here (see data-filter-input).
+                   It takes the autofocus the select used to have. #}
+                <div class="select-filter">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="search" id="equipment_search" class="select-filter-input"
+                           placeholder="Buscar unidad (número, tablilla, modelo)…"
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                           aria-controls="equipment_id" aria-label="Buscar unidad"{% if not prefilled_truck %} autofocus{% endif %}>
+                    <span class="select-filter-count" id="equipment_search_count" aria-live="polite"></span>
+                </div>
                 {# Camiones first, then the other equipment (chasis / tanques / generadores). #}
-                <select name="equipment_id" id="equipment_id" required {% if not prefilled_truck %}autofocus{% endif %}>
+                <select name="equipment_id" id="equipment_id" required
+                        data-filter-input="equipment_search" data-filter-count="equipment_search_count">
                     <option value="">— Seleccionar unidad —</option>
                     {# Edit mode: the report's current unit is no longer reportable
                        (archived / reclassified) — keep it selectable so the rest of
                        the report can still be fixed without moving it. #}
                     {% if extra_unit %}
-                    <option value="{{ extra_unit.id }}" {% if prefilled_truck == extra_unit.id %}selected{% endif %}>
+                    <option value="{{ extra_unit.id }}" {% if prefilled_truck == extra_unit.id %}selected{% endif %}
+                            data-search="{{ extra_unit.unit_number or '' }} {{ extra_unit.plate_number or '' }} {{ extra_unit.make or '' }} {{ extra_unit.model or '' }} {{ extra_unit.equipment_class_label }}{% if extra_unit.vin_serial %} {{ extra_unit.vin_serial }}{% endif %}">
                         {{ extra_unit.display_name }} ({{ extra_unit.company }}) — {{ 'archivado' if extra_unit.is_archived else 'no reportable' }}
                     </option>
                     {% endif %}
                     {% for group_label, units in unit_groups %}
                     <optgroup label="{{ group_label }}">
                     {% for unit in units %}
-                    <option value="{{ unit.id }}" {% if prefilled_truck == unit.id %}selected{% endif %}>
+                    <option value="{{ unit.id }}" {% if prefilled_truck == unit.id %}selected{% endif %}
+                            data-search="{{ unit.unit_number or '' }} {{ unit.plate_number or '' }} {{ unit.make or '' }} {{ unit.model or '' }} {{ unit.equipment_class_label }}{% if unit.vin_serial %} {{ unit.vin_serial }}{% endif %}">
                         {{ unit.display_name }} ({{ unit.company }}){% if unit.make or unit.model %} — {{ unit.make }} {{ unit.model }}{% endif %}{% if unit.year %} ({{ unit.year }}){% endif %}
                     </option>
                     {% endfor %}
