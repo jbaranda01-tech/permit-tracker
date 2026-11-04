@@ -1,0 +1,21 @@
+{# Driver-facing <head> branding: the home-screen / bookmark icon, the tab
+   favicon and the Open Graph tags that WhatsApp / iMessage read for the link
+   preview — all switched on the driver's company, like _report_logo.html.
+   Every icon-*.png is the LB truck; the icon-pli-*.png set is the PLI logo on
+   the same background. Expects `employee` (may be None on the inactive page)
+   and `og_title`, set by the including template right before the include.
+   `_scheme='https'`: there is no ProxyFix, so a bare `_external` would emit
+   http:// behind Railway's proxy, and only preview bots ever read these. #}
+{% set icon_prefix = 'img/icon-pli-' if employee and employee.company == 'PLI' else 'img/icon-' %}
+{% set brand = employee.company_full if employee else 'LB Caribe Services' %}
+<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename=icon_prefix ~ '180.png') }}">
+<link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename=icon_prefix ~ '152.png') }}">
+<link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename=icon_prefix ~ '192.png') }}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ brand }}">
+<meta property="og:title" content="{{ og_title }} — {{ brand }}">
+{% if employee %}<meta property="og:description" content="Reporte de problemas y permisos de {{ employee.name }}">{% endif %}
+<meta property="og:image" content="{{ url_for('static', filename=icon_prefix ~ '512.png', _external=True, _scheme='https') }}">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta name="twitter:card" content="summary">

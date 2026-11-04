@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Enlace Inactivo{% endblock %}
 {% block pwa_meta %}{% endblock %}
+{% block title_suffix %} — {{ employee.company_full if employee else 'LB Caribe' }}{% endblock %}
+{% block head_icons %}{% set og_title = 'Enlace Inactivo' %}{% include 'issues/_report_head.html' %}{% endblock %}
 {% block service_worker %}
 <script>
 if ('serviceWorker' in navigator) {

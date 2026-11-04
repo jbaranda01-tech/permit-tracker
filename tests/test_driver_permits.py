@@ -211,3 +211,62 @@ def test_success_page_links_to_permits_view(ctx, client):
     resp = client.get(f'/issues/report/{emp.access_token}/success?issue_ids=1')
     assert resp.status_code == 200
     assert _report_url(emp, view='permits') in resp.get_data(as_text=True)
+
+
+# ── Per-company head branding (home-screen icon, favicon, link preview) ──────
+
+def _head(html):
+    return html.split('</head>', 1)[0]
+
+
+def _assert_company_head(html, company):
+    """The driver pages' <head> follows the employee's company, not LB always."""
+    head = _head(html)
+    prefix, brand = ('img/icon-pli-', 'Professional Logistics') if company == 'PLI' else ('img/icon-', 'LB Caribe Services')
+    assert f'rel="apple-touch-icon" sizes="180x180" href="/static/{prefix}180.png"' in head
+    assert f'rel="apple-touch-icon" sizes="152x152" href="/static/{prefix}152.png"' in head
+    assert f'rel="icon" type="image/png" sizes="192x192" href="/static/{prefix}192.png"' in head
+    assert f'property="og:site_name" content="{brand}"' in head
+    assert f'property="og:image" content="https://localhost/static/{prefix}512.png"' in head
+    assert f' — {brand}</title>' in head
+    if company == 'PLI':
+        assert 'img/icon-180.png' not in head and 'LB Caribe' not in head
+    else:
+        assert 'icon-pli-' not in head
+
+
+def test_pli_driver_pages_carry_pli_icon_and_preview_tags(ctx, client):
+    emp = _driver(company='PLI')
+    db.session.commit()
+    for url in (_report_url(emp), _report_url(emp, view='permits'), _report_url(emp) + '/success?issue_ids=1'):
+        html = client.get(url).get_data(as_text=True)
+        _assert_company_head(html, 'PLI')
+        assert f'property="og:description" content="Reporte de problemas y permisos de {emp.name}"' in _head(html)
+    report = _head(client.get(_report_url(emp)).get_data(as_text=True))
+    assert 'property="og:title" content="Reportar Problema — Professional Logistics"' in report
+    permits = _head(client.get(_report_url(emp, view='permits')).get_data(as_text=True))
+    assert 'property="og:title" content="Mis Permisos — Professional Logistics"' in permits
+
+
+def test_lb_driver_pages_keep_lb_icon(ctx, client):
+    emp = _driver(company='LB')
+    db.session.commit()
+    for url in (_report_url(emp), _report_url(emp) + '/success?issue_ids=1'):
+        _assert_company_head(client.get(url).get_data(as_text=True), 'LB')
+
+
+def test_inactive_link_page_follows_company(ctx, client):
+    emp = _driver(company='PLI', archived_at=datetime.utcnow(), archive_reason='baja')
+    db.session.commit()
+    resp = client.get(_report_url(emp))
+    assert resp.status_code == 410
+    html = resp.get_data(as_text=True)
+    _assert_company_head(html, 'PLI')
+    assert 'property="og:title" content="Enlace Inactivo — Professional Logistics"' in _head(html)
+
+
+def test_staff_pages_untouched_by_driver_head_branding(ctx, client):
+    head = _head(client.get('/login').get_data(as_text=True))
+    assert 'href="/static/img/icon-180.png"' in head
+    assert 'icon-pli-' not in head and 'property="og:' not in head
+    assert ' — LB Caribe</title>' in head
