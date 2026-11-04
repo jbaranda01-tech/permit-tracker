@@ -2354,6 +2354,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 }
 .status-change-form .form-row { align-items: flex-end; }
 
+/* Issue detail: Unidad + Cambiar Estado side by side on desktop. minmax(0, 1fr)
+   lets the status form's .form-row inputs shrink inside a half-width column. */
+.profile-grid--issue {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    margin-bottom: 0; /* the history card below carries its own .card-stack top margin */
+}
+.profile-grid--issue > .profile-card:only-child { grid-column: 1 / -1; }
+/* Must follow the generic 768px `.profile-grid { 1fr }` rule, which this
+   later same-specificity modifier would otherwise override. */
+@media (max-width: 768px) {
+    .profile-grid--issue { grid-template-columns: 1fr; }
+}
+
 /* Status timeline */
 .status-timeline { padding-left: var(--space-md); }
 .timeline-entry {
