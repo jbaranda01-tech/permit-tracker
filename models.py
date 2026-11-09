@@ -400,7 +400,7 @@ class Equipment(db.Model):
     equipment_type = db.Column(db.String(20), default='vehicle')  # deprecated in UI; kept for data
     equipment_class = db.Column(db.String(20))  # truck | chassis | tank | generator
     titular = db.Column(db.String(200))
-    name = db.Column(db.String(120))  # optional manual display name; see display_name
+    name = db.Column(db.String(120))  # legacy manual name; UI-dead, fallback only — see display_name
     unit_number = db.Column(db.String(50))
     plate_number = db.Column(db.String(50))
     make = db.Column(db.String(100))
@@ -435,9 +435,13 @@ class Equipment(db.Model):
 
     @property
     def display_name(self):
-        """Manual name first, then unit #, then plate; the id is a last resort."""
-        return (self.name or self.unit_number or self.plate_number
-                or f'Equipo #{self.id}')
+        """The unit # IS the title. A unit-less row falls back to its legacy
+        manual name, then the plate; the id is a last resort."""
+        for value in (self.unit_number, self.name, self.plate_number):
+            value = (value or '').strip()
+            if value:
+                return value
+        return f'Equipo #{self.id}'
 
     @property
     def unit_sort_key(self):

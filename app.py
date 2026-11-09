@@ -1575,8 +1575,7 @@ def equipment_new():
             insurance_policy_type=_resolve_insurance_policy(
                 request.form, request.form['company']),
             titular=request.form.get('titular', ''),
-            name=request.form.get('name', ''),
-            unit_number=request.form.get('unit_number', ''),
+            unit_number=request.form.get('unit_number', '').strip(),
             plate_number=request.form.get('plate_number', ''),
             make=request.form.get('make', ''),
             model=request.form.get('model', ''),
@@ -1634,8 +1633,9 @@ def equipment_edit(id):
         equip.insurance_policy_type = _resolve_insurance_policy(
             request.form, equip.company)
         equip.titular = request.form.get('titular', '')
-        equip.name = request.form.get('name', '')
-        equip.unit_number = request.form.get('unit_number', '')
+        # equip.name is deliberately not written: the unit # is the title, and
+        # the form no longer posts a name (assigning here would blank legacy ones).
+        equip.unit_number = request.form.get('unit_number', '').strip()
         equip.plate_number = request.form.get('plate_number', '')
         equip.make = request.form.get('make', '')
         equip.model = request.form.get('model', '')
@@ -3477,6 +3477,29 @@ def dedup_data(dry_run):
     print(f'{prefix}Dedup complete: {emp_deleted} duplicate employees, {permit_deleted} duplicate employee permits, {equip_deleted} duplicate equipment, {eq_permit_deleted} duplicate equipment permits, {issue_deleted} duplicate issues removed.')
 
 
+# Text columns the equipment form used to pre-fill with the literal word "None"
+# when the column was NULL (Jinja prints None as "None"); saving the form then
+# stored that string — which is how equipment titles ended up reading "None".
+NONE_STRING_COLUMNS = {
+    'equipment': ('name', 'titular', 'unit_number', 'plate_number', 'make',
+                  'model', 'vin_serial', 'insurance_company', 'notes'),
+}
+
+
+def _clear_none_strings():
+    """Null out text columns holding the literal string 'None'. Idempotent;
+    returns {'table.column': rows} for the columns it repaired."""
+    repaired = {}
+    for table, columns in NONE_STRING_COLUMNS.items():
+        for column in columns:
+            result = db.session.execute(db.text(
+                f"UPDATE {table} SET {column} = NULL WHERE {column} = 'None'"))
+            if result.rowcount:
+                repaired[f'{table}.{column}'] = result.rowcount
+    db.session.commit()
+    return repaired
+
+
 def _migrate_issue_statuses(dry_run=False):
     """Rewrite retired issue-status codes to the merged three-status vocabulary.
 
@@ -3860,6 +3883,11 @@ with app.app_context():
                         'WHERE insurance_policy_type = :old'),
                 {'new': replacement, 'old': legacy_code})
         db.session.commit()
+
+        # Undo the "None" strings the equipment form used to write (idempotent).
+        repaired = _clear_none_strings()
+        if repaired:
+            print(f"[INFO] Cleared literal 'None' values: {repaired}")
 
         # Merge the retired five-status issue vocabulary into the current three.
         # Runs on boot (not just via `flask migrate-issue-statuses`) because
