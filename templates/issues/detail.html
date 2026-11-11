@@ -129,7 +129,7 @@
             <span>{{ fulfillment.technician or '—' }}</span>
         </div>
         <div class="permit-field">
-            <label>Horas hombre</label>
+            <label>Horas de labor</label>
             <span>{% if fulfillment.man_hours is not none %}{{ '{:,.2f}'.format(fulfillment.man_hours) }} h{% else %}—{% endif %}</span>
         </div>
         <div class="permit-field">
@@ -204,7 +204,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="work-hours">Horas hombre</label>
+                        <label for="work-hours">Horas de labor</label>
                         <input type="number" name="man_hours" id="work-hours" min="0" step="0.25" inputmode="decimal"
                                value="{{ work_form.get('man_hours', '') }}" placeholder="0.00">
                     </div>

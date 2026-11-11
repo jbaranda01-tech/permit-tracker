@@ -935,7 +935,7 @@ def _validate_fulfillment(form, uploads):
     fields = {
         'technician': technician or None,
         'work_description': (form.get('work_description') or '').strip() or None,
-        'man_hours': _parse_amount(form.get('man_hours'), 'Horas hombre', Decimal('10000'), errors),
+        'man_hours': _parse_amount(form.get('man_hours'), 'Horas de labor', Decimal('10000'), errors),
         'parts_cost': _parse_amount(form.get('parts_cost'), 'Costo de piezas',
                                     Decimal('100000000'), errors),
     }

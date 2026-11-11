@@ -2905,7 +2905,7 @@ def export_excel():
     if worked_issues:
         ws = new_sheet(wb, 'Trabajos',
                        ['Empresa', 'Unidad', 'Reporte #', 'Categoría', 'Estado',
-                        'Técnico', 'Trabajo realizado', 'Horas hombre',
+                        'Técnico', 'Trabajo realizado', 'Horas de labor',
                         'Costo piezas', 'Recibos', 'Fecha Reporte', 'Fecha Cierre'],
                        [10, 12, 10, 16, 14, 22, 50, 13, 14, 9, 14, 14])
         total_hours = Decimal('0')
