@@ -33,7 +33,7 @@ QUEUE_SORTS = ('unit', 'recent', 'oldest', 'severity')
 # and for the unit <select>s on the report forms, which list both groups.
 QUEUE_KINDS = ('trucks', 'other')
 TRUCK_CLASSES = ('truck',)
-OTHER_CLASSES = ('chassis', 'tank', 'generator')
+OTHER_CLASSES = ('chassis', 'container', 'tank', 'generator')
 KIND_LABELS = {'trucks': 'Camiones', 'other': 'Otros equipos'}
 
 
@@ -92,8 +92,8 @@ def _unreportable_reason(eq):
 
 def reportable_equipment_query(company=None, kind='trucks'):
     """Active LB/PLI equipment of one queue kind: `trucks` (the default —
-    equipment_class truck, plus NULL-class rows), `other` (chassis / tank /
-    generator), or `all` (both; validation and the report-form selects)."""
+    equipment_class truck, plus NULL-class rows), `other` (chassis / container /
+    tank / generator), or `all` (both; validation and the report-form selects)."""
     query = Equipment.query.filter(
         Equipment.status == 'activo',
         Equipment.archived_at.is_(None),

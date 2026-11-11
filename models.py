@@ -375,6 +375,7 @@ EQUIPMENT_ARCHIVE_REASONS = [
 EQUIPMENT_CLASSES = [
     ('truck', 'Camión'),
     ('chassis', 'Chasis'),
+    ('container', 'Contenedor'),
     ('tank', 'Tanque'),
     ('generator', 'Generador'),
 ]
@@ -390,6 +391,10 @@ def classify_equipment(model, equipment_type=None):
         return 'tank'
     if 'generador' in m or equipment_type == 'generator':
         return 'generator'
+    # After generador: 'generador contenedor' is a generator housed in a
+    # container, not a container. After chasis: 'chasis contenedor' is a chassis.
+    if 'contenedor' in m or 'container' in m:
+        return 'container'
     return 'truck'
 
 
@@ -398,7 +403,7 @@ class Equipment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     company = db.Column(db.String(10), nullable=False)  # LB, PLI, or Personal
     equipment_type = db.Column(db.String(20), default='vehicle')  # deprecated in UI; kept for data
-    equipment_class = db.Column(db.String(20))  # truck | chassis | tank | generator
+    equipment_class = db.Column(db.String(20))  # truck | chassis | container | tank | generator
     titular = db.Column(db.String(200))
     name = db.Column(db.String(120))  # legacy manual name; UI-dead, fallback only — see display_name
     unit_number = db.Column(db.String(50))
@@ -617,6 +622,10 @@ COMPANY_PERMIT_TYPES = [
 INSURANCE_TYPE_BY_CLASS = {
     'truck': 'SEGURO_TRUCK',
     'chassis': 'SEGURO_CHASSIS',
+    # Containers ride on the chassis policy by decision (2026-11-11): the class
+    # exists for specificity only, so reclassifying a chassis as a container
+    # must not move it off its policy. There is no SEGURO_CONTAINER.
+    'container': 'SEGURO_CHASSIS',
     'tank': 'SEGURO_TANK',
     'generator': 'SEGURO_GENERATOR',
 }

@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO))
 
 import pytest  # noqa: E402
 import app as appmod  # noqa: E402
-from models import db, Employee, Equipment, Issue, User  # noqa: E402
+from models import db, Employee, Equipment, Issue, User, classify_equipment  # noqa: E402
 from issues.routes import (  # noqa: E402
     reportable_equipment_list, reportable_unit_groups, _queue_context, _kind_of,
 )
@@ -61,11 +61,12 @@ def client():
 
 @pytest.fixture(scope='module')
 def fleet():
-    """One truck, one chassis, one tank, one generator (LB), each with an open
-    issue, plus a driver with a report link."""
+    """One truck, one chassis, one container, one tank, one generator (LB),
+    each with an open issue, plus a driver with a report link."""
     with app.app_context():
         units = {}
         for klass, model in (('truck', 'Camion'), ('chassis', 'Chasis 40'),
+                             ('container', 'Contenedor 40'),
                              ('tank', 'Tanque combustible'), ('generator', 'Generador')):
             eq = Equipment(company='LB', unit_number=_uniq('K'), model=model,
                            equipment_class=klass, status='activo')
@@ -95,8 +96,9 @@ def test_reportable_lists_split_by_kind(fleet):
         both = {e.id for e in reportable_equipment_list(kind='all')}
         u = fleet['units']
         assert u['truck'] in trucks and u['chassis'] not in trucks
-        assert {u['chassis'], u['tank'], u['generator']} <= other
+        assert {u['chassis'], u['container'], u['tank'], u['generator']} <= other
         assert u['truck'] not in other
+        assert u['container'] not in trucks
         assert both >= trucks | other
         # The form groups: Camiones first, then Otros equipos
         labels = [label for label, _ in reportable_unit_groups(company='LB')]
@@ -130,8 +132,8 @@ def test_queue_counts_are_scoped_to_the_kind(client, fleet):
         from flask import request
         ctx = _queue_context(request.args)
         assert ctx['kind'] == 'other'
-        assert ctx['severity_counts']['alta'] == 3        # chassis + tank + generator
-        assert ctx['kind_counts'] == {'trucks': 1, 'other': 3}
+        assert ctx['severity_counts']['alta'] == 4        # chassis + container + tank + generator
+        assert ctx['kind_counts'] == {'trucks': 1, 'other': 4}
         assert ctx['nav_args'] == {'kind': 'other'}
     with app.app_context(), app.test_request_context('/issues/'):
         from flask import request
@@ -222,3 +224,16 @@ def test_manual_form_accepts_other_equipment(client, fleet):
         assert issue.equipment_id == fleet['units']['generator']
     html = client.get('/issues/?kind=other').get_data(as_text=True)
     assert 'generador no arranca' in html
+
+
+def test_container_class_is_specificity_only():
+    """A container is its own class for labeling, but keeps the chassis
+    insurance policy under Automática and classifies after generador/chasis."""
+    assert classify_equipment('Contenedor 20') == 'container'
+    assert classify_equipment('Shipping container 40') == 'container'
+    assert classify_equipment('generador contenedor') == 'generator'
+    assert classify_equipment('chasis contenedor') == 'chassis'
+    eq = Equipment(company='LB', equipment_class='container', model='Contenedor 40')
+    assert eq.equipment_class_label == 'Contenedor'
+    assert eq.insurance_permit_type == 'SEGURO_CHASSIS'
+    assert eq.insurance_card_title == 'Seguro de chasis (compartido)'

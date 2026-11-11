@@ -52,8 +52,8 @@ if ('serviceWorker' in navigator) {
                            aria-controls="equipment_id" aria-label="Buscar unidad">
                     <span class="select-filter-count" id="equipment_search_count" aria-live="polite"></span>
                 </div>
-                {# Camiones first (the default group), then chasis / tanques /
-                   generadores — one select so a driver can report either. #}
+                {# Camiones first (the default group), then chasis / contenedores /
+                   tanques / generadores — one select so a driver can report either. #}
                 <select name="equipment_id" id="equipment_id" required
                         data-filter-input="equipment_search" data-filter-count="equipment_search_count">
                     <option value="">— Seleccionar unidad —</option>

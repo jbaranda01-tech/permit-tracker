@@ -54,7 +54,7 @@
                            aria-controls="equipment_id" aria-label="Buscar unidad"{% if not prefilled_truck %} autofocus{% endif %}>
                     <span class="select-filter-count" id="equipment_search_count" aria-live="polite"></span>
                 </div>
-                {# Camiones first, then the other equipment (chasis / tanques / generadores). #}
+                {# Camiones first, then the other equipment (chasis / contenedores / tanques / generadores). #}
                 <select name="equipment_id" id="equipment_id" required
                         data-filter-input="equipment_search" data-filter-count="equipment_search_count">
                     <option value="">— Seleccionar unidad —</option>

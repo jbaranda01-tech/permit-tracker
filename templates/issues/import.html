@@ -54,7 +54,7 @@
                 <span class="col-tag">Fecha Resuelto</span>
             </div>
             <div class="import-notes">
-                <p><i class="fas fa-info-circle"></i> <strong>Unidad</strong> debe ser solo el número de unidad (o la placa) de una unidad existente (camión, chasis, tanque o generador) — sin el símbolo <strong>#</strong> (ej. <code>204</code>, no <code>#204</code>). Las filas sin coincidencia se omiten y se listan como error.</p>
+                <p><i class="fas fa-info-circle"></i> <strong>Unidad</strong> debe ser solo el número de unidad (o la placa) de una unidad existente (camión, chasis, contenedor, tanque o generador) — sin el símbolo <strong>#</strong> (ej. <code>204</code>, no <code>#204</code>). Las filas sin coincidencia se omiten y se listan como error.</p>
                 <p><i class="fas fa-info-circle"></i> <strong>Categoría</strong>: {{ categories|map(attribute=1)|join(', ') }}.</p>
                 <p><i class="fas fa-info-circle"></i> <strong>Severidad</strong>: {{ severities|map(attribute=1)|join(', ') }} (por defecto: Media).</p>
                 <p><i class="fas fa-info-circle"></i> <strong>Estado</strong>: {{ statuses|map(attribute=1)|join(', ') }} (por defecto: Reportado). El estado <strong>Cerrado</strong> usa la Fecha Resuelto.</p>

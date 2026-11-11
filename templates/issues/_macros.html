@@ -4,7 +4,7 @@
 {# Class-aware icon for a unit: trucks keep fa-truck; chassis / tanks /
    generators get their own glyph so the "Otros equipos" queue reads at a glance. #}
 {% macro unit_icon(equipment) -%}
-{%- set icons = {'chassis': 'fa-trailer', 'tank': 'fa-oil-can', 'generator': 'fa-plug'} -%}
+{%- set icons = {'chassis': 'fa-trailer', 'container': 'fa-box', 'tank': 'fa-oil-can', 'generator': 'fa-plug'} -%}
 <i class="fas {{ icons.get(equipment.equipment_class if equipment else none, 'fa-truck') }}"></i>
 {%- endmacro %}
 

@@ -84,7 +84,7 @@
             <i class="fas fa-truck"></i> Agregar Camión
         </a>
         {% elif current_user.is_admin %}
-        {# Chassis/tanks/generators are created on the permits side (class select) #}
+        {# Chassis/containers/tanks/generators are created on the permits side (class select) #}
         <a href="{{ url_for('equipment_new') }}" class="btn btn-secondary">
             <i class="fas fa-trailer"></i> Agregar Equipo
         </a>
