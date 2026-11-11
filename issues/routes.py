@@ -5,6 +5,7 @@ import tempfile
 import unicodedata
 from collections import defaultdict
 from datetime import datetime, date, timedelta
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from flask import render_template, request, redirect, url_for, flash, abort, session, send_file
 from flask_login import login_required, current_user
@@ -15,11 +16,13 @@ from issues import issues_bp
 from issues.decorators import shop_required, admin_required, shop_manager_required
 from models import (
     db, Employee, Equipment, EquipmentPermit, FileStorage, Issue, IssueStatusHistory,
+    IssueFulfillment, IssueReceipt,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     OPEN_STATUSES, RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES, ISSUE_EDIT_NOTE,
     EXCLUDED_EQUIPMENT_MODELS, EQUIPMENT_PERMIT_TYPES,
     classify_equipment, protect_uploaded_files,
 )
+from file_store import allowed_receipt, save_uploaded_file, delete_stored_file
 from list_prefs import (
     QUEUE_PREF_PARAMS, restore_list_args, remember_list_args, forget_list_args,
 )
@@ -729,9 +732,14 @@ def truck_profile(equipment_id):
     equipment = Equipment.query.get_or_404(equipment_id)
     issues = (Issue.query
               .filter_by(equipment_id=equipment.id)
-              .options(joinedload(Issue.reporter))
+              .options(joinedload(Issue.reporter), joinedload(Issue.fulfillment))
               .order_by(Issue.reported_at.desc(), Issue.id.desc())
               .all())
+
+    # Work totals across every report that has a fulfilment form.
+    works = [i.fulfillment for i in issues if i.fulfillment]
+    total_hours = sum((w.man_hours for w in works if w.man_hours is not None), Decimal('0'))
+    total_parts_cost = sum((w.parts_cost for w in works if w.parts_cost is not None), Decimal('0'))
 
     by_status = {code: [] for code, _ in ISSUE_STATUSES}
     for issue in issues:
@@ -768,6 +776,9 @@ def truck_profile(equipment_id):
                            worst_severity=worst_severity,
                            last_reported=issues[0].reported_at if issues else None,
                            last_closed=closed[0].resolved_at if closed else None,
+                           fulfilled_count=len(works),
+                           total_hours=total_hours,
+                           total_parts_cost=total_parts_cost,
                            # Detail-page prev/next arrows walk this truck's
                            # queue slice; the back-link lands on the queue
                            # filtered to the same unit.
@@ -789,16 +800,34 @@ def _safe_next(raw, fallback):
 
 # ── ISSUE DETAIL ──────────────────────────────────────────────────────
 
-@issues_bp.route('/<int:issue_id>', methods=['GET'])
-@shop_required
-def detail(issue_id):
-    issue = Issue.query.get_or_404(issue_id)
+def _render_detail(issue, work_form=None, fulfillment_open=False, status_code=200):
+    """Single render point for the issue detail page. ``work_form`` carries the
+    fulfilment panel's sticky values — the posted form on a 422 re-render,
+    otherwise the stored record (or blanks)."""
     history = issue.status_history.order_by(IssueStatusHistory.changed_at.asc()).all()
+    if work_form is None:
+        work_form = _fulfillment_form_values(issue.fulfillment)
+    technicians = [name for (name,) in (
+        db.session.query(IssueFulfillment.technician)
+        .filter(IssueFulfillment.technician.isnot(None), IssueFulfillment.technician != '')
+        .distinct().order_by(IssueFulfillment.technician).limit(50))]
     return render_template('issues/detail.html',
                            issue=issue,
                            history=history,
                            statuses=ISSUE_STATUSES,
-                           nav=_issue_sibling_nav(issue.id, request.args))
+                           fulfillment=issue.fulfillment,
+                           work_form=work_form,
+                           fulfillment_open=fulfillment_open,
+                           technician_suggestions=technicians,
+                           max_receipts=MAX_RECEIPTS,
+                           nav=_issue_sibling_nav(issue.id, request.args)), status_code
+
+
+@issues_bp.route('/<int:issue_id>', methods=['GET'])
+@shop_required
+def detail(issue_id):
+    issue = Issue.query.get_or_404(issue_id)
+    return _render_detail(issue)
 
 
 @issues_bp.route('/<int:issue_id>/status', methods=['POST'])
@@ -829,6 +858,195 @@ def update_status(issue_id):
     status_label = dict(ISSUE_STATUSES).get(new_status, new_status)
     flash(f'Estado actualizado a "{status_label}".', 'success')
     return redirect(next_url)
+
+
+# ── FULFILMENT FORM ("Trabajo Realizado") ────────────────────────────
+#
+# An OPTIONAL work record per issue: technician, job description, man hours,
+# parts cost and receipt photos. Nothing in update_status / update_issue_status
+# looks at it — an issue closes exactly the same with or without one. Shop
+# managers fill it in (same gate as editing a report); every shop user reads it.
+
+MAX_RECEIPTS = 20
+
+# Served mime type per extension — never the browser-supplied content type,
+# which would let an upload named x.jpg be served back inline as text/html.
+RECEIPT_MIME_TYPES = {
+    'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+    'gif': 'image/gif', 'webp': 'image/webp', 'heic': 'image/heic',
+    'pdf': 'application/pdf',
+}
+
+
+def _format_decimal(value, places=None):
+    if value is None:
+        return ''
+    if places is not None:
+        return f'{value:.{places}f}'
+    text = f'{value:f}'
+    return text.rstrip('0').rstrip('.') if '.' in text else text
+
+
+def _fulfillment_form_values(fulfillment):
+    """Sticky values for the fulfilment panel from the stored record."""
+    if fulfillment is None:
+        return {'technician': '', 'work_description': '', 'man_hours': '', 'parts_cost': ''}
+    return {
+        'technician': fulfillment.technician or '',
+        'work_description': fulfillment.work_description or '',
+        'man_hours': _format_decimal(fulfillment.man_hours),
+        'parts_cost': _format_decimal(fulfillment.parts_cost, 2),
+    }
+
+
+def _parse_amount(raw, label, limit, errors):
+    """'' → None; otherwise a non-negative Decimal rounded to cents. Accepts
+    '$', spaces, thousands commas ('1,234.50') and a decimal comma ('2,5')."""
+    text = (raw or '').strip().replace('$', '').replace(' ', '')
+    if not text:
+        return None
+    if ',' in text:
+        head, _, tail = text.rpartition(',')
+        if '.' in text or (len(tail) == 3 and head):
+            text = text.replace(',', '')      # thousands separators
+        else:
+            text = text.replace(',', '.')     # decimal comma
+    try:
+        value = Decimal(text)
+    except InvalidOperation:
+        errors.append(f'{label}: escriba un número válido.')
+        return None
+    if not value.is_finite() or value < 0:
+        errors.append(f'{label}: escriba un número válido (0 o mayor).')
+        return None
+    value = value.quantize(Decimal('0.01'))
+    if value >= limit:
+        errors.append(f'{label}: el valor es demasiado grande.')
+        return None
+    return value
+
+
+def _validate_fulfillment(form, uploads):
+    """Returns (fields, files, errors). Every field is individually optional."""
+    errors = []
+    technician = (form.get('technician') or '').strip()
+    if len(technician) > 120:
+        errors.append('Técnico: máximo 120 caracteres.')
+    fields = {
+        'technician': technician or None,
+        'work_description': (form.get('work_description') or '').strip() or None,
+        'man_hours': _parse_amount(form.get('man_hours'), 'Horas hombre', Decimal('10000'), errors),
+        'parts_cost': _parse_amount(form.get('parts_cost'), 'Costo de piezas',
+                                    Decimal('100000000'), errors),
+    }
+    files = [f for f in uploads if f and f.filename]
+    for f in files:
+        if not allowed_receipt(f.filename):
+            errors.append(f'Recibo "{f.filename}": tipo de archivo no permitido '
+                          f'(use fotos o PDF).')
+    return fields, files, errors
+
+
+def _fulfillment_url(issue):
+    """Where the fulfilment routes return to: the POSTed relative ``next``
+    (the detail page with its prev/next nav args) or the bare detail page."""
+    return _safe_next(request.form.get('next', ''),
+                      url_for('issues.detail', issue_id=issue.id)) + '#trabajo-realizado'
+
+
+@issues_bp.route('/<int:issue_id>/fulfillment', methods=['POST'])
+@shop_manager_required
+def save_fulfillment(issue_id):
+    issue = Issue.query.get_or_404(issue_id)
+    fulfillment = issue.fulfillment
+    fields, files, errors = _validate_fulfillment(request.form,
+                                                  request.files.getlist('receipts'))
+
+    if not errors and fulfillment is None and not files \
+            and all(v is None for v in fields.values()):
+        errors.append('Complete al menos un campo o adjunte un recibo.')
+    existing_receipts = len(fulfillment.receipts) if fulfillment else 0
+    if not errors and existing_receipts + len(files) > MAX_RECEIPTS:
+        errors.append(f'Máximo {MAX_RECEIPTS} recibos por reporte.')
+
+    if errors:
+        for error in errors:
+            flash(error, 'danger')
+        return _render_detail(issue, work_form=request.form, fulfillment_open=True,
+                              status_code=422)
+
+    created = fulfillment is None
+    if created:
+        fulfillment = IssueFulfillment(issue=issue, created_by_user_id=current_user.id)
+        db.session.add(fulfillment)
+    for key, value in fields.items():
+        setattr(fulfillment, key, value)
+    fulfillment.updated_by_user_id = current_user.id
+    # Receipts alone don't dirty the row, so stamp the edit time explicitly.
+    fulfillment.updated_at = datetime.utcnow()
+
+    for f in files:
+        extension = f.filename.rsplit('.', 1)[1].lower()
+        fulfillment.receipts.append(IssueReceipt(
+            storage_filename=save_uploaded_file(f),
+            original_filename=f.filename,
+            mime_type=RECEIPT_MIME_TYPES.get(extension, 'application/octet-stream'),
+            uploaded_by_user_id=current_user.id,
+        ))
+    db.session.commit()
+
+    flash('Trabajo realizado registrado.' if created else 'Trabajo realizado actualizado.',
+          'success')
+    return redirect(_fulfillment_url(issue))
+
+
+@issues_bp.route('/<int:issue_id>/fulfillment/delete', methods=['POST'])
+@shop_manager_required
+def delete_fulfillment(issue_id):
+    issue = Issue.query.get_or_404(issue_id)
+    fulfillment = issue.fulfillment
+    if fulfillment is None:
+        abort(404)
+    for receipt in fulfillment.receipts:
+        delete_stored_file(receipt.storage_filename)
+    db.session.delete(fulfillment)
+    db.session.commit()
+    flash('Formulario de trabajo eliminado.', 'warning')
+    return redirect(_fulfillment_url(issue))
+
+
+def _receipt_or_404(issue_id, receipt_id):
+    """A receipt only resolves under its own issue's URL."""
+    receipt = IssueReceipt.query.get_or_404(receipt_id)
+    if receipt.fulfillment is None or receipt.fulfillment.issue_id != issue_id:
+        abort(404)
+    return receipt
+
+
+@issues_bp.route('/<int:issue_id>/fulfillment/receipts/<int:receipt_id>/delete', methods=['POST'])
+@shop_manager_required
+def delete_receipt(issue_id, receipt_id):
+    issue = Issue.query.get_or_404(issue_id)
+    receipt = _receipt_or_404(issue.id, receipt_id)
+    delete_stored_file(receipt.storage_filename)
+    db.session.delete(receipt)
+    db.session.commit()
+    flash('Recibo eliminado.', 'warning')
+    return redirect(_fulfillment_url(issue))
+
+
+@issues_bp.route('/<int:issue_id>/receipts/<int:receipt_id>', methods=['GET'])
+@shop_required
+def receipt_file(issue_id, receipt_id):
+    """Serve a receipt blob. /uploads/<filename> is a permit-module endpoint
+    that shop-only users are redirected away from, so receipts get their own
+    route inside the blueprint."""
+    receipt = _receipt_or_404(issue_id, receipt_id)
+    stored = FileStorage.query.filter_by(filename=receipt.storage_filename).first_or_404()
+    return send_file(BytesIO(stored.data),
+                     mimetype=receipt.mime_type or 'application/octet-stream',
+                     as_attachment=False,
+                     download_name=receipt.original_filename or receipt.storage_filename)
 
 
 # ── ADMIN: GENERATE DRIVER LINK ──────────────────────────────────────
@@ -1169,14 +1387,15 @@ def delete(issue_id):
 
     # SQLite (local dev / tests) never enforces FKs, so the child issues'
     # ON DELETE SET NULL is mirrored by hand (employee_delete idiom in app.py);
-    # status history and photos go through the ORM delete-orphan cascades.
+    # status history, photos and the fulfilment form (with its receipts) go
+    # through the ORM delete-orphan cascades; their blobs are deleted here.
     Issue.query.filter_by(parent_issue_id=issue.id).update(
         {'parent_issue_id': None}, synchronize_session=False)
-    photo_files = [p.storage_filename for p in issue.photos if p.storage_filename]
-    if photo_files:
-        # delete_stored_file lives in app.py, which this blueprint cannot import.
-        FileStorage.query.filter(FileStorage.filename.in_(photo_files)).delete(
-            synchronize_session=False)
+    stored_files = [p.storage_filename for p in issue.photos if p.storage_filename]
+    if issue.fulfillment:
+        stored_files += [r.storage_filename for r in issue.fulfillment.receipts]
+    for filename in stored_files:
+        delete_stored_file(filename)
     db.session.delete(issue)
     db.session.commit()
 

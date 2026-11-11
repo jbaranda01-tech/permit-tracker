@@ -3011,3 +3011,94 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
     .form-shortcut-hint { display: none; }
     .detail-nav-btn, .detail-nav-count { min-height: 44px; }
 }
+
+/* ── Fulfilment form ("Trabajo Realizado") on the issue detail page ── */
+.card-header-note {
+    margin-left: var(--space-sm);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+.work-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-xs);
+}
+.work-label .badge {
+    margin-left: 0;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    padding: 1px 7px;
+    border-radius: 20px;
+}
+.work-description,
+.work-receipts { margin-top: var(--space-md); }
+.work-description p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.work-empty { color: var(--text-secondary); font-size: 0.88rem; }
+.work-updated {
+    margin-top: var(--space-md);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+.work-actions { margin-top: var(--space-md); }
+.fulfillment-panel {
+    margin-top: var(--space-md);
+    padding: var(--space-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+.fulfillment-panel[hidden] { display: none; }
+.fulfillment-panel input[type="file"] { width: 100%; max-width: 100%; }
+.work-delete-form {
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border-color);
+}
+.form-hint { display: block; margin-top: var(--space-xs); font-size: 0.78rem; color: var(--text-secondary); }
+.form-hint--error { color: var(--color-expired-text); }
+.receipt-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: var(--space-sm);
+}
+.receipt-item { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
+.receipt-item form { display: flex; }
+.receipt-item form .btn { flex: 1; justify-content: center; }
+.receipt-thumb {
+    display: block;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+.receipt-thumb:hover { border-color: var(--accent); }
+.receipt-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.receipt-thumb--file {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+    text-align: center;
+}
+.receipt-thumb--file i { font-size: 1.8rem; color: var(--accent); }
+.receipt-thumb--file span {
+    max-width: 100%;
+    font-size: 0.7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* "Trabajo registrado" marker on truck-profile issue rows */
+.issue-row-work { color: var(--color-valid-text); }

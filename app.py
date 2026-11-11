@@ -30,7 +30,7 @@ from models import (
     EQUIPMENT_PERMIT_TYPES,
     COMPANY_PERMIT_TYPES, FileStorage, NotificationLog,
     protect_uploaded_files, ProtectedFileError,
-    Issue, IssueStatusHistory, IssuePhoto, UserIssueRole,
+    Issue, IssueStatusHistory, IssuePhoto, UserIssueRole, IssueFulfillment,
     ISSUE_CATEGORIES, ISSUE_SEVERITIES, ISSUE_STATUSES,
     RESOLVED_STATUSES, LEGACY_ISSUE_STATUSES, ISSUE_EDIT_NOTE,
     EMPLOYEE_ARCHIVE_REASONS, EQUIPMENT_ARCHIVE_REASONS,
@@ -71,33 +71,24 @@ from issues import issues_bp
 app.register_blueprint(issues_bp)
 
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'doc', 'docx'}
+# Upload helpers live in file_store.py so the issues blueprint can share them.
+from file_store import (  # noqa: E402
+    ALLOWED_EXTENSIONS, allowed_file, save_uploaded_file, delete_stored_file,
+)
 
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-def save_uploaded_file(file):
-    """Save an uploaded file to the database and return the storage filename."""
-    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-    file_data = file.read()
-    stored = FileStorage(
-        filename=filename,
-        original_filename=file.filename,
-        mime_type=file.content_type or 'application/octet-stream',
-        data=file_data,
-        size=len(file_data),
-    )
-    db.session.add(stored)
-    return filename
-
-
-def delete_stored_file(filename):
-    """Delete a file from the database by filename."""
-    stored = FileStorage.query.filter_by(filename=filename).first()
-    if stored:
-        db.session.delete(stored)
+@app.errorhandler(413)
+def upload_too_large(_error):
+    """MAX_CONTENT_LENGTH is per request, so several photos together can trip
+    it. Send the user back with a message instead of a bare 413 page."""
+    flash('Los archivos superan el límite de 16 MB por envío. '
+          'Suba menos archivos a la vez o reduzca su tamaño.', 'danger')
+    # Back to the page the form was on — same host only (no open redirect).
+    from urllib.parse import urlparse
+    referrer = urlparse(request.referrer or '')
+    if referrer.netloc == request.host and referrer.path.startswith('/'):
+        return redirect(referrer.path + ('?' + referrer.query if referrer.query else ''))
+    return redirect(url_for('dashboard'))
 
 
 # ── NOTIFICATION HELPERS ──────────────────────────────────────────────
@@ -2647,6 +2638,30 @@ def _gather_report_data(report_type, company_filter):
     return employees, equipment_list, issues, company_permits
 
 
+def _gather_fulfillments(report_type, company_filter):
+    """Issues that carry a fulfilment form ("Trabajo Realizado"), for the Excel
+    "Trabajos" sheet. Unlike the Averías list this is NOT open-only — the work
+    is usually recorded when the issue is closed. Same company scoping and
+    archived-unit exclusion as ``_gather_report_data``."""
+    if report_type not in ('all', 'issues'):
+        return []
+    q = (Issue.query
+         .join(IssueFulfillment, IssueFulfillment.issue_id == Issue.id)
+         .join(Equipment, Issue.equipment_id == Equipment.id)
+         .filter(Equipment.archived_at.is_(None)))
+    if company_filter:
+        q = q.filter(Equipment.company == company_filter)
+    return sorted(
+        q.all(),
+        key=lambda i: (
+            i.equipment.company or '',
+            i.equipment.unit_sort_key,
+            -(i.reported_at.toordinal() if i.reported_at else 0),
+            -i.id,
+        ),
+    )
+
+
 def _insurance_permits_by_equipment(equipment_list):
     """equipment id → the permit record covering its insurance.
 
@@ -2885,6 +2900,46 @@ def export_excel():
             if issue.reported_at:
                 d = ws.cell(row=r, column=8, value=issue.reported_at.date())
                 d.number_format = 'MM/DD/YYYY'
+
+    worked_issues = _gather_fulfillments(report_type, company_filter)
+    if worked_issues:
+        ws = new_sheet(wb, 'Trabajos',
+                       ['Empresa', 'Unidad', 'Reporte #', 'Categoría', 'Estado',
+                        'Técnico', 'Trabajo realizado', 'Horas hombre',
+                        'Costo piezas', 'Recibos', 'Fecha Reporte', 'Fecha Cierre'],
+                       [10, 12, 10, 16, 14, 22, 50, 13, 14, 9, 14, 14])
+        total_hours = Decimal('0')
+        total_cost = Decimal('0')
+        r = 1
+        for r, issue in enumerate(worked_issues, start=2):
+            eq = issue.equipment
+            work = issue.fulfillment
+            ws.cell(row=r, column=1, value=eq.company)
+            ws.cell(row=r, column=2, value=eq.display_name)
+            ws.cell(row=r, column=3, value=issue.id)
+            ws.cell(row=r, column=4, value=issue.category_label)
+            ws.cell(row=r, column=5, value=issue.status_label)
+            ws.cell(row=r, column=6, value=work.technician or '')
+            ws.cell(row=r, column=7, value=work.work_description or '')
+            if work.man_hours is not None:
+                ws.cell(row=r, column=8, value=float(work.man_hours)).number_format = '0.00'
+                total_hours += work.man_hours
+            if work.parts_cost is not None:
+                ws.cell(row=r, column=9, value=float(work.parts_cost)).number_format = '"$"#,##0.00'
+                total_cost += work.parts_cost
+            ws.cell(row=r, column=10, value=len(work.receipts))
+            if issue.reported_at:
+                ws.cell(row=r, column=11, value=issue.reported_at.date()).number_format = 'MM/DD/YYYY'
+            if issue.resolved_at:
+                ws.cell(row=r, column=12, value=issue.resolved_at.date()).number_format = 'MM/DD/YYYY'
+        r += 1
+        ws.cell(row=r, column=7, value='Total').font = header_font
+        hours_cell = ws.cell(row=r, column=8, value=float(total_hours))
+        hours_cell.number_format = '0.00'
+        hours_cell.font = header_font
+        cost_cell = ws.cell(row=r, column=9, value=float(total_cost))
+        cost_cell.number_format = '"$"#,##0.00'
+        cost_cell.font = header_font
 
     if company_permits:
         ws = new_sheet(wb, 'Empresa',
@@ -3420,6 +3475,17 @@ def dedup_data(dry_run):
         group.sort(key=lambda i: i.id)
         keeper = group[0]
         for dup in group[1:]:
+            # A fulfilment form (work record + receipt photos) must not be lost
+            # to the cascade: move it to the keeper, or — when both carry one —
+            # leave the duplicate alone and report it.
+            if dup.fulfillment is not None:
+                if keeper.fulfillment is not None:
+                    print(f'  Skip duplicate issue id={dup.id} (keeping id={keeper.id}): '
+                          f'both have a fulfilment form — merge by hand')
+                    continue
+                if not dry_run:
+                    dup.fulfillment.issue = keeper
+                    db.session.flush()
             # Re-point any child issues referencing the doomed dup to the keeper.
             if not dry_run:
                 Issue.query.filter_by(parent_issue_id=dup.id).update({'parent_issue_id': keeper.id})

@@ -171,6 +171,19 @@
                     <label>Último cierre</label>
                     <span>{{ last_closed|time_ago if last_closed else '—' }}</span>
                 </div>
+                {# Totals from the optional fulfilment forms ("Trabajo Realizado"). #}
+                <div class="permit-field">
+                    <label>Trabajos registrados</label>
+                    <span>{{ fulfilled_count }}</span>
+                </div>
+                <div class="permit-field">
+                    <label>Horas hombre</label>
+                    <span>{{ '{:,.2f}'.format(total_hours) ~ ' h' if fulfilled_count else '—' }}</span>
+                </div>
+                <div class="permit-field">
+                    <label>Costo de piezas</label>
+                    <span>{{ '${:,.2f}'.format(total_parts_cost) if fulfilled_count else '—' }}</span>
+                </div>
             </div>
         </div>
     </div>
@@ -185,7 +198,7 @@
         </div>
         <div class="card-body card-body--flush" id="sec-body-{{ code }}">
             {% for issue in items %}
-            {{ issue_row(issue, statuses, nav_args, show_resolved=(code in resolved_statuses)) }}
+            {{ issue_row(issue, statuses, nav_args, show_resolved=(code in resolved_statuses), show_work=true) }}
             {% else %}
             <div class="truck-no-issues">Sin reportes en este estado</div>
             {% endfor %}

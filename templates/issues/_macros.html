@@ -8,7 +8,7 @@
 <i class="fas {{ icons.get(equipment.equipment_class if equipment else none, 'fa-truck') }}"></i>
 {%- endmacro %}
 
-{% macro issue_row(issue, statuses, nav_args, show_truck=false, show_resolved=false) %}
+{% macro issue_row(issue, statuses, nav_args, show_truck=false, show_resolved=false, show_work=false) %}
 {# Stretched-link row: the whole card is clickable via .issue-row-link::after,
    while the inline status form sits above the overlay (z-index) — a nested
    form inside a whole-row <a> would be invalid HTML. #}
@@ -31,6 +31,11 @@
         <span><i class="fas fa-check"></i> Cerrado {{ issue.resolved_at|time_ago }}</span>
         {% elif issue.reported_at %}
         <span><i class="fas fa-clock"></i> {{ issue.reported_at|time_ago }}</span>
+        {% endif %}
+        {# show_work: only the truck profile passes it (its query eager-loads
+           the fulfilment form; the queue's does not). #}
+        {% if show_work and issue.fulfillment %}
+        <span class="issue-row-work" title="Trabajo realizado registrado"><i class="fas fa-clipboard-check"></i> Trabajo registrado</span>
         {% endif %}
         <form method="POST" action="{{ url_for('issues.update_status', issue_id=issue.id) }}" class="issue-row-status-form">
             <input type="hidden" name="next" value="{{ request.full_path }}">

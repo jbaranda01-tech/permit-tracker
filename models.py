@@ -890,6 +890,56 @@ class IssuePhoto(db.Model):
     issue = db.relationship('Issue', backref=db.backref('photos', lazy='dynamic', cascade='all, delete-orphan'))
 
 
+class IssueFulfillment(db.Model):
+    """Optional work record for an issue ("Trabajo Realizado"): who did the
+    job, what was done, the labour and the parts cost, plus receipt photos.
+
+    One per issue (unique ``issue_id``). It is never required — status changes
+    do not look at it — and every content column is nullable so a partial
+    form can be saved and completed later.
+    """
+    __tablename__ = 'issue_fulfillments'
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'),
+                         nullable=False, unique=True)
+    technician = db.Column(db.String(120), nullable=True)
+    work_description = db.Column(db.Text, nullable=True)
+    man_hours = db.Column(db.Numeric(6, 2), nullable=True)
+    parts_cost = db.Column(db.Numeric(10, 2), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    updated_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    issue = db.relationship('Issue', backref=db.backref(
+        'fulfillment', uselist=False, cascade='all, delete-orphan'))
+    updated_by = db.relationship('User', foreign_keys=[updated_by_user_id])
+
+
+class IssueReceipt(db.Model):
+    """A receipt photo / invoice attached to an issue's fulfilment form.
+    ``storage_filename`` points at a ``FileStorage`` blob."""
+    __tablename__ = 'issue_receipts'
+    id = db.Column(db.Integer, primary_key=True)
+    fulfillment_id = db.Column(db.Integer, db.ForeignKey('issue_fulfillments.id', ondelete='CASCADE'),
+                               nullable=False)
+    storage_filename = db.Column(db.String(500), nullable=False)
+    original_filename = db.Column(db.String(500), nullable=True)
+    mime_type = db.Column(db.String(100), nullable=True)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    fulfillment = db.relationship('IssueFulfillment', backref=db.backref(
+        'receipts', order_by='IssueReceipt.id', cascade='all, delete-orphan'))
+
+    @property
+    def is_image(self):
+        """True when a browser can render it inline as a thumbnail (HEIC only
+        renders in Safari, so it is offered as a file link instead)."""
+        mime = (self.mime_type or '').lower()
+        return mime.startswith('image/') and 'heic' not in mime and 'heif' not in mime
+
+
 class UserIssueRole(db.Model):
     __tablename__ = 'user_issue_roles'
     __table_args__ = (
@@ -920,6 +970,7 @@ PROTECTED_FILE_FIELDS = {
     'EquipmentPermit': ('file_path',),
     'CompanyPermit': ('file_path',),
     'IssuePhoto': ('storage_filename',),
+    'IssueReceipt': ('storage_filename',),
 }
 
 _file_guard = threading.local()

@@ -116,6 +116,130 @@
 </div>
 {% endif %}
 
+{# ── Trabajo Realizado: the OPTIONAL fulfilment form. Never required to change
+      or close the issue; shop managers fill it in, every shop user reads it. #}
+<div class="profile-card card-stack" id="trabajo-realizado">
+    <div class="card-header">
+        <i class="fas fa-clipboard-check"></i> Trabajo Realizado <span class="card-header-note">Opcional</span>
+    </div>
+    <div class="card-body">
+        {% if fulfillment %}
+        <div class="permit-field">
+            <label>Técnico</label>
+            <span>{{ fulfillment.technician or '—' }}</span>
+        </div>
+        <div class="permit-field">
+            <label>Horas hombre</label>
+            <span>{% if fulfillment.man_hours is not none %}{{ '{:,.2f}'.format(fulfillment.man_hours) }} h{% else %}—{% endif %}</span>
+        </div>
+        <div class="permit-field">
+            <label>Costo total de piezas</label>
+            <span>{% if fulfillment.parts_cost is not none %}{{ '${:,.2f}'.format(fulfillment.parts_cost) }}{% else %}—{% endif %}</span>
+        </div>
+        {% if fulfillment.work_description %}
+        <div class="work-description">
+            <span class="work-label">Descripción del trabajo</span>
+            <p>{{ fulfillment.work_description }}</p>
+        </div>
+        {% endif %}
+        <div class="work-receipts">
+            <span class="work-label">Recibos <span class="badge">{{ fulfillment.receipts|length }}</span></span>
+            {% if fulfillment.receipts %}
+            <div class="receipt-grid">
+                {% for receipt in fulfillment.receipts %}
+                {% set receipt_url = url_for('issues.receipt_file', issue_id=issue.id, receipt_id=receipt.id) %}
+                <div class="receipt-item">
+                    {% if receipt.is_image %}
+                    <a href="{{ receipt_url }}" target="_blank" rel="noopener" class="receipt-thumb" title="{{ receipt.original_filename or 'Recibo' }}">
+                        <img src="{{ receipt_url }}" alt="Recibo {{ loop.index }}" loading="lazy">
+                    </a>
+                    {% else %}
+                    <a href="{{ receipt_url }}" target="_blank" rel="noopener" class="receipt-thumb receipt-thumb--file" title="{{ receipt.original_filename or 'Recibo' }}">
+                        <i class="fas {{ 'fa-file-pdf' if receipt.mime_type == 'application/pdf' else 'fa-file-image' }}"></i>
+                        <span>{{ receipt.original_filename or 'Recibo' }}</span>
+                    </a>
+                    {% endif %}
+                    {% if current_user.is_shop_manager %}
+                    <form method="POST" action="{{ url_for('issues.delete_receipt', issue_id=issue.id, receipt_id=receipt.id) }}"
+                          onsubmit="return confirm('¿Eliminar este recibo? Esta acción no se puede deshacer.')">
+                        <input type="hidden" name="next" value="{{ work_form.get('next') or request.full_path }}">
+                        <button type="submit" class="btn btn-ghost btn-sm"><i class="fas fa-trash"></i> Eliminar</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="work-empty">Sin recibos adjuntos.</p>
+            {% endif %}
+        </div>
+        <p class="work-updated">
+            Actualizado {{ fulfillment.updated_at.strftime('%m/%d/%Y %H:%M') if fulfillment.updated_at else '' }}{% if fulfillment.updated_by %} por {{ fulfillment.updated_by.username }}{% endif %}
+        </p>
+        {% else %}
+        <p class="work-empty">Sin registrar. Este formulario es opcional: el reporte se puede cerrar o cambiar de estado sin llenarlo.</p>
+        {% endif %}
+
+        {% if current_user.is_shop_manager %}
+        <div class="work-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="work-toggle"
+                    aria-expanded="{{ 'true' if fulfillment_open else 'false' }}" aria-controls="work-panel" onclick="toggleWorkPanel()">
+                <i class="fas {{ 'fa-edit' if fulfillment else 'fa-plus' }}"></i> {{ 'Editar / agregar recibos' if fulfillment else 'Completar formulario' }}
+            </button>
+        </div>
+
+        <div id="work-panel" class="fulfillment-panel" {% if not fulfillment_open %}hidden{% endif %}>
+            <form method="POST" action="{{ url_for('issues.save_fulfillment', issue_id=issue.id) }}" enctype="multipart/form-data" id="work-form">
+                {# next = this page with its nav args (kept across a 422 re-render). #}
+                <input type="hidden" name="next" value="{{ work_form.get('next') or request.full_path }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="work-technician">Técnico</label>
+                        <input type="text" name="technician" id="work-technician" maxlength="120" list="work-technicians"
+                               value="{{ work_form.get('technician', '') }}" placeholder="Nombre del técnico o taller" autocomplete="off">
+                        <datalist id="work-technicians">
+                            {% for name in technician_suggestions %}<option value="{{ name }}">{% endfor %}
+                        </datalist>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="work-hours">Horas hombre</label>
+                        <input type="number" name="man_hours" id="work-hours" min="0" step="0.25" inputmode="decimal"
+                               value="{{ work_form.get('man_hours', '') }}" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="work-cost">Costo total de piezas ($)</label>
+                        <input type="number" name="parts_cost" id="work-cost" min="0" step="0.01" inputmode="decimal"
+                               value="{{ work_form.get('parts_cost', '') }}" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="work-description">Descripción del trabajo realizado</label>
+                    <textarea name="work_description" id="work-description" rows="4" placeholder="Qué se reparó, piezas reemplazadas...">{{ work_form.get('work_description', '') }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="work-receipts">Recibos de piezas o herramientas (fotos o PDF)</label>
+                    <input type="file" name="receipts" id="work-receipts" multiple accept="image/*,.pdf">
+                    <small class="form-hint" id="work-receipts-note">Puede seleccionar varios archivos; se agregan a los ya adjuntos (máximo {{ max_receipts }}).</small>
+                </div>
+                <div class="quick-report-actions">
+                    <button type="submit" class="btn btn-primary" id="work-save"><i class="fas fa-save"></i> Guardar</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleWorkPanel()">Cancelar</button>
+                </div>
+            </form>
+            {% if fulfillment %}
+            <form method="POST" action="{{ url_for('issues.delete_fulfillment', issue_id=issue.id) }}" class="work-delete-form"
+                  onsubmit="return confirm('¿Eliminar el formulario de trabajo y sus recibos? Esta acción no se puede deshacer.')">
+                <input type="hidden" name="next" value="{{ work_form.get('next') or request.full_path }}">
+                <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Eliminar formulario</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 {% if history %}
 <div class="profile-card card-stack">
     <div class="card-header">
@@ -153,5 +277,79 @@
         </div>
     </div>
 </div>
+{% endif %}
+
+{% if current_user.is_shop_manager %}
+<script>
+function toggleWorkPanel() {
+    var panel = document.getElementById('work-panel');
+    var btn = document.getElementById('work-toggle');
+    var open = panel.hidden;
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) { document.getElementById('work-technician').focus(); }
+}
+
+// Shrink phone photos in the browser before upload (longest side 1600px,
+// JPEG) so several receipts fit in one request and the stored files stay
+// small. Anything that can't be processed is sent as-is.
+(function () {
+    var input = document.getElementById('work-receipts');
+    var save = document.getElementById('work-save');
+    var note = document.getElementById('work-receipts-note');
+    if (!input) { return; }
+    var MAX_SIDE = 1600, LIMIT = 15 * 1024 * 1024;
+    var baseNote = note.textContent;
+
+    function shrink(file) {
+        return new Promise(function (resolve) {
+            if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 400 * 1024) { resolve(file); return; }
+            var url = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function () {
+                URL.revokeObjectURL(url);
+                var scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                var ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(function (blob) {
+                    if (!blob || blob.size >= file.size) { resolve(file); return; }
+                    resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+                }, 'image/jpeg', 0.82);
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+            img.src = url;
+        });
+    }
+
+    function checkSize() {
+        var total = 0;
+        for (var i = 0; i < input.files.length; i++) { total += input.files[i].size; }
+        var tooBig = total > LIMIT;
+        note.textContent = tooBig
+            ? 'Los archivos pesan ' + (total / 1048576).toFixed(1) + ' MB; el límite es 16 MB por envío. Seleccione menos archivos.'
+            : baseNote;
+        note.classList.toggle('form-hint--error', tooBig);
+        save.disabled = tooBig;
+    }
+
+    input.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(input.files);
+        if (!files.length || !window.DataTransfer || !window.Promise) { checkSize(); return; }
+        save.disabled = true;
+        Promise.all(files.map(shrink)).then(function (out) {
+            try {
+                var dt = new DataTransfer();
+                out.forEach(function (f) { dt.items.add(f); });
+                input.files = dt.files;
+            } catch (e) { /* keep the originals */ }
+        }).then(checkSize, checkSize);
+    });
+})();
+</script>
 {% endif %}
 {% endblock %}
