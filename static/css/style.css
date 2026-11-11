@@ -3102,3 +3102,45 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 }
 /* "Trabajo registrado" marker on truck-profile issue rows */
 .issue-row-work { color: var(--color-valid-text); }
+/* Receipt capture: camera / picker buttons + the pending (not yet uploaded) list */
+.receipt-capture { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.receipt-capture[hidden] { display: none; }
+.receipt-capture-btn { flex: 1 1 160px; justify-content: center; min-height: 44px; }
+.receipt-pending { display: flex; flex-direction: column; gap: var(--space-xs); }
+.receipt-pending:not(:empty) { margin-top: var(--space-sm); }
+.receipt-pending-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+.receipt-pending-thumb {
+    flex: 0 0 48px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--accent);
+    font-size: 1.3rem;
+}
+.receipt-pending-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.receipt-pending-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.receipt-pending-remove { flex-shrink: 0; }
+/* A mouse-and-keyboard device has no rear camera to open: the picker is enough. */
+@media (hover: hover) and (pointer: fine) {
+    .receipt-capture-btn--camera { display: none; }
+}

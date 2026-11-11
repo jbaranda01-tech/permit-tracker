@@ -220,8 +220,23 @@
                 </div>
                 <div class="form-group">
                     <label for="work-receipts">Recibos de piezas o herramientas (fotos o PDF)</label>
+                    {# Enhanced by the script below: "Tomar foto" opens the phone's
+                       camera directly (capture), "Elegir archivos" the gallery /
+                       files; both accumulate into #work-receipts, which is the
+                       only field posted. Without JS support the plain multi-file
+                       input stays visible. #}
+                    <div class="receipt-capture" id="work-capture" hidden>
+                        <button type="button" class="btn btn-primary receipt-capture-btn receipt-capture-btn--camera" id="work-camera-btn">
+                            <i class="fas fa-camera"></i> Tomar foto
+                        </button>
+                        <button type="button" class="btn btn-secondary receipt-capture-btn" id="work-pick-btn">
+                            <i class="fas fa-images"></i> Elegir archivos
+                        </button>
+                    </div>
+                    <input type="file" id="work-camera" accept="image/*" capture="environment" hidden>
                     <input type="file" name="receipts" id="work-receipts" multiple accept="image/*,.pdf">
-                    <small class="form-hint" id="work-receipts-note">Puede seleccionar varios archivos; se agregan a los ya adjuntos (máximo {{ max_receipts }}).</small>
+                    <div class="receipt-pending" id="work-pending" aria-live="polite"></div>
+                    <small class="form-hint" id="work-receipts-note">Puede agregar varios recibos; se suman a los ya adjuntos (máximo {{ max_receipts }}).</small>
                 </div>
                 <div class="quick-report-actions">
                     <button type="submit" class="btn btn-primary" id="work-save"><i class="fas fa-save"></i> Guardar</button>
@@ -290,16 +305,31 @@ function toggleWorkPanel() {
     if (open) { document.getElementById('work-technician').focus(); }
 }
 
-// Shrink phone photos in the browser before upload (longest side 1600px,
-// JPEG) so several receipts fit in one request and the stored files stay
-// small. Anything that can't be processed is sent as-is.
+// Receipt capture. "Tomar foto" opens the phone camera directly; "Elegir
+// archivos" opens the gallery / file picker. Every photo taken or file chosen
+// is ADDED to a pending list (a camera input only ever holds one shot), shown
+// as removable previews, and mirrored into #work-receipts — the one field the
+// form posts. Photos are shrunk first (longest side 1600px, JPEG) so several
+// fit in one request; anything that can't be processed is sent as-is.
 (function () {
     var input = document.getElementById('work-receipts');
+    var camera = document.getElementById('work-camera');
+    var capture = document.getElementById('work-capture');
+    var list = document.getElementById('work-pending');
     var save = document.getElementById('work-save');
     var note = document.getElementById('work-receipts-note');
     if (!input) { return; }
     var MAX_SIDE = 1600, LIMIT = 15 * 1024 * 1024;
     var baseNote = note.textContent;
+    var pending = [];   // File objects waiting to be uploaded
+    var urls = [];      // object URLs of the current previews
+
+    // Mirroring needs a writable FileList; without it keep the plain input.
+    var enhanced = false;
+    try { new DataTransfer(); enhanced = !!window.Promise; } catch (e) { enhanced = false; }
+    if (!enhanced) { return; }
+    capture.hidden = false;
+    input.hidden = true;
 
     function shrink(file) {
         return new Promise(function (resolve) {
@@ -326,29 +356,72 @@ function toggleWorkPanel() {
         });
     }
 
-    function checkSize() {
+    function sync() {
+        var dt = new DataTransfer();
+        pending.forEach(function (f) { dt.items.add(f); });
+        input.files = dt.files;
+
+        urls.forEach(function (u) { URL.revokeObjectURL(u); });
+        urls = [];
+        list.textContent = '';
         var total = 0;
-        for (var i = 0; i < input.files.length; i++) { total += input.files[i].size; }
+        pending.forEach(function (file, index) {
+            total += file.size;
+            var item = document.createElement('div');
+            item.className = 'receipt-pending-item';
+            var thumb = document.createElement('span');
+            thumb.className = 'receipt-pending-thumb';
+            if (/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
+                var url = URL.createObjectURL(file);
+                urls.push(url);
+                var img = document.createElement('img');
+                img.src = url;
+                img.alt = '';
+                thumb.appendChild(img);
+            } else {
+                var icon = document.createElement('i');
+                icon.className = 'fas ' + (file.type === 'application/pdf' ? 'fa-file-pdf' : 'fa-file-image');
+                thumb.appendChild(icon);
+            }
+            var name = document.createElement('span');
+            name.className = 'receipt-pending-name';
+            name.textContent = file.name + ' · ' + (file.size / 1048576).toFixed(1) + ' MB';
+            var remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn btn-ghost btn-sm receipt-pending-remove';
+            remove.setAttribute('aria-label', 'Quitar ' + file.name);
+            remove.innerHTML = '<i class="fas fa-times"></i> Quitar';
+            remove.addEventListener('click', function () { pending.splice(index, 1); sync(); });
+            item.appendChild(thumb);
+            item.appendChild(name);
+            item.appendChild(remove);
+            list.appendChild(item);
+        });
+
         var tooBig = total > LIMIT;
         note.textContent = tooBig
-            ? 'Los archivos pesan ' + (total / 1048576).toFixed(1) + ' MB; el límite es 16 MB por envío. Seleccione menos archivos.'
+            ? 'Los archivos pesan ' + (total / 1048576).toFixed(1) + ' MB; el límite es 16 MB por envío. Quite alguno y guárdelo en otro envío.'
             : baseNote;
         note.classList.toggle('form-hint--error', tooBig);
         save.disabled = tooBig;
     }
 
-    input.addEventListener('change', function () {
-        var files = Array.prototype.slice.call(input.files);
-        if (!files.length || !window.DataTransfer || !window.Promise) { checkSize(); return; }
+    function add(source) {
+        var files = Array.prototype.slice.call(source.files);
+        // Free the camera input so the same shot can be retaken; the picker's
+        // own selection is overwritten by sync().
+        if (source === camera) { camera.value = ''; }
+        if (!files.length) { sync(); return; }
         save.disabled = true;
         Promise.all(files.map(shrink)).then(function (out) {
-            try {
-                var dt = new DataTransfer();
-                out.forEach(function (f) { dt.items.add(f); });
-                input.files = dt.files;
-            } catch (e) { /* keep the originals */ }
-        }).then(checkSize, checkSize);
-    });
+            pending = pending.concat(out);
+        }).then(sync, sync);
+    }
+
+    document.getElementById('work-camera-btn').addEventListener('click', function () { camera.click(); });
+    document.getElementById('work-pick-btn').addEventListener('click', function () { input.click(); });
+    camera.addEventListener('change', function () { add(camera); });
+    input.addEventListener('change', function () { add(input); });
 })();
 </script>
 {% endif %}
